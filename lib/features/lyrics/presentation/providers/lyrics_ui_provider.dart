@@ -1,0 +1,14 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+class LyricsOverlayNotifier extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void toggle() {
+    state = !state;
+  }
+}
+
+final lyricsOverlayProvider = NotifierProvider<LyricsOverlayNotifier, bool>(() {
+  return LyricsOverlayNotifier();
+});
