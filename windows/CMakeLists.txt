@@ -106,3 +106,20 @@ install(DIRECTORY "${PROJECT_BUILD_DIR}/${FLUTTER_ASSET_DIR_NAME}"
 install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   CONFIGURATIONS Profile;Release
   COMPONENT Runtime)
+
+# ── Resonance Downloader Bridge ──────────────────────────────────────────────
+# Copy the self-contained resonance_downloader.exe (built with PyInstaller)
+# next to the main application executable so it can be found at runtime.
+# Build it first by running:  python build_downloader.py  (from the project root)
+set(DOWNLOADER_EXE "${CMAKE_CURRENT_SOURCE_DIR}/../python_engine/dist/resonance_downloader.exe")
+if(EXISTS "${DOWNLOADER_EXE}")
+  install(FILES "${DOWNLOADER_EXE}"
+    DESTINATION "${CMAKE_INSTALL_PREFIX}"
+    COMPONENT Runtime)
+  message(STATUS "[Resonance] resonance_downloader.exe will be bundled.")
+else()
+  message(WARNING
+    "[Resonance] resonance_downloader.exe not found at ${DOWNLOADER_EXE}.\n"
+    "  Run  python build_downloader.py  from the project root before flutter build windows.\n"
+    "  The download feature will not work until this step is completed.")
+endif()

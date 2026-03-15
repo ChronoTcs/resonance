@@ -40,36 +40,31 @@ final themeProvider = NotifierProvider<ThemeProvider, ThemeMode>(() {
   return ThemeProvider();
 });
 
-class AccentColorProvider extends Notifier<Color?> {
-  static const String _accentKey = 'app_accent_color';
+class AccentColorProvider extends Notifier<String?> {
+  static const String _accentKey = 'app_accent_mode';
 
   @override
-  Color? build() {
+  String? build() {
     _loadAccentColor();
-    return null; // null means System Default
+    return null; // null means System Default (App's default)
   }
 
   Future<void> _loadAccentColor() async {
     final prefs = await SharedPreferences.getInstance();
-    final colorInt = prefs.getInt(_accentKey);
-    if (colorInt != null) {
-      state = Color(colorInt);
-    } else {
-      state = null;
-    }
+    state = prefs.getString(_accentKey);
   }
 
-  Future<void> setAccentColor(Color? color) async {
-    state = color;
+  Future<void> setAccentColor(String? mode) async {
+    state = mode;
     final prefs = await SharedPreferences.getInstance();
-    if (color == null) {
+    if (mode == null) {
       await prefs.remove(_accentKey);
     } else {
-      await prefs.setInt(_accentKey, color.value);
+      await prefs.setString(_accentKey, mode);
     }
   }
 }
 
-final accentColorProvider = NotifierProvider<AccentColorProvider, Color?>(() {
+final accentColorProvider = NotifierProvider<AccentColorProvider, String?>(() {
   return AccentColorProvider();
 });

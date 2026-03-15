@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/repositories/lyrics_provider.dart';
 import '../../../player/data/repositories/audio_provider.dart';
+import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 class LyricsScreen extends ConsumerStatefulWidget {
   final bool isEmbedded;
@@ -12,24 +13,23 @@ class LyricsScreen extends ConsumerStatefulWidget {
 }
 
 class _LyricsScreenState extends ConsumerState<LyricsScreen> {
-  final ScrollController _scrollController = ScrollController();
+  final ItemScrollController _itemScrollController = ItemScrollController();
+  final ItemPositionsListener _itemPositionsListener = ItemPositionsListener.create();
   int _currentIndex = -1;
   double _listHeight = 600.0; // Default fallback
 
   @override
   void dispose() {
-    _scrollController.dispose();
     super.dispose();
   }
 
   void _scrollToActiveLyric(int index) {
-    if (_scrollController.hasClients && index >= 0) {
-      // Approximate position of middle of list items (assume ~60px per item)
-      final position = index * 60.0 - (_listHeight / 2) + 30;
-      _scrollController.animateTo(
-        position > 0 ? position : 0,
+    if (_itemScrollController.isAttached && index >= 0) {
+      _itemScrollController.scrollTo(
+        index: index,
         duration: const Duration(milliseconds: 600),
         curve: Curves.fastOutSlowIn,
+        alignment: 0.5, // Precisely center the item
       );
     }
   }
@@ -141,8 +141,9 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
                 child: LayoutBuilder(
                   builder: (context, constraints) {
                     _listHeight = constraints.maxHeight;
-                    return ListView.builder(
-                      controller: _scrollController,
+                    return ScrollablePositionedList.builder(
+                      itemScrollController: _itemScrollController,
+                      itemPositionsListener: _itemPositionsListener,
                       physics: const BouncingScrollPhysics(),
                       padding: EdgeInsets.only(
                         top: _listHeight / 2 - 30,
@@ -165,7 +166,9 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
                               fontWeight: isActive
                                   ? FontWeight.bold
                                   : FontWeight.w500,
-                              color: isActive ? Colors.white : Colors.white38,
+                              color: isActive
+                                  ? Theme.of(context).colorScheme.onSurface
+                                  : Theme.of(context).colorScheme.onSurface.withOpacity(0.38),
                               height: 1.4,
                             ),
                           ),

@@ -22,11 +22,9 @@ class EqualizerSheet extends ConsumerWidget {
     final audioState = ref.watch(audioProvider);
     final audioNotifier = ref.read(audioProvider.notifier);
 
-    // Background colors matching the screenshot
-    const bgColor = Color(0xFF2B2B2B);
-    const surfaceColor = Color(0xFF3B3B3B);
-    const accentColor = Colors.white;
-    const mutedColor = Color(0xFFAAAAAA);
+    final colorScheme = Theme.of(context).colorScheme;
+    final onSurface = colorScheme.onSurface;
+    final onSurfaceVariant = colorScheme.onSurfaceVariant;
 
     return Container(
       height: 480,
@@ -36,9 +34,9 @@ class EqualizerSheet extends ConsumerWidget {
         right: 32.0,
         bottom: 16.0,
       ),
-      decoration: const BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -50,7 +48,6 @@ class EqualizerSheet extends ConsumerWidget {
               const Text(
                 'Equaliser',
                 style: TextStyle(
-                  color: accentColor,
                   fontSize: 22,
                   fontWeight: FontWeight.w400,
                 ),
@@ -60,7 +57,6 @@ class EqualizerSheet extends ConsumerWidget {
                   Text(
                     audioState.isEqualizerEnabled ? 'On' : 'Off',
                     style: const TextStyle(
-                      color: accentColor,
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
@@ -68,10 +64,6 @@ class EqualizerSheet extends ConsumerWidget {
                   const SizedBox(width: 12),
                   Switch(
                     value: audioState.isEqualizerEnabled,
-                    activeColor: Colors.black,
-                    activeTrackColor: Colors.white,
-                    inactiveThumbColor: Colors.grey,
-                    inactiveTrackColor: Colors.grey.withOpacity(0.3),
                     onChanged: (val) {
                       audioNotifier.toggleEqualizer(val);
                     },
@@ -87,23 +79,23 @@ class EqualizerSheet extends ConsumerWidget {
             children: [
               const Text(
                 'Preset',
-                style: TextStyle(color: accentColor, fontSize: 16),
+                style: TextStyle(fontSize: 16),
               ),
               const SizedBox(width: 16),
               Container(
                 height: 36,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 decoration: BoxDecoration(
-                  color: surfaceColor,
+                  color: colorScheme.surfaceVariant.withOpacity(0.5),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<String>(
                     value: audioState.equalizerPreset,
-                    dropdownColor: surfaceColor,
-                    icon: const Icon(
+                    dropdownColor: colorScheme.surfaceVariant,
+                    icon: Icon(
                       Icons.keyboard_arrow_down,
-                      color: mutedColor,
+                      color: onSurfaceVariant,
                       size: 20,
                     ),
                     items: ['Flat', 'Bass Boost', 'Vocal', 'Custom'].map((
@@ -115,8 +107,8 @@ class EqualizerSheet extends ConsumerWidget {
                           value,
                           style: TextStyle(
                             color: audioState.equalizerPreset == value
-                                ? accentColor
-                                : mutedColor,
+                                ? colorScheme.primary
+                                : onSurface,
                             fontSize: 14,
                           ),
                         ),
@@ -141,28 +133,28 @@ class EqualizerSheet extends ConsumerWidget {
                 // Y-Axis Labels
                 Column(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: const [
+                  children: [
                     Text(
                       '+12 dB',
-                      style: TextStyle(color: accentColor, fontSize: 12),
+                      style: TextStyle(color: onSurfaceVariant, fontSize: 12),
                     ),
                     Text(
                       ' +6 dB',
-                      style: TextStyle(color: accentColor, fontSize: 12),
+                      style: TextStyle(color: onSurfaceVariant, fontSize: 12),
                     ),
                     Text(
                       '  0 dB',
-                      style: TextStyle(color: accentColor, fontSize: 12),
+                      style: TextStyle(color: onSurfaceVariant, fontSize: 12),
                     ),
                     Text(
                       ' -6 dB',
-                      style: TextStyle(color: accentColor, fontSize: 12),
+                      style: TextStyle(color: onSurfaceVariant, fontSize: 12),
                     ),
                     Text(
                       '-12 dB',
-                      style: TextStyle(color: accentColor, fontSize: 12),
+                      style: TextStyle(color: onSurfaceVariant, fontSize: 12),
                     ),
-                    SizedBox(height: 20), // Spacer for bottom labels alignment
+                    const SizedBox(height: 20), // Spacer for bottom labels alignment
                   ],
                 ),
                 const SizedBox(width: 16),
@@ -187,7 +179,7 @@ class EqualizerSheet extends ConsumerWidget {
                                     (_) => Container(
                                       width: 24,
                                       height: 1,
-                                      color: Colors.white24,
+                                      color: colorScheme.onSurface.withOpacity(0.1),
                                     ),
                                   ),
                                 ),
@@ -197,12 +189,12 @@ class EqualizerSheet extends ConsumerWidget {
                                   child: SliderTheme(
                                     data: SliderTheme.of(context).copyWith(
                                       trackHeight: 4,
-                                      activeTrackColor: mutedColor,
-                                      inactiveTrackColor: mutedColor,
-                                      thumbColor: const Color(0xFF555555),
+                                      activeTrackColor: colorScheme.primary,
+                                      inactiveTrackColor: colorScheme.surfaceVariant,
+                                      thumbColor: colorScheme.primary,
                                       thumbShape: const RoundSliderThumbShape(
                                         enabledThumbRadius: 9,
-                                        elevation: 0,
+                                        elevation: 2,
                                       ),
                                       overlayShape:
                                           SliderComponentShape.noOverlay,
@@ -228,9 +220,9 @@ class EqualizerSheet extends ConsumerWidget {
                           const SizedBox(height: 12),
                           Text(
                             _bandLabels[index],
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 12,
-                              color: accentColor,
+                              color: onSurfaceVariant,
                             ),
                           ),
                         ],
@@ -244,7 +236,7 @@ class EqualizerSheet extends ConsumerWidget {
           const SizedBox(height: 16),
 
           // Bottom Control Row
-          const Divider(color: surfaceColor, thickness: 1),
+          const Divider(thickness: 1),
           const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -257,9 +249,9 @@ class EqualizerSheet extends ConsumerWidget {
                     height: 24,
                     child: Checkbox(
                       value: audioState.linkEqualizerSliders,
-                      activeColor: surfaceColor,
-                      checkColor: mutedColor,
-                      side: const BorderSide(color: mutedColor),
+                      activeColor: colorScheme.primary,
+                      checkColor: colorScheme.onPrimary,
+                      side: BorderSide(color: onSurfaceVariant),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(4),
                       ),
@@ -269,9 +261,9 @@ class EqualizerSheet extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  const Text(
+                  Text(
                     'Move nearby sliders together',
-                    style: TextStyle(color: mutedColor, fontSize: 14),
+                    style: TextStyle(color: onSurfaceVariant, fontSize: 14),
                   ),
                 ],
               ),
@@ -279,8 +271,8 @@ class EqualizerSheet extends ConsumerWidget {
               ElevatedButton(
                 onPressed: () => Navigator.pop(context),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: surfaceColor,
-                  foregroundColor: accentColor,
+                  backgroundColor: colorScheme.surfaceVariant,
+                  foregroundColor: colorScheme.onSurfaceVariant,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),

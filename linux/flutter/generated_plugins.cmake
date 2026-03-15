@@ -6,9 +6,13 @@ list(APPEND FLUTTER_PLUGIN_LIST
   audiotags
   media_kit_libs_linux
   media_kit_video
+  screen_retriever_linux
+  system_theme
+  window_manager
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST
+  flutter_discord_rpc
 )
 
 set(PLUGIN_BUNDLED_LIBRARIES)

@@ -1,12 +1,36 @@
+import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../../../../core/theme/theme_provider.dart';
 import '../../../library/data/repositories/library_provider.dart';
 import '../../../player/data/repositories/audio_provider.dart';
+import '../../../../core/services/media_cache_service.dart';
+import '../../../../core/services/data_usage_service.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({Key? key}) : super(key: key);
+
+  Future<bool> _requestStoragePermission() async {
+    if (!Platform.isAndroid) return true;
+    
+    var status = await Permission.manageExternalStorage.status;
+    if (!status.isGranted) {
+      status = await Permission.manageExternalStorage.request();
+    }
+    
+    // Fallback to older storage permission if manageExternalStorage isn't supported
+    if (!status.isGranted) {
+       var readStatus = await Permission.storage.status;
+       if (!readStatus.isGranted) {
+         readStatus = await Permission.storage.request();
+       }
+       return readStatus.isGranted;
+    }
+    
+    return status.isGranted;
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -82,34 +106,51 @@ class SettingsScreen extends ConsumerWidget {
             subtitle: const Text('Select primary accent'),
             trailing: Consumer(
               builder: (context, ref, _) {
-                final accentColor = ref.watch(accentColorProvider);
-                return DropdownButton<Color?>(
-                  value: accentColor,
+                final accentMode = ref.watch(accentColorProvider);
+                return DropdownButton<String?>(
+                  value: accentMode,
                   dropdownColor: Theme.of(context).colorScheme.surface,
                   borderRadius: BorderRadius.circular(12),
                   focusColor: Colors.transparent,
                   underline: const SizedBox(),
-                  items: const [
-                    DropdownMenuItem(
+                  items: [
+                    const DropdownMenuItem(
                       value: null,
                       child: Text('System setting'),
                     ),
-                    DropdownMenuItem(value: Colors.red, child: Text('Red')),
-                    DropdownMenuItem(value: Colors.blue, child: Text('Blue')),
-                    DropdownMenuItem(value: Colors.green, child: Text('Green')),
-                    DropdownMenuItem(
-                      value: Colors.orange,
-                      child: Text('Orange'),
+                    const DropdownMenuItem(
+                      value: 'windows',
+                      child: Text('Windows Accent'),
+                    ),
+                    const DropdownMenuItem(
+                      value: 'cream',
+                      child: Text('Soft Cream'),
                     ),
                     DropdownMenuItem(
-                      value: Colors.purple,
-                      child: Text('Purple'),
+                      value: '0x${Colors.red.value.toRadixString(16)}',
+                      child: const Text('Red'),
+                    ),
+                    DropdownMenuItem(
+                      value: '0x${Colors.blue.value.toRadixString(16)}',
+                      child: const Text('Blue'),
+                    ),
+                    DropdownMenuItem(
+                      value: '0x${Colors.green.value.toRadixString(16)}',
+                      child: const Text('Green'),
+                    ),
+                    DropdownMenuItem(
+                      value: '0x${Colors.orange.value.toRadixString(16)}',
+                      child: const Text('Orange'),
+                    ),
+                    DropdownMenuItem(
+                      value: '0x${Colors.purple.value.toRadixString(16)}',
+                      child: const Text('Purple'),
                     ),
                   ],
-                  onChanged: (color) {
+                  onChanged: (mode) {
                     ref
                         .read(accentColorProvider.notifier)
-                        .setAccentColor(color);
+                        .setAccentColor(mode);
                   },
                 );
               },
@@ -140,10 +181,12 @@ class SettingsScreen extends ConsumerWidget {
               borderRadius: BorderRadius.circular(8),
             ),
             onTap: () async {
-              String? selectedDirectory = await FilePicker.platform
-                  .getDirectoryPath();
-              if (selectedDirectory != null) {
-                libraryLogic.setMusicFolder(selectedDirectory);
+              if (await _requestStoragePermission()) {
+                String? selectedDirectory = await FilePicker.platform
+                    .getDirectoryPath();
+                if (selectedDirectory != null) {
+                  libraryLogic.setMusicFolder(selectedDirectory);
+                }
               }
             },
           ),
@@ -158,10 +201,12 @@ class SettingsScreen extends ConsumerWidget {
               borderRadius: BorderRadius.circular(8),
             ),
             onTap: () async {
-              String? selectedDirectory = await FilePicker.platform
-                  .getDirectoryPath();
-              if (selectedDirectory != null) {
-                libraryLogic.setVideoFolder(selectedDirectory);
+              if (await _requestStoragePermission()) {
+                String? selectedDirectory = await FilePicker.platform
+                    .getDirectoryPath();
+                if (selectedDirectory != null) {
+                  libraryLogic.setVideoFolder(selectedDirectory);
+                }
               }
             },
           ),
@@ -176,10 +221,32 @@ class SettingsScreen extends ConsumerWidget {
               borderRadius: BorderRadius.circular(8),
             ),
             onTap: () async {
-              String? selectedDirectory = await FilePicker.platform
-                  .getDirectoryPath();
-              if (selectedDirectory != null) {
-                libraryLogic.setLyricsFolder(selectedDirectory);
+              if (await _requestStoragePermission()) {
+                String? selectedDirectory = await FilePicker.platform
+                    .getDirectoryPath();
+                if (selectedDirectory != null) {
+                  libraryLogic.setLyricsFolder(selectedDirectory);
+                }
+              }
+            },
+          ),
+          const SizedBox(height: 12),
+          ListTile(
+            leading: const Icon(Icons.cached),
+            title: const Text('Cache Directory'),
+            subtitle: Text(libraryState.cacheFolderPath ?? 'Default (Documents/resonance_cache)'),
+            trailing: const Icon(Icons.edit),
+            tileColor: Theme.of(context).colorScheme.surface,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+            onTap: () async {
+              if (await _requestStoragePermission()) {
+                String? selectedDirectory = await FilePicker.platform
+                    .getDirectoryPath();
+                if (selectedDirectory != null) {
+                  libraryLogic.setCacheFolder(selectedDirectory);
+                }
               }
             },
           ),
@@ -353,8 +420,130 @@ class SettingsScreen extends ConsumerWidget {
               );
             },
           ),
+          const Text(
+            'Network & Data Usage',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(16.0),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: FutureBuilder<int>(
+              future: DataUsageService().getTotalBytes(),
+              builder: (context, snapshot) {
+                final bytes = snapshot.data ?? 0;
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.data_usage),
+                  title: const Text('Total Data Used'),
+                  subtitle: Text(
+                    DataUsageService().formatBytes(bytes),
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  trailing: TextButton(
+                    onPressed: () async {
+                      final confirm = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: const Text('Reset Usage?'),
+                          content: const Text(
+                            'This will reset the total data usage counter to zero.',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, false),
+                              child: const Text('Cancel'),
+                            ),
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, true),
+                              child: const Text(
+                                'Reset',
+                                style: TextStyle(color: Colors.red),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+
+                      if (confirm == true) {
+                        await DataUsageService().resetUsage();
+                        (context as Element).markNeedsBuild();
+                      }
+                    },
+                    child: const Text('Reset'),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 32),
+          const Text(
+            'Cache Management',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(16.0),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Consumer(
+              builder: (context, ref, _) {
+                return Column(
+                  children: [
+                    FutureBuilder<String>(
+                      future: MediaCacheService().getCacheSize(),
+                      builder: (context, snapshot) {
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(Icons.storage),
+                          title: const Text('Local Cache Size'),
+                          subtitle: Text(snapshot.data ?? 'Calculating...'),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.delete_sweep, color: Colors.redAccent),
+                            onPressed: () async {
+                              final confirm = await showDialog<bool>(
+                                context: context,
+                                builder: (ctx) => AlertDialog(
+                                  title: const Text('Clear Cache?'),
+                                  content: const Text('This will delete all cached audio, lyrics, and metadata.'),
+                                  actions: [
+                                    TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                                    TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Clear', style: TextStyle(color: Colors.red))),
+                                  ],
+                                ),
+                              );
+
+                              if (confirm == true) {
+                                await MediaCacheService().clearCache();
+                                // Force rebuild to update size
+                                (context as Element).markNeedsBuild();
+                              }
+                            },
+                          ),
+                        );
+                      }
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
           const SizedBox(height: 32),
         ],
+
       ),
     );
   }

@@ -9,6 +9,9 @@
 #include <audiotags/audiotags_plugin.h>
 #include <media_kit_libs_linux/media_kit_libs_linux_plugin.h>
 #include <media_kit_video/media_kit_video_plugin.h>
+#include <screen_retriever_linux/screen_retriever_linux_plugin.h>
+#include <system_theme/system_theme_plugin.h>
+#include <window_manager/window_manager_plugin.h>
 
 void fl_register_plugins(FlPluginRegistry* registry) {
   g_autoptr(FlPluginRegistrar) audiotags_registrar =
@@ -20,4 +23,13 @@ void fl_register_plugins(FlPluginRegistry* registry) {
   g_autoptr(FlPluginRegistrar) media_kit_video_registrar =
       fl_plugin_registry_get_registrar_for_plugin(registry, "MediaKitVideoPlugin");
   media_kit_video_plugin_register_with_registrar(media_kit_video_registrar);
+  g_autoptr(FlPluginRegistrar) screen_retriever_linux_registrar =
+      fl_plugin_registry_get_registrar_for_plugin(registry, "ScreenRetrieverLinuxPlugin");
+  screen_retriever_linux_plugin_register_with_registrar(screen_retriever_linux_registrar);
+  g_autoptr(FlPluginRegistrar) system_theme_registrar =
+      fl_plugin_registry_get_registrar_for_plugin(registry, "SystemThemePlugin");
+  system_theme_plugin_register_with_registrar(system_theme_registrar);
+  g_autoptr(FlPluginRegistrar) window_manager_registrar =
+      fl_plugin_registry_get_registrar_for_plugin(registry, "WindowManagerPlugin");
+  window_manager_plugin_register_with_registrar(window_manager_registrar);
 }

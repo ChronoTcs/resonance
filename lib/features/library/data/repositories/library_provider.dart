@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path/path.dart' as p;
 import 'package:audiotags/audiotags.dart';
+import '../../../../core/services/media_cache_service.dart';
 import '../models/media_item.dart';
 
 class LibraryState {
@@ -12,6 +13,7 @@ class LibraryState {
   final String? musicFolderPath;
   final String? videoFolderPath;
   final String? lyricsFolderPath;
+  final String? cacheFolderPath;
 
   LibraryState({
     this.allMedia = const [],
@@ -19,6 +21,7 @@ class LibraryState {
     this.musicFolderPath,
     this.videoFolderPath,
     this.lyricsFolderPath,
+    this.cacheFolderPath,
   });
 
   LibraryState copyWith({
@@ -27,6 +30,7 @@ class LibraryState {
     String? musicFolderPath,
     String? videoFolderPath,
     String? lyricsFolderPath,
+    String? cacheFolderPath,
   }) {
     return LibraryState(
       allMedia: allMedia ?? this.allMedia,
@@ -34,6 +38,7 @@ class LibraryState {
       musicFolderPath: musicFolderPath ?? this.musicFolderPath,
       videoFolderPath: videoFolderPath ?? this.videoFolderPath,
       lyricsFolderPath: lyricsFolderPath ?? this.lyricsFolderPath,
+      cacheFolderPath: cacheFolderPath ?? this.cacheFolderPath,
     );
   }
 }
@@ -50,11 +55,13 @@ class LibraryNotifier extends Notifier<LibraryState> {
     final musicPath = prefs.getString('music_folder');
     final videoPath = prefs.getString('video_folder');
     final lyricsPath = prefs.getString('lyrics_folder');
+    final cachePath = prefs.getString('cache_folder');
 
     state = state.copyWith(
       musicFolderPath: musicPath,
       videoFolderPath: videoPath,
       lyricsFolderPath: lyricsPath,
+      cacheFolderPath: cachePath,
     );
 
     if (musicPath != null || videoPath != null) {
@@ -82,6 +89,12 @@ class LibraryNotifier extends Notifier<LibraryState> {
     state = state.copyWith(lyricsFolderPath: path);
   }
 
+  Future<void> setCacheFolder(String path) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('cache_folder', path);
+    state = state.copyWith(cacheFolderPath: path);
+  }
+
   Future<void> scanLibrary() async {
     state = state.copyWith(isLoading: true);
 
@@ -101,6 +114,8 @@ class LibraryNotifier extends Notifier<LibraryState> {
               String? album;
               Uint8List? albumArt;
 
+              String? thumbnailUrl;
+
               try {
                 final tag = await AudioTags.read(file.path);
                 if (tag != null) {
@@ -112,6 +127,14 @@ class LibraryNotifier extends Notifier<LibraryState> {
                   albumArt = tag.pictures.isNotEmpty
                       ? tag.pictures.first.bytes
                       : null;
+                      
+                  if (albumArt != null) {
+                    final songId = file.path;
+                    final cache = MediaCacheService();
+                    await cache.saveArtToCache(songId, albumArt);
+                    thumbnailUrl = await cache.getCachedArtPath(songId);
+                    albumArt = null; // Free memory immediately
+                  }
                 }
               } catch (_) {
                 // Ignore parse errors, fallback to defaults
@@ -124,6 +147,7 @@ class LibraryNotifier extends Notifier<LibraryState> {
                   artist: artist,
                   album: album,
                   albumArt: albumArt,
+                  thumbnailUrl: thumbnailUrl,
                   type: 'audio',
                 ),
               );
@@ -156,6 +180,20 @@ class LibraryNotifier extends Notifier<LibraryState> {
     }
 
     state = state.copyWith(allMedia: mediaList, isLoading: false);
+  }
+
+  /// Permanently deletes a media file from disk and removes it from the library.
+  Future<void> deleteTrack(String path) async {
+    try {
+      final file = File(path);
+      if (await file.exists()) {
+        await file.delete();
+      }
+    } catch (_) {}
+    // Remove from state
+    state = state.copyWith(
+      allMedia: state.allMedia.where((m) => m.path != path).toList(),
+    );
   }
 }
 

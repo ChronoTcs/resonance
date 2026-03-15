@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../data/repositories/audio_provider.dart';
+import 'package:resonance_app/features/player/data/repositories/audio_provider.dart';
+import 'package:resonance_app/features/library/data/models/media_item.dart';
+import 'package:resonance_app/features/library/data/repositories/library_provider.dart';
 import '../screens/now_playing_screen.dart';
+import '../../../../core/widgets/media_actions_bottom_sheet.dart';
+import '../../../../core/widgets/media_artwork_widget.dart';
 import '../../../lyrics/presentation/providers/lyrics_ui_provider.dart';
 import 'equalizer_sheet.dart';
 
@@ -53,10 +57,19 @@ class MiniPlayer extends ConsumerWidget {
                   overlayShape: const RoundSliderOverlayShape(overlayRadius: 8),
                 ),
                 child: Slider(
-                  value: audioState.position.inSeconds.toDouble(),
+                  value: audioState.position.inSeconds.toDouble().clamp(
+                    0.0,
+                    audioState.duration.inSeconds.toDouble() > 0
+                        ? audioState.duration.inSeconds.toDouble()
+                        : (audioState.position.inSeconds.toDouble() > 0
+                            ? audioState.position.inSeconds.toDouble()
+                            : 1.0),
+                  ),
                   max: audioState.duration.inSeconds.toDouble() > 0
                       ? audioState.duration.inSeconds.toDouble()
-                      : 1.0,
+                      : (audioState.position.inSeconds.toDouble() > 0
+                          ? audioState.position.inSeconds.toDouble()
+                          : 1.0),
                   onChanged: (val) {
                     audioNotifier.seek(Duration(seconds: val.toInt()));
                   },
@@ -71,38 +84,20 @@ class MiniPlayer extends ConsumerWidget {
                   return Row(
                     children: [
                       // Album Art
-                      track.albumArt != null
-                          ? Container(
-                              width: 48,
-                              height: 48,
-                              margin: const EdgeInsets.only(left: 16),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(4),
-                                child: Image.memory(
-                                  track.albumArt!,
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
-                            )
-                          : Container(
-                              width: 48,
-                              height: 48,
-                              margin: const EdgeInsets.only(left: 16),
-                              decoration: BoxDecoration(
-                                color: Colors.grey[800],
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: const Icon(
-                                Icons.music_note,
-                                color: Colors.white54,
-                                size: 24,
-                              ),
-                            ),
+                      Padding(
+                        padding: const EdgeInsets.only(left: 16),
+                        child: MediaArtworkWidget(
+                          item: track,
+                          width: 48,
+                          height: 48,
+                          borderRadius: 4,
+                        ),
+                      ),
                       const SizedBox(width: 12),
 
                       // Track Info
                       Expanded(
-                        flex: isDesktop ? 2 : 3,
+                        flex: isDesktop ? 2 : 1,
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -118,7 +113,7 @@ class MiniPlayer extends ConsumerWidget {
                             Text(
                               track.artist ?? 'Unknown Artist',
                               style: TextStyle(
-                                color: Colors.grey[400],
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
                                 fontSize: 12,
                               ),
                               maxLines: 1,
@@ -129,10 +124,10 @@ class MiniPlayer extends ConsumerWidget {
                                 padding: const EdgeInsets.only(top: 4.0),
                                 child: Text(
                                   "${_formatDuration(audioState.position)} / ${_formatDuration(audioState.duration)}",
-                                  style: const TextStyle(
-                                    fontSize: 10,
-                                    color: Colors.grey,
-                                  ),
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.7),
+                              ),
                                 ),
                               ),
                           ],
@@ -140,64 +135,132 @@ class MiniPlayer extends ConsumerWidget {
                       ),
 
                       // Core Controls
-                      Expanded(
-                        flex: isDesktop ? 3 : 5,
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            if (isDesktop)
+                      if (isDesktop)
+                        Expanded(
+                          flex: 3,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
                               IconButton(
+                                tooltip: 'Shuffle',
                                 icon: Icon(
                                   Icons.shuffle,
                                   color: audioState.isShuffleEnabled
                                       ? Theme.of(context).primaryColor
-                                      : Colors.grey,
+                                      : Theme.of(context).iconTheme.color?.withOpacity(0.5),
                                   size: 20,
                                 ),
                                 onPressed: () => audioNotifier.toggleShuffle(),
                               ),
-                            IconButton(
-                              icon: const Icon(Icons.skip_previous, size: 24),
-                              onPressed: () => audioNotifier.skipToPrevious(),
-                            ),
-                            IconButton(
-                              icon: Icon(
-                                audioState.isPlaying
-                                    ? Icons.pause_circle_filled
-                                    : Icons.play_circle_filled,
-                                size: 36,
-                                color: Theme.of(context).primaryColor,
-                              ),
-                              onPressed: () => audioNotifier.togglePlayPause(),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.skip_next, size: 24),
-                              onPressed: () => audioNotifier.skipToNext(),
-                            ),
-                            if (isDesktop)
                               IconButton(
+                                tooltip: 'Previous',
+                                icon: const Icon(Icons.skip_previous, size: 24),
+                                onPressed: () => audioNotifier.skipToPrevious(),
+                              ),
+                              audioState.isLoading
+                                  ? SizedBox(
+                                      width: 36,
+                                      height: 36,
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(8.0),
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Theme.of(context).primaryColor,
+                                        ),
+                                      ),
+                                    )
+                                  : IconButton(
+                                      tooltip: audioState.isPlaying ? 'Pause' : 'Play',
+                                      icon: Icon(
+                                        audioState.isPlaying
+                                            ? Icons.pause_circle_filled
+                                            : Icons.play_circle_filled,
+                                        size: 36,
+                                        color: Theme.of(context).primaryColor,
+                                      ),
+                                      onPressed: () => audioNotifier.togglePlayPause(),
+                                    ),
+                              IconButton(
+                                tooltip: 'Next',
+                                icon: const Icon(Icons.skip_next, size: 24),
+                                onPressed: () => audioNotifier.skipToNext(),
+                              ),
+                              IconButton(
+                                tooltip: audioState.loopMode == LoopMode.off 
+                                    ? 'Repeat Off' 
+                                    : audioState.loopMode == LoopMode.one 
+                                        ? 'Repeat One' 
+                                        : 'Repeat All',
                                 icon: Icon(
                                   audioState.loopMode == LoopMode.one
                                       ? Icons.repeat_one
                                       : Icons.repeat,
                                   color: audioState.loopMode == LoopMode.off
-                                      ? Colors.grey
+                                      ? Theme.of(context).iconTheme.color?.withOpacity(0.5)
                                       : Theme.of(context).primaryColor,
                                   size: 20,
                                 ),
                                 onPressed: () => audioNotifier.cycleLoopMode(),
                               ),
+                            ],
+                          ),
+                        )
+                      else
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            audioState.isLoading
+                                ? SizedBox(
+                                    width: 36,
+                                    height: 36,
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(8.0),
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Theme.of(context).primaryColor,
+                                      ),
+                                    ),
+                                  )
+                                : IconButton(
+                                    tooltip: audioState.isPlaying ? 'Pause' : 'Play',
+                                    icon: Icon(
+                                      audioState.isPlaying
+                                          ? Icons.pause_circle_filled
+                                          : Icons.play_circle_filled,
+                                      size: 36,
+                                      color: Theme.of(context).primaryColor,
+                                    ),
+                                    onPressed: () => audioNotifier.togglePlayPause(),
+                                  ),
+                            IconButton(
+                              tooltip: 'Next',
+                              icon: const Icon(Icons.skip_next, size: 24),
+                              onPressed: () => audioNotifier.skipToNext(),
+                            ),
                           ],
+                        ),
+
+                      // Quick add-to-playlist button (always visible)
+                      IconButton(
+                        icon: const Icon(Icons.playlist_add, size: 20),
+                        tooltip: 'Media actions',
+                        onPressed: () => _showMediaActions(
+                          context,
+                          ref,
+                          track,
                         ),
                       ),
 
                       // Extra actions - Only visible on wide screens
                       if (isDesktop)
                         Expanded(
-                          flex: 2,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
+                          flex: 3, // slightly bumped up flex to prevent too much scaling
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerRight,
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
                               Text(
                                 "${_formatDuration(audioState.position)} / ${_formatDuration(audioState.duration)}",
                                 style: const TextStyle(
@@ -216,7 +279,7 @@ class MiniPlayer extends ConsumerWidget {
                                           : audioState.volume < 50
                                           ? Icons.volume_down
                                           : Icons.volume_up,
-                                      color: Colors.white54,
+                                      color: Theme.of(context).iconTheme.color?.withOpacity(0.56),
                                     ),
                                     onPressed: () {
                                       final RenderBox renderBox =
@@ -302,8 +365,7 @@ class MiniPlayer extends ConsumerWidget {
                                                                           .volume_down
                                                                     : Icons
                                                                           .volume_up,
-                                                                color:
-                                                                    Colors.grey,
+                                                                color: Theme.of(context).colorScheme.onSurfaceVariant,
                                                                 size: 20,
                                                               ),
                                                               const SizedBox(
@@ -361,11 +423,9 @@ class MiniPlayer extends ConsumerWidget {
                                                                   state.volume
                                                                       .toInt()
                                                                       .toString(),
-                                                                  style: const TextStyle(
-                                                                    color: Colors
-                                                                        .grey,
-                                                                    fontSize:
-                                                                        13,
+                                                                  style: TextStyle(
+                                                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                                                    fontSize: 13,
                                                                   ),
                                                                   textAlign:
                                                                       TextAlign
@@ -399,7 +459,7 @@ class MiniPlayer extends ConsumerWidget {
                                       Icons.lyrics_outlined,
                                       color: isLyricsOpen
                                           ? Theme.of(context).primaryColor
-                                          : Colors.white54,
+                                          : Theme.of(context).iconTheme.color?.withOpacity(0.56),
                                     ),
                                     onPressed: () {
                                       consumerRef
@@ -410,15 +470,15 @@ class MiniPlayer extends ConsumerWidget {
                                 },
                               ),
                               IconButton(
-                                icon: const Icon(
+                                icon: Icon(
                                   Icons.more_vert,
-                                  color: Colors.white54,
+                                  color: Theme.of(context).iconTheme.color?.withOpacity(0.56),
                                 ),
                                 tooltip: 'Audio Settings',
                                 onPressed: () {
                                   showModalBottomSheet(
                                     context: context,
-                                    backgroundColor: Colors.grey[900],
+                                    backgroundColor: Theme.of(context).colorScheme.surface,
                                     shape: const RoundedRectangleBorder(
                                       borderRadius: BorderRadius.vertical(
                                         top: Radius.circular(20),
@@ -441,10 +501,10 @@ class MiniPlayer extends ConsumerWidget {
                                               ),
                                             ),
                                             const SizedBox(height: 20),
-                                            const Text(
+                                            Text(
                                               'Playback Speed',
                                               style: TextStyle(
-                                                color: Colors.white70,
+                                                color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.7),
                                               ),
                                             ),
                                             Consumer(
@@ -454,11 +514,11 @@ class MiniPlayer extends ConsumerWidget {
                                                 );
                                                 return Row(
                                                   children: [
-                                                    const Text(
+                                                    Text(
                                                       '0.5x',
                                                       style: TextStyle(
                                                         fontSize: 12,
-                                                        color: Colors.white54,
+                                                        color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.5),
                                                       ),
                                                     ),
                                                     Expanded(
@@ -480,11 +540,11 @@ class MiniPlayer extends ConsumerWidget {
                                                             .setSpeed(val),
                                                       ),
                                                     ),
-                                                    const Text(
+                                                    Text(
                                                       '2.0x',
                                                       style: TextStyle(
                                                         fontSize: 12,
-                                                        color: Colors.white54,
+                                                        color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.5),
                                                       ),
                                                     ),
                                                   ],
@@ -492,10 +552,10 @@ class MiniPlayer extends ConsumerWidget {
                                               },
                                             ),
                                             const SizedBox(height: 10),
-                                            const Text(
+                                            Text(
                                               'Pitch',
                                               style: TextStyle(
-                                                color: Colors.white70,
+                                                color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.7),
                                               ),
                                             ),
                                             Consumer(
@@ -505,11 +565,11 @@ class MiniPlayer extends ConsumerWidget {
                                                 );
                                                 return Row(
                                                   children: [
-                                                    const Text(
+                                                    Text(
                                                       '-12',
                                                       style: TextStyle(
                                                         fontSize: 12,
-                                                        color: Colors.white54,
+                                                        color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.5),
                                                       ),
                                                     ),
                                                     Expanded(
@@ -531,11 +591,11 @@ class MiniPlayer extends ConsumerWidget {
                                                             .setPitch(val),
                                                       ),
                                                     ),
-                                                    const Text(
+                                                    Text(
                                                       '+12',
                                                       style: TextStyle(
                                                         fontSize: 12,
-                                                        color: Colors.white54,
+                                                        color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.5),
                                                       ),
                                                     ),
                                                   ],
@@ -544,17 +604,17 @@ class MiniPlayer extends ConsumerWidget {
                                             ),
                                             const SizedBox(height: 10),
                                             ListTile(
-                                              leading: const Icon(
+                                              leading: Icon(
                                                 Icons.equalizer,
-                                                color: Colors.white,
+                                                color: Theme.of(context).colorScheme.onSurface,
                                               ),
                                               title: const Text(
                                                 'Equalizer Settings',
                                               ),
-                                              trailing: const Icon(
+                                              trailing: Icon(
                                                 Icons.arrow_forward_ios,
                                                 size: 16,
-                                                color: Colors.white54,
+                                                color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.5),
                                               ),
                                               onTap: () {
                                                 Navigator.pop(context);
@@ -577,7 +637,8 @@ class MiniPlayer extends ConsumerWidget {
                                 },
                               ),
                               const SizedBox(width: 16),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                     ],
@@ -587,6 +648,46 @@ class MiniPlayer extends ConsumerWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showMediaActions(
+    BuildContext context,
+    WidgetRef ref,
+    MediaItem track,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => MediaActionsBottomSheet(
+        item: track,
+        onDelete: track.id == null
+            ? () => _confirmDelete(context, ref, track)
+            : null,
+      ),
+    );
+  }
+
+  void _confirmDelete(BuildContext context, WidgetRef ref, MediaItem item) {
+    showDialog(
+      context: context,
+      builder: (dlg) => AlertDialog(
+        title: const Text('Delete Track'),
+        content: Text('Permanently delete "${item.title}" from your device?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dlg), child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () {
+              Navigator.pop(dlg);
+              ref.read(libraryProvider.notifier).deleteTrack(item.path);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('"${item.title}" deleted.')),
+              );
+            },
+            child: const Text('Delete'),
+          ),
+        ],
       ),
     );
   }

@@ -1,12 +1,20 @@
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
+import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart'; // Added import
 import 'package:smtc_windows/smtc_windows.dart';
+import 'package:http/http.dart' as http;
 import 'package:windows_taskbar/windows_taskbar.dart';
-import '../../../library/data/repositories/library_provider.dart';
+import 'package:window_manager/window_manager.dart';
+import '../../../home/presentation/providers/recently_played_provider.dart';
 import '../../../library/data/models/media_item.dart';
+import '../../../library/data/repositories/library_provider.dart';
+import 'package:resonance_app/features/explore/presentation/providers/explore_provider.dart';
+import '../../../../core/services/discord_rpc_service.dart';
+import '../../../../core/services/media_cache_service.dart';
 
 enum LoopMode { off, all, one }
 
@@ -24,6 +32,9 @@ class AudioState {
   final bool isEqualizerEnabled;
   final String equalizerPreset;
   final bool linkEqualizerSliders;
+  final List<MediaItem> queue;
+  final int currentIndex;
+  final bool isLoading;
 
   AudioState({
     this.currentTrack,
@@ -39,6 +50,9 @@ class AudioState {
     this.isEqualizerEnabled = false,
     this.equalizerPreset = 'Flat',
     this.linkEqualizerSliders = false,
+    this.queue = const [],
+    this.currentIndex = -1,
+    this.isLoading = false,
   });
 
   AudioState copyWith({
@@ -55,6 +69,9 @@ class AudioState {
     bool? isEqualizerEnabled,
     String? equalizerPreset,
     bool? linkEqualizerSliders,
+    List<MediaItem>? queue,
+    int? currentIndex,
+    bool? isLoading,
   }) {
     return AudioState(
       currentTrack: currentTrack ?? this.currentTrack,
@@ -70,6 +87,9 @@ class AudioState {
       isEqualizerEnabled: isEqualizerEnabled ?? this.isEqualizerEnabled,
       equalizerPreset: equalizerPreset ?? this.equalizerPreset,
       linkEqualizerSliders: linkEqualizerSliders ?? this.linkEqualizerSliders,
+      queue: queue ?? this.queue,
+      currentIndex: currentIndex ?? this.currentIndex,
+      isLoading: isLoading ?? this.isLoading,
     );
   }
 }
@@ -77,32 +97,63 @@ class AudioState {
 class AudioNotifier extends Notifier<AudioState> {
   late Player _player;
   SMTCWindows? _smtc;
-  HttpServer? _artServer;
-  String? _artServerUrl;
   SharedPreferences? _prefs;
 
-  Future<void> _startArtServer() async {
-    if (_artServer != null) return;
-    try {
-      _artServer = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-      _artServerUrl = 'http://127.0.0.1:${_artServer!.port}/art.jpg';
-      _artServer!.listen((HttpRequest request) {
-        if (request.uri.path == '/art.jpg') {
-          final file = File('${Directory.systemTemp.path}\\resonance_art.jpg');
-          if (file.existsSync()) {
-            request.response.headers.contentType = ContentType('image', 'jpeg');
-            file.openRead().pipe(request.response);
-          } else {
-            request.response.statusCode = HttpStatus.notFound;
-            request.response.close();
-          }
-        } else {
-          request.response.statusCode = HttpStatus.notFound;
-          request.response.close();
+  List<String> _shuffleQueue = [];
+  int _shuffleQueueIndex = -1;
+  Timer? _saveTimer;
+
+  void _schedulePrefSave(String key, dynamic value) {
+    _saveTimer?.cancel();
+    _saveTimer = Timer(const Duration(milliseconds: 500), () {
+      if (_prefs != null) {
+        if (value is double) {
+          _prefs!.setDouble(key, value);
+        } else if (value is bool) {
+          _prefs!.setBool(key, value);
+        } else if (value is String) {
+          _prefs!.setString(key, value);
+        } else if (value is List<String>) {
+          _prefs!.setStringList(key, value);
         }
-      });
-    } catch (_) {}
+      }
+    });
   }
+
+  void _applyEqualizer() {
+    if (_player.platform is NativePlayer) {
+      final np = _player.platform as NativePlayer;
+      if (state.isEqualizerEnabled) {
+        // Construct libmpv equalizer audio filter string
+        // The 9 bands correspond to frequencies: 62.5, 125, 250, 500, 1000, 2000, 4000, 8000, 16000
+        final bands = state.equalizerBands;
+        final freqs = [62.5, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
+
+        final filterParts = <String>[];
+        for (int i = 0; i < bands.length; i++) {
+          if (bands[i] != 0.0) {
+            filterParts.add('superequalizer=${i + 1}b=${bands[i]}');
+            // In libmpv, superequalizer handles multiple bands. But wait, `equalizer=f=freq:width_type=o:w=1:g=gain` is better.
+          }
+        }
+
+        final afParts = <String>[];
+        for (int i = 0; i < bands.length; i++) {
+          if (bands[i] != 0.0) {
+            afParts.add(
+              'equalizer=f=${freqs[i]}:width_type=o:w=1:g=${bands[i]}',
+            );
+          }
+        }
+        final afString = afParts.isNotEmpty ? afParts.join(',') : '';
+        np.setProperty('af', afString);
+      } else {
+        // Clear all filters
+        np.setProperty('af', '');
+      }
+    }
+  }
+
 
   Future<void> _initPrefs() async {
     _prefs = await SharedPreferences.getInstance();
@@ -124,7 +175,7 @@ class AudioNotifier extends Notifier<AudioState> {
     // Apply loaded settings
     _player.setVolume(volume);
     _player.setRate(speed);
-    _player.setPitch(pitch);
+    _player.setPitch(pow(2.0, pitch / 12.0).toDouble());
 
     state = state.copyWith(
       volume: volume,
@@ -135,12 +186,13 @@ class AudioNotifier extends Notifier<AudioState> {
       linkEqualizerSliders: eqLinked,
       equalizerBands: eqBands,
     );
+    _applyEqualizer();
   }
 
   Future<void> restoreToDefault() async {
     _player.setVolume(100.0);
     _player.setRate(1.0);
-    _player.setPitch(0.0);
+    _player.setPitch(1.0);
 
     const defaultBands = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
     state = state.copyWith(
@@ -152,6 +204,7 @@ class AudioNotifier extends Notifier<AudioState> {
       linkEqualizerSliders: false,
       equalizerBands: defaultBands,
     );
+    _applyEqualizer();
 
     if (_prefs != null) {
       await _prefs!.setDouble('audio_volume', 100.0);
@@ -169,10 +222,22 @@ class AudioNotifier extends Notifier<AudioState> {
 
   @override
   AudioState build() {
-    _player = Player();
+    _player = Player(
+      configuration: PlayerConfiguration(
+        pitch: Platform.isWindows || Platform.isMacOS || Platform.isLinux,
+      ),
+    );
+
+    // Listen to cache folder changes to update MediaCacheService
+    ref.listen(libraryProvider.select((s) => s.cacheFolderPath), (prev, next) {
+      MediaCacheService.setCustomPath(next);
+    });
+
+    // Initialize with current value
+    final initialCache = ref.read(libraryProvider).cacheFolderPath;
+    MediaCacheService.setCustomPath(initialCache);
 
     if (Platform.isWindows) {
-      _startArtServer();
       try {
         _smtc = SMTCWindows(
           config: const SMTCConfig(
@@ -217,10 +282,13 @@ class AudioNotifier extends Notifier<AudioState> {
     _initListeners();
     _initPrefs();
 
+    DiscordRpcService().initialize();
+
     ref.onDispose(() {
+      _saveTimer?.cancel();
       _player.dispose();
       _smtc?.dispose();
-      _artServer?.close(force: true);
+      DiscordRpcService().dispose();
     });
     return AudioState();
   }
@@ -234,6 +302,12 @@ class AudioNotifier extends Notifier<AudioState> {
         );
         _updateTaskbarThumbnail(isPlaying);
       }
+      DiscordRpcService().updatePresence(
+        state.currentTrack,
+        state.position,
+        state.duration,
+        isPlaying,
+      );
     });
 
     _player.stream.position.listen((position) {
@@ -247,6 +321,12 @@ class AudioNotifier extends Notifier<AudioState> {
           ),
         );
       }
+      DiscordRpcService().updatePresence(
+        state.currentTrack,
+        position,
+        state.duration,
+        state.isPlaying,
+      );
     });
 
     _player.stream.duration.listen((duration) {
@@ -258,49 +338,217 @@ class AudioNotifier extends Notifier<AudioState> {
     });
 
     _player.stream.completed.listen((completed) {
-      // LoopMode.all not naturally handled because we feed Media separately,
-      // LoopMode.one is handled natively by media_kit's PlaylistMode.single
       if (completed && state.loopMode != LoopMode.one) {
-        skipToNext();
+        skipToNext(fromCompletion: true);
       }
     });
   }
 
   Future<void> playTrack(MediaItem item) async {
-    state = state.copyWith(currentTrack: item);
-    if (Platform.isWindows) {
-      try {
-        String? thumbnailPath;
-        if (item.albumArt != null) {
-          final file = File('${Directory.systemTemp.path}\\resonance_art.jpg');
-          await file.writeAsBytes(item.albumArt!);
-          thumbnailPath =
-              _artServerUrl; // Local HTTP Server binds UWP Uri cleanly
-        }
+    // Add track to recently played list
+    ref.read(recentlyPlayedProvider.notifier).addTrack(item);
 
-        _smtc?.updateMetadata(
-          MusicMetadata(
-            title: item.title,
-            albumArtist: item.artist ?? 'Unknown Artist',
-            album: item.album ?? 'Resonance',
-            artist:
-                'Resonance', // The 'artist' property in Windows SMTC actually determines the Top-Level App Name display instead of 'albumArtist'
-            thumbnail:
-                thumbnailPath, // Passing null instead of empty string avoids native Unwrap panics.
-          ),
-        );
-        WindowsTaskbar.setWindowTitle('${item.title} - Resonance');
-        WindowsTaskbar.setThumbnailTooltip(
-          '${item.artist ?? "Unknown Artist"} - ${item.title}',
-        );
+    state = state.copyWith(
+      currentTrack: item,
+      position: Duration.zero,
+      duration: item.duration ?? Duration.zero,
+      isPlaying: false, // Reset playing state during transition
+    );
+
+    // Defer system updates to prevent UI hiccups during loading
+    Future.microtask(() async {
+      try {
+        // if (Platform.isWindows) {
+        //   String? smtcThumbnailUrl;
+          
+        //   // Priority 1: Check Disk Cache (MediaCacheService)
+        //   final cachePath = await MediaCacheService().getCachedArtPath(item.id ?? item.path);
+        //   if (cachePath != null) {
+        //     smtcThumbnailUrl = Uri.file(cachePath).toString();
+        //   } 
+        //   // Priority 2: Direct Local File (thumbnailUrl)
+        //   else if (item.thumbnailUrl != null && !item.thumbnailUrl!.startsWith('http')) {
+        //     smtcThumbnailUrl = Uri.file(item.thumbnailUrl!).toString();
+        //   }
+        if (Platform.isWindows) {
+          String? smtcThumbnailUrl;
+          
+          // 1. LOGIKA THUMBNAIL (RAW PATH & HTTP MURNI)
+          if (item.thumbnailUrl != null && item.thumbnailUrl!.startsWith('http')) {
+            smtcThumbnailUrl = item.thumbnailUrl;
+          } else if (item.id != null && item.id!.length == 11 && !item.id!.contains(r'\') && !item.id!.contains('/')) {
+            smtcThumbnailUrl = 'https://i.ytimg.com/vi/${item.id}/hqdefault.jpg';
+          } else {
+            final cachePath = await MediaCacheService().getCachedArtPath(item.id ?? item.path);
+            if (cachePath != null) {
+              // PERBAIKAN: Gunakan Raw Path (C:\...), JANGAN gunakan Uri.file()
+              smtcThumbnailUrl = cachePath; 
+            } else if (item.thumbnailUrl != null && !item.thumbnailUrl!.startsWith('http')) {
+              smtcThumbnailUrl = item.thumbnailUrl;
+            }
+          }
+
+          // 2. PENGAMAN SMTC
+          try {
+            _smtc?.updateMetadata(
+              MusicMetadata(
+                title: item.title,
+                albumArtist: item.artist ?? 'Unknown Artist',
+                album: item.album ?? 'Unknown Album',
+                artist: item.artist ?? 'Unknown Artist',
+                thumbnail: smtcThumbnailUrl,
+              ),
+            );
+          } catch (e) {
+            print('SMTC Update Error: $e');
+          }
+          
+          // 3. PENGAMAN WINDOWS (Mencegah PlatformException -1)
+          try {
+            if (Platform.isWindows) {
+              await windowManager.setTitle('${item.title} - Resonance');
+              await WindowsTaskbar.setThumbnailTooltip(
+                '${item.artist ?? "Unknown Artist"} - ${item.title}',
+              );
+            }
+          } catch (e) {
+            print('Windows UI Update Error: $e');
+          }
+        }
       } catch (_) {}
-    }
+    });
+
     try {
-      await _player.open(Media(item.path));
-      _player.play();
+      // Explicitly stop previous playback to clear internal libmpv buffers
+      // await _player.stop();
+
+      if (item.path.startsWith('http')) {
+        // Apply network optimizations for libmpv on Windows
+        // if (_player.platform is NativePlayer) {
+        //   final platform = _player.platform as NativePlayer;
+        //   platform.setProperty('ytdl', 'no'); // Prevent mpv from using yt-dlp on direct stream URLs
+        //   platform.setProperty('cache', 'yes');
+        //   platform.setProperty('demuxer-max-bytes', '33554432'); // 32MB buffer
+        // }
+
+        await _player.open(Media(item.path), play: true);
+      } else {
+        await _player.open(Media(item.path), play: true);
+      }
     } catch (e) {
       print("Error loading audio: $e");
     }
+  }
+
+  Future<void> playOnlineTrack(
+    MediaItem displayItem,
+    Future<String?> Function() fetchStreamUrl,
+  ) async {
+    final cacheService = MediaCacheService();
+    final songId = displayItem.id ?? displayItem.path;
+
+    // 1. Immediately check if Audio is already cached
+    final cachedAudioPath = await cacheService.getCachedAudioPath(songId);
+    
+    // 2. Prepare the item with cached path if possible
+    MediaItem trackToPlay = displayItem;
+    if (cachedAudioPath != null) {
+      print("Using cached audio: $cachedAudioPath");
+      trackToPlay = displayItem.copyWith(path: cachedAudioPath);
+    }
+
+    // 3. Set UI state immediately
+    state = state.copyWith(
+      currentTrack: trackToPlay,
+      isLoading: cachedAudioPath == null, // Only loading if not cached
+      isPlaying: false,
+      position: Duration.zero,
+      duration: displayItem.duration ?? Duration.zero,
+    );
+
+    // 4. Background: Fetch Metadata & Thumbnails non-blockingly
+    Future.microtask(() async {
+      try {
+        final cachedMeta = await cacheService.getCachedMetadata(songId);
+        if (cachedMeta != null && cachedMeta.title != 'Unknown') {
+          state = state.copyWith(currentTrack: state.currentTrack?.copyWith(
+            title: cachedMeta.title,
+            artist: cachedMeta.artist,
+            album: cachedMeta.album,
+          ));
+        }
+
+        // Fetch thumbnail if missing
+        if (state.currentTrack?.albumArt == null) {
+          final artBytes = await _fetchThumbnailBytes(displayItem.thumbnailUrl ?? songId);
+          if (artBytes != null) {
+            state = state.copyWith(currentTrack: state.currentTrack?.copyWith(albumArt: artBytes));
+          }
+        }
+      } catch (_) {}
+    });
+
+    try {
+      if (cachedAudioPath != null) {
+        await playTrack(trackToPlay);
+      } else {
+        // Fetch stream URL and resolve
+        final streamUrl = await fetchStreamUrl();
+        if (streamUrl != null) {
+          final playPath = await cacheService.getAudioPath(songId, streamUrl);
+          final updatedItem = trackToPlay.copyWith(path: playPath);
+          
+          await playTrack(updatedItem);
+          
+          // Save metadata for next time in background
+          Future.microtask(() => cacheService.saveMetadata(songId, updatedItem));
+        }
+      }
+    } catch (e) {
+      print("Error fetching online stream: $e");
+    } finally {
+      state = state.copyWith(isLoading: false);
+    }
+  }
+
+  Future<void> playPlaylist(
+    List<MediaItem> items, {
+    int initialIndex = 0,
+  }) async {
+    if (items.isEmpty) return;
+
+    state = state.copyWith(queue: items, currentIndex: initialIndex);
+
+    final track = items[initialIndex];
+    // Robust detection: URL path OR 11-char ID (YouTube)
+    final isOnline = track.path.startsWith('http') || 
+                    (track.id != null && track.id!.length == 11 && !track.id!.contains(Platform.pathSeparator));
+
+    if (isOnline) {
+      final ytService = ref.read(youtubeServiceProvider);
+      await playOnlineTrack(
+        track,
+        () => ytService.getAudioStreamUrl(track.id ?? track.path),
+      );
+    } else {
+      await playTrack(track);
+    }
+  }
+
+  Future<Uint8List?> _fetchThumbnailBytes(String idOrUrl) async {
+    try {
+      // If it's just an ID, construct the URL. If it's already a URL, use it.
+      String url = idOrUrl;
+      if (!url.startsWith('http')) {
+        url = 'https://i.ytimg.com/vi/$idOrUrl/hqdefault.jpg';
+      }
+
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200) {
+        return response.bodyBytes;
+      }
+    } catch (_) {}
+    return null;
   }
 
   void togglePlayPause() {
@@ -317,20 +565,21 @@ class AudioNotifier extends Notifier<AudioState> {
 
   void setVolume(double volume) {
     _player.setVolume(volume);
-    _prefs?.setDouble('audio_volume', volume);
+    _schedulePrefSave('audio_volume', volume);
     // Let the stream listener update the state.
   }
 
   void setSpeed(double speed) {
     _player.setRate(speed);
     state = state.copyWith(speed: speed);
-    _prefs?.setDouble('audio_speed', speed);
+    _schedulePrefSave('audio_speed', speed);
   }
 
-  void setPitch(double pitch) {
-    _player.setPitch(pitch);
-    state = state.copyWith(pitch: pitch);
-    _prefs?.setDouble('audio_pitch', pitch);
+  void setPitch(double semitones) {
+    final multiplier = pow(2.0, semitones / 12.0).toDouble();
+    _player.setPitch(multiplier);
+    state = state.copyWith(pitch: semitones);
+    _schedulePrefSave('audio_pitch', semitones);
   }
 
   void setEqualizerBand(int index, double value) {
@@ -353,26 +602,28 @@ class AudioNotifier extends Notifier<AudioState> {
             12.0,
           );
         }
-        state = state.copyWith(
-          equalizerBands: newBands,
-          equalizerPreset: 'Custom',
-        );
-        state = state.copyWith(
-          equalizerBands: newBands,
-          equalizerPreset: 'Custom',
-        );
+      } else {
+        newBands[index] = value;
       }
-      _prefs?.setStringList(
+
+      state = state.copyWith(
+        equalizerBands: newBands,
+        equalizerPreset: 'Custom',
+      );
+
+      _schedulePrefSave(
         'audio_eq_bands',
         newBands.map((e) => e.toString()).toList(),
       );
-      _prefs?.setString('audio_eq_preset', 'Custom');
+      _schedulePrefSave('audio_eq_preset', 'Custom');
+      _applyEqualizer();
     }
   }
 
   void toggleEqualizer(bool enabled) {
     state = state.copyWith(isEqualizerEnabled: enabled);
-    _prefs?.setBool('audio_eq_enabled', enabled);
+    _schedulePrefSave('audio_eq_enabled', enabled);
+    _applyEqualizer();
   }
 
   void setEqualizerPreset(String preset) {
@@ -391,47 +642,129 @@ class AudioNotifier extends Notifier<AudioState> {
     }
     state = state.copyWith(equalizerPreset: preset, equalizerBands: newBands);
 
-    _prefs?.setString('audio_eq_preset', preset);
-    _prefs?.setStringList(
+    _schedulePrefSave('audio_eq_preset', preset);
+    _schedulePrefSave(
       'audio_eq_bands',
       newBands.map((e) => e.toString()).toList(),
     );
+    _applyEqualizer();
   }
 
   void toggleLinkSliders(bool link) {
     state = state.copyWith(linkEqualizerSliders: link);
-    _prefs?.setBool('audio_eq_linked', link);
+    _schedulePrefSave('audio_eq_linked', link);
   }
 
-  void skipToNext() {
-    final libraryState = ref.read(libraryProvider);
-    final audioList = libraryState.allMedia
-        .where((m) => m.type == 'audio')
-        .toList();
+  void skipToNext({bool fromCompletion = false}) {
+    // Check if we should auto-populate the queue for local tracks
+    if (state.queue.isEmpty) {
+      // Only auto-populate if we are ALREADY playing a local track
+      // The user wants online songs to stop if no queue is set.
+      final currentIsOnline =
+          state.currentTrack?.id != null &&
+          (state.currentTrack?.path.startsWith('http') ?? false);
 
-    if (audioList.isEmpty) return;
+      if (currentIsOnline) {
+        if (fromCompletion) {
+          _player.stop();
+          return;
+        }
+      } else {
+        final libraryState = ref.read(libraryProvider);
+        final audioList = libraryState.allMedia
+            .where((m) => m.type == 'audio')
+            .toList();
+        if (audioList.isEmpty) return;
+        state = state.copyWith(queue: audioList);
+      }
+    }
+
+    final queue = state.queue;
+    if (queue.isEmpty) return;
 
     if (state.currentTrack == null) {
-      playTrack(audioList.first);
+      _shuffleQueue.clear();
+      _shuffleQueueIndex = -1;
+      playPlaylist(queue, initialIndex: 0);
       return;
     }
 
-    int currentIndex = audioList.indexWhere(
-      (m) => m.path == state.currentTrack!.path,
-    );
-    if (currentIndex == -1) {
-      playTrack(audioList.first);
-      return;
-    }
-
-    int nextIndex;
     if (state.isShuffleEnabled) {
-      nextIndex = Random().nextInt(audioList.length);
+      if (_shuffleQueue.isEmpty) {
+        _generateShuffleQueue(queue);
+      }
+
+      _shuffleQueueIndex++;
+
+      if (_shuffleQueueIndex >= _shuffleQueue.length) {
+        if (fromCompletion && state.loopMode == LoopMode.off) {
+          _player.stop();
+          return;
+        }
+        _generateShuffleQueue(queue, allowCurrentTrackFirst: false);
+        _shuffleQueueIndex = 0;
+      }
+
+      final nextPath = _shuffleQueue[_shuffleQueueIndex];
+      final nextTrackIndex = queue.indexWhere(
+        (m) => m.path == nextPath || (m.id != null && m.id == nextPath),
+      );
+      if (nextTrackIndex != -1) {
+        playPlaylist(queue, initialIndex: nextTrackIndex);
+      }
     } else {
-      nextIndex = (currentIndex + 1) % audioList.length;
+      int currentIndex = state.currentIndex;
+      if (currentIndex == -1) {
+        currentIndex = queue.indexWhere(
+          (m) =>
+              m.path == state.currentTrack!.path ||
+              (m.id != null && m.id == state.currentTrack!.id),
+        );
+      }
+
+      if (currentIndex == -1) {
+        playPlaylist(queue, initialIndex: 0);
+        return;
+      }
+
+      if (fromCompletion &&
+          state.loopMode == LoopMode.off &&
+          currentIndex == queue.length - 1) {
+        _player.stop();
+        return;
+      }
+
+      int nextIndex = (currentIndex + 1) % queue.length;
+      playPlaylist(queue, initialIndex: nextIndex);
+    }
+  }
+
+  void _generateShuffleQueue(
+    List<MediaItem> allAudio, {
+    bool allowCurrentTrackFirst = true,
+  }) {
+    _shuffleQueue = allAudio.map((m) => m.id ?? m.path).toList();
+    _shuffleQueue.shuffle(Random());
+
+    final currentId = state.currentTrack?.id ?? state.currentTrack?.path;
+
+    // Ensure the current track is handled cleanly
+    if (!allowCurrentTrackFirst &&
+        currentId != null &&
+        _shuffleQueue.isNotEmpty) {
+      // Avoid replaying the same track immediately on shuffle regeneration
+      if (_shuffleQueue[0] == currentId && _shuffleQueue.length > 1) {
+        final temp = _shuffleQueue[0];
+        _shuffleQueue[0] = _shuffleQueue[1];
+        _shuffleQueue[1] = temp;
+      }
+    } else if (currentId != null && _shuffleQueue.contains(currentId)) {
+      // Put the very current track at the beginning of the queue so back/next works properly
+      _shuffleQueue.remove(currentId);
+      _shuffleQueue.insert(0, currentId);
     }
 
-    playTrack(audioList[nextIndex]);
+    _shuffleQueueIndex = (currentId != null && allowCurrentTrackFirst) ? 0 : -1;
   }
 
   void skipToPrevious() {
@@ -440,34 +773,49 @@ class AudioNotifier extends Notifier<AudioState> {
       return;
     }
 
-    final libraryState = ref.read(libraryProvider);
-    final audioList = libraryState.allMedia
-        .where((m) => m.type == 'audio')
-        .toList();
-
-    if (audioList.isEmpty) return;
+    final queue = state.queue;
+    if (queue.isEmpty) return;
 
     if (state.currentTrack == null) {
-      playTrack(audioList.first);
+      playPlaylist(queue, initialIndex: 0);
       return;
     }
 
-    int currentIndex = audioList.indexWhere(
-      (m) => m.path == state.currentTrack!.path,
-    );
-    if (currentIndex == -1) {
-      playTrack(audioList.first);
-      return;
-    }
-
-    int prevIndex;
     if (state.isShuffleEnabled) {
-      prevIndex = Random().nextInt(audioList.length);
-    } else {
-      prevIndex = (currentIndex - 1 + audioList.length) % audioList.length;
-    }
+      if (_shuffleQueue.isEmpty) {
+        _generateShuffleQueue(queue);
+      }
 
-    playTrack(audioList[prevIndex]);
+      _shuffleQueueIndex--;
+
+      if (_shuffleQueueIndex < 0) {
+        _shuffleQueueIndex = _shuffleQueue.length - 1;
+      }
+
+      final prevPath = _shuffleQueue[_shuffleQueueIndex];
+      final prevTrackIndex = queue.indexWhere(
+        (m) => m.path == prevPath || (m.id != null && m.id == prevPath),
+      );
+      if (prevTrackIndex != -1) {
+        playPlaylist(queue, initialIndex: prevTrackIndex);
+      }
+    } else {
+      int currentIndex = state.currentIndex;
+      if (currentIndex == -1) {
+        currentIndex = queue.indexWhere(
+          (m) =>
+              m.path == state.currentTrack!.path ||
+              (m.id != null && m.id == state.currentTrack!.id),
+        );
+      }
+      if (currentIndex == -1) {
+        playPlaylist(queue, initialIndex: 0);
+        return;
+      }
+
+      int prevIndex = (currentIndex - 1 + queue.length) % queue.length;
+      playPlaylist(queue, initialIndex: prevIndex);
+    }
   }
 
   void cycleLoopMode() {
@@ -492,7 +840,17 @@ class AudioNotifier extends Notifier<AudioState> {
   void toggleShuffle() {
     final isShuffle = !state.isShuffleEnabled;
     state = state.copyWith(isShuffleEnabled: isShuffle);
-    // Note: To properly shuffle, we will need to randomize the playback queue later.
+
+    if (isShuffle) {
+      final libraryState = ref.read(libraryProvider);
+      final audioList = libraryState.allMedia
+          .where((m) => m.type == 'audio')
+          .toList();
+      _generateShuffleQueue(audioList);
+    } else {
+      _shuffleQueue.clear();
+      _shuffleQueueIndex = -1;
+    }
   }
 
   void _updateTaskbarThumbnail(bool playing) {

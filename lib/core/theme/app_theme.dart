@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:system_theme/system_theme.dart';
 
 class AppTheme {
   // Monochrome & Cream Palette
@@ -15,7 +16,27 @@ class AppTheme {
   static const Color accentGrey = Color(0xFF6B6B6B);
   static const Color accentSoft = Color(0xFFB5B5B5);
 
-  static ThemeData getLightTheme(Color? accentColor) {
+  static Color? _resolveAccent(String? mode, Brightness brightness) {
+    if (mode == null) return null;
+    if (mode == 'windows') {
+      return SystemTheme.accentColor.accent;
+    }
+    if (mode == 'cream') {
+      // Soft Cream (Old Lace/Krem)
+      // In light mode (cream background), we need a dark contrast (dark brownish cream)
+      // In dark mode, we use the soft light cream
+      return brightness == Brightness.light
+          ? const Color(0xFF5D574B) // Dark Warm Grey/Brown
+          : const Color(0xFFFDF5E6); // Soft Cream
+    }
+    if (mode.startsWith('0x')) {
+      return Color(int.parse(mode));
+    }
+    return null;
+  }
+
+  static ThemeData getLightTheme(String? accentMode) {
+    final accentColor = _resolveAccent(accentMode, Brightness.light);
     final primary = accentColor ?? textDark;
     return ThemeData(
       useMaterial3: true,
@@ -68,7 +89,8 @@ class AppTheme {
     );
   }
 
-  static ThemeData getDarkTheme(Color? accentColor) {
+  static ThemeData getDarkTheme(String? accentMode) {
+    final accentColor = _resolveAccent(accentMode, Brightness.dark);
     final primary = accentColor ?? creamBackground;
     return ThemeData(
       useMaterial3: true,

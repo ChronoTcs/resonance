@@ -1,15 +1,33 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:resonance_app/features/playlist/data/models/playlist_model.dart';
 import '../../data/repositories/library_provider.dart';
 import '../../data/models/media_item.dart';
 import '../../../player/data/repositories/audio_provider.dart';
 import '../../../player/presentation/screens/video_player_screen.dart';
+import '../../../../core/widgets/media_actions_bottom_sheet.dart';
+import '../../../../core/widgets/media_artwork_widget.dart';
 
-class LibraryScreen extends ConsumerWidget {
+class LibraryScreen extends ConsumerStatefulWidget {
   const LibraryScreen({Key? key}) : super(key: key);
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<LibraryScreen> createState() => _LibraryScreenState();
+}
+
+class _LibraryScreenState extends ConsumerState<LibraryScreen> {
+  final TextEditingController _searchController = TextEditingController();
+  bool _isSearching = false;
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final libraryState = ref.watch(libraryProvider);
 
     if (libraryState.musicFolderPath == null &&
@@ -56,17 +74,35 @@ class LibraryScreen extends ConsumerWidget {
     }
 
     final audioList = libraryState.allMedia
-        .where((m) => m.type == 'audio')
+        .where((m) => m.type == 'audio' && 
+            (m.title.toLowerCase().contains(_searchQuery.toLowerCase()) || 
+             (m.artist?.toLowerCase().contains(_searchQuery.toLowerCase()) ?? false)))
         .toList();
     final videoList = libraryState.allMedia
-        .where((m) => m.type == 'video')
+        .where((m) => m.type == 'video' && 
+            (m.path.toLowerCase().contains(_searchQuery.toLowerCase()) || 
+             m.title.toLowerCase().contains(_searchQuery.toLowerCase())))
         .toList();
 
     return DefaultTabController(
       length: 2,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Local Library'),
+          title: _isSearching
+              ? TextField(
+                  controller: _searchController,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    hintText: 'Search in library...',
+                    border: InputBorder.none,
+                  ),
+                  onChanged: (value) {
+                    setState(() {
+                      _searchQuery = value;
+                    });
+                  },
+                )
+              : const Text('Local Library'),
           bottom: const TabBar(
             tabs: [
               Tab(text: 'Music', icon: Icon(Icons.music_note)),
@@ -74,6 +110,20 @@ class LibraryScreen extends ConsumerWidget {
             ],
           ),
           actions: [
+            IconButton(
+              icon: Icon(_isSearching ? Icons.close : Icons.search),
+              onPressed: () {
+                setState(() {
+                  if (_isSearching) {
+                    _isSearching = false;
+                    _searchQuery = '';
+                    _searchController.clear();
+                  } else {
+                    _isSearching = true;
+                  }
+                });
+              },
+            ),
             IconButton(
               icon: const Icon(Icons.refresh),
               onPressed: () {
@@ -110,30 +160,24 @@ class LibraryScreen extends ConsumerWidget {
         final item = mediaList[index];
         final isAudio = item.type == 'audio';
         return ListTile(
-          leading: isAudio && item.albumArt != null
-              ? ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: Image.memory(
-                    item.albumArt!,
-                    width: 48,
-                    height: 48,
-                    fit: BoxFit.cover,
-                  ),
+          leading: isAudio
+              ? MediaArtworkWidget(
+                  item: item,
+                  width: 48,
+                  height: 48,
+                  borderRadius: 4,
+                  placeholderIcon: Icons.music_note,
                 )
               : Container(
                   width: 48,
                   height: 48,
                   decoration: BoxDecoration(
-                    color: isAudio
-                        ? Theme.of(context).primaryColor.withOpacity(0.1)
-                        : Colors.blueAccent.withOpacity(0.1),
+                    color: Colors.blueAccent.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(4),
                   ),
-                  child: Icon(
-                    isAudio ? Icons.music_note : Icons.movie,
-                    color: isAudio
-                        ? Theme.of(context).primaryColor
-                        : Colors.blueAccent,
+                  child: const Icon(
+                    Icons.movie,
+                    color: Colors.blueAccent,
                   ),
                 ),
           title: Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis),
@@ -142,9 +186,22 @@ class LibraryScreen extends ConsumerWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
+          trailing: IconButton(
+            icon: const Icon(Icons.more_vert),
+            tooltip: 'More options',
+            onPressed: () {
+              showModalBottomSheet(
+                context: context,
+                builder: (_) => MediaActionsBottomSheet(
+                  item: item,
+                  onDelete: () => _confirmDelete(context, ref, item),
+                ),
+              );
+            },
+          ),
           onTap: () {
             if (isAudio) {
-              ref.read(audioProvider.notifier).playTrack(item);
+              ref.read(audioProvider.notifier).playPlaylist(mediaList, initialIndex: index);
             } else {
               Navigator.of(context).push(
                 MaterialPageRoute(
@@ -153,8 +210,41 @@ class LibraryScreen extends ConsumerWidget {
               );
             }
           },
+          onLongPress: () {
+            showModalBottomSheet(
+              context: context,
+              builder: (_) => MediaActionsBottomSheet(
+                item: item,
+                onDelete: () => _confirmDelete(context, ref, item),
+              ),
+            );
+          },
         );
       },
+    );
+  }
+
+  void _confirmDelete(BuildContext context, WidgetRef ref, MediaItem item) {
+    showDialog(
+      context: context,
+      builder: (dlg) => AlertDialog(
+        title: const Text('Delete Track'),
+        content: Text('Permanently delete "${item.title}" from your device?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dlg), child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () {
+              Navigator.pop(dlg);
+              ref.read(libraryProvider.notifier).deleteTrack(item.path);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('"${item.title}" deleted.')),
+              );
+            },
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
     );
   }
 }
