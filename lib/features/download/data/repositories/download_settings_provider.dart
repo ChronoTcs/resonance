@@ -1,6 +1,7 @@
-import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../../core/utils/path_utils.dart';
+import '../../../../features/library/application/library_provider.dart';
 
 class DownloadSettings {
   final String musicOutputPath;
@@ -69,13 +70,9 @@ class DownloadSettingsNotifier extends AsyncNotifier<DownloadSettings> {
   @override
   Future<DownloadSettings> build() async {
     final prefs = await SharedPreferences.getInstance();
-    // Sensible defaults: use user's Music / Videos / Documents folders
-    final home = Platform.isWindows
-        ? (Platform.environment['USERPROFILE'] ?? '')
-        : (Platform.environment['HOME'] ?? '');
-    final defaultMusic = '$home\\Music\\Resonance Downloads';
-    final defaultVideo = '$home\\Videos\\Resonance Downloads';
-    final defaultLyrics = '$home\\Music\\Resonance Downloads\\Lyrics';
+    final defaultMusic = await PathUtils.getMusicDefault();
+    final defaultVideo = await PathUtils.getVideoDefault();
+    final defaultLyrics = await PathUtils.getLyricsDefault();
 
     return DownloadSettings(
       musicOutputPath: prefs.getString(_kMusicPath) ?? defaultMusic,
@@ -96,11 +93,30 @@ class DownloadSettingsNotifier extends AsyncNotifier<DownloadSettings> {
     await prefs.setString(_kMusicPath, settings.musicOutputPath);
     await prefs.setString(_kVideoPath, settings.videoOutputPath);
     await prefs.setString(_kLyricsPath, settings.lyricsOutputPath);
+    // ... rest of the settings
     await prefs.setInt(_kMaxConcurrent, settings.maxConcurrent);
     await prefs.setInt(_kMaxRetries, settings.maxRetries);
     await prefs.setInt(_kTimeout, settings.connectionTimeout);
     await prefs.setInt(_kFragments, settings.fragmentsPerDownload);
     await prefs.setString(_kQuality, settings.audioQuality);
     await prefs.setString(_kSource, settings.defaultSource);
+    
+    // Sync to Library
+    _syncToLibrary(settings);
+  }
+
+  void _syncToLibrary(DownloadSettings settings) {
+    final library = ref.read(libraryProvider.notifier);
+    final libraryState = ref.read(libraryProvider);
+    
+    if (libraryState.musicFolderPath != settings.musicOutputPath) {
+      library.setMusicFolder(settings.musicOutputPath);
+    }
+    if (libraryState.videoFolderPath != settings.videoOutputPath) {
+      library.setVideoFolder(settings.videoOutputPath);
+    }
+    if (libraryState.lyricsFolderPath != settings.lyricsOutputPath) {
+      library.setLyricsFolder(settings.lyricsOutputPath);
+    }
   }
 }

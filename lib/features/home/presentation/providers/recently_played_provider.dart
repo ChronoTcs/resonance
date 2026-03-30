@@ -1,8 +1,9 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:resonance_app/features/library/data/models/media_item.dart';
 import 'package:resonance_app/core/services/media_cache_service.dart';
+import 'package:resonance_app/core/services/storage_service.dart';
 
 const _recentlyPlayedKey = 'recently_played_items';
 const _maxRecentlyPlayed = 20;
@@ -15,9 +16,12 @@ class RecentlyPlayedNotifier extends AsyncNotifier<List<MediaItem>> {
 
   @override
   Future<List<MediaItem>> build() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = ref.read(sharedPreferencesProvider);
     final jsonList = prefs.getStringList(_recentlyPlayedKey) ?? [];
-    return jsonList.map((item) => MediaItem.fromJson(jsonDecode(item))).toList();
+    if (jsonList.isEmpty) return [];
+
+    // Use compute for JSON parsing to avoid blocking UI thread
+    return await compute(_parseRecentlyPlayedJson, jsonList);
   }
 
   Future<void> addTrack(MediaItem item) async {
@@ -33,7 +37,7 @@ class RecentlyPlayedNotifier extends AsyncNotifier<List<MediaItem>> {
     MediaItem itemToSave = item;
     if (item.albumArt != null && item.thumbnailUrl == null) {
       try {
-        final cacheService = MediaCacheService();
+        final cacheService = ref.read(mediaCacheServiceProvider);
         final songId = item.id ?? item.path.hashCode.toString();
         await cacheService.saveArtToCache(songId, item.albumArt!);
         final cachePath = await cacheService.getCachedArtPath(songId);
@@ -58,10 +62,25 @@ class RecentlyPlayedNotifier extends AsyncNotifier<List<MediaItem>> {
     await _saveState(listForStorage);
   }
 
+  Future<void> clearHistory() async {
+    state = const AsyncValue.data([]);
+    await _saveState([]);
+  }
+
   Future<void> _saveState(List<MediaItem> listToSave) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = ref.read(sharedPreferencesProvider);
     // Use the optimized toJson that skips art serialization
     final jsonList = listToSave.map((item) => jsonEncode(item.toJson(includeArt: false))).toList();
     await prefs.setStringList(_recentlyPlayedKey, jsonList);
+  }
+}
+
+/// Isolate-safe JSON parser for Recently Played
+List<MediaItem> _parseRecentlyPlayedJson(List<String> jsonList) {
+  try {
+    return jsonList.map((item) => MediaItem.fromJson(jsonDecode(item))).toList();
+  } catch (e) {
+    print('RecentlyPlayed Isolate: Failed to parse JSON: $e');
+    return [];
   }
 }

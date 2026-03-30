@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:youtube_explode_dart/youtube_explode_dart.dart' as yt;
 import '../../features/library/data/models/media_item.dart';
 import '../../features/playlist/presentation/providers/playlist_provider.dart';
 import '../../features/download/data/repositories/download_provider.dart';
@@ -13,11 +14,13 @@ class MediaActionsBottomSheet extends ConsumerWidget {
     required this.item,
     this.playlistId, // If provided, show "Remove from playlist" instead of "Add to"
     this.onDelete, // If provided, show a delete/permanent remove option
+    this.video, // Optional pre-fetched metadata for downloads
   });
 
   final MediaItem item;
   final String? playlistId;
   final VoidCallback? onDelete;
+  final yt.Video? video;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -104,6 +107,7 @@ class MediaActionsBottomSheet extends ConsumerWidget {
                   [item.id!],
                   type: DownloadType.audio,
                   source: DownloadSource.ytmusic,
+                  video: video, // Metadata Passthrough
                 );
                 
                 // 2. Switch to download tab

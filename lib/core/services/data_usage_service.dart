@@ -1,27 +1,51 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'storage_service.dart';
+
+final dataUsageServiceProvider = Provider<DataUsageService>((ref) {
+  final prefs = ref.watch(sharedPreferencesProvider);
+  return DataUsageService(prefs);
+});
+
 class DataUsageService {
-  static final DataUsageService _instance = DataUsageService._internal();
-  factory DataUsageService() => _instance;
-  DataUsageService._internal();
+  final SharedPreferences _prefs;
+  DataUsageService(this._prefs);
 
   static const _totalBytesKey = 'total_data_usage_bytes';
   
+  // Buffered writing to prevent excessive disk I/O
+  int _bufferedBytes = 0;
+  static const int _flushThreshold = 1024 * 1024; // 1MB threshold
+
   Future<int> getTotalBytes() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getInt(_totalBytesKey) ?? 0;
+    final stored = _prefs.getInt(_totalBytesKey) ?? 0;
+    return stored + _bufferedBytes;
   }
 
-  Future<void> addBytes(int bytes) async {
+  void addBytes(int bytes) {
     if (bytes <= 0) return;
-    final prefs = await SharedPreferences.getInstance();
-    final current = prefs.getInt(_totalBytesKey) ?? 0;
-    await prefs.setInt(_totalBytesKey, current + bytes);
+    _bufferedBytes += bytes;
+    
+    // Auto-flush if threshold is reached
+    if (_bufferedBytes >= _flushThreshold) {
+      flush();
+    }
+  }
+
+  Future<void> flush() async {
+    if (_bufferedBytes == 0) return;
+    
+    final toFlush = _bufferedBytes;
+    final current = _prefs.getInt(_totalBytesKey) ?? 0;
+    await _prefs.setInt(_totalBytesKey, current + toFlush);
+    _bufferedBytes = 0;
+    print('DataUsageService: Flushed $toFlush bytes to disk.');
   }
 
   Future<void> resetUsage() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(_totalBytesKey, 0);
+    _bufferedBytes = 0;
+    await _prefs.setInt(_totalBytesKey, 0);
   }
 
   String formatBytes(int bytes) {

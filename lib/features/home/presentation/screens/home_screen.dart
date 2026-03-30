@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance_app/features/home/presentation/providers/recently_played_provider.dart';
 import 'package:resonance_app/features/library/data/models/media_item.dart';
-import 'package:resonance_app/features/library/data/repositories/library_provider.dart';
-import 'package:resonance_app/features/player/data/repositories/audio_provider.dart';
+import 'package:resonance_app/features/library/application/library_provider.dart';
+import 'package:resonance_app/features/player/application/audio_provider.dart';
 import 'package:resonance_app/core/widgets/media_actions_bottom_sheet.dart';
 import 'package:resonance_app/core/widgets/media_artwork_widget.dart';
 
@@ -39,7 +39,7 @@ class HomeScreen extends ConsumerWidget {
 
     return Scaffold(
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
         children: [
           // ── Recently Played ──────────────────────────────────────
           Text(

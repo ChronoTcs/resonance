@@ -10,7 +10,10 @@ class MediaItem {
   final Uint8List? albumArt;
   final String? thumbnailUrl;
   final Duration? duration;
+  final String? date;
   final String type; // 'audio' or 'video'
+  
+  bool get isLocal => !path.startsWith('http') && !path.startsWith('https');
 
   MediaItem({
     this.id,
@@ -21,6 +24,7 @@ class MediaItem {
     this.albumArt,
     this.thumbnailUrl,
     this.duration,
+    this.date,
     required this.type,
   });
 
@@ -33,6 +37,7 @@ class MediaItem {
     Uint8List? albumArt,
     String? thumbnailUrl,
     Duration? duration,
+    String? date,
     String? type,
     bool clearAlbumArt = false,
     bool clearThumbnailUrl = false,
@@ -46,6 +51,7 @@ class MediaItem {
       albumArt: clearAlbumArt ? null : (albumArt ?? this.albumArt),
       thumbnailUrl: clearThumbnailUrl ? null : (thumbnailUrl ?? this.thumbnailUrl),
       duration: duration ?? this.duration,
+      date: date ?? this.date,
       type: type ?? this.type,
     );
   }
@@ -59,6 +65,7 @@ class MediaItem {
       'album': album,
       'thumbnailUrl': thumbnailUrl,
       'durationMs': duration?.inMilliseconds,
+      'date': date,
       'type': type,
       'albumArtBase64': (includeArt && albumArt != null) ? base64Encode(albumArt!) : null,
     };
@@ -73,8 +80,39 @@ class MediaItem {
       album: json['album'],
       thumbnailUrl: json['thumbnailUrl'],
       duration: json['durationMs'] != null ? Duration(milliseconds: json['durationMs']) : null,
+      date: json['date'],
       albumArt: json['albumArtBase64'] != null ? base64Decode(json['albumArtBase64'] as String) : null,
       type: json['type'] ?? 'audio',
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is MediaItem &&
+        other.id == id &&
+        other.path == path &&
+        other.title == title &&
+        other.artist == artist &&
+        other.album == album &&
+        other.thumbnailUrl == thumbnailUrl &&
+        other.duration == duration &&
+        other.date == date &&
+        other.type == type;
+  }
+
+  @override
+  int get hashCode {
+    return Object.hash(
+      id,
+      path,
+      title,
+      artist,
+      album,
+      thumbnailUrl,
+      duration,
+      date,
+      type,
     );
   }
 

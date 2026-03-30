@@ -1,15 +1,19 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../features/library/data/models/media_item.dart';
 import '../services/media_cache_service.dart';
 
-class MediaArtworkWidget extends StatefulWidget {
+class MediaArtworkWidget extends ConsumerStatefulWidget {
   final MediaItem item;
   final double width;
   final double height;
   final double borderRadius;
   final IconData placeholderIcon;
+  final BoxFit fit;
+  final Color? color;
+  final BlendMode? colorBlendMode;
 
   const MediaArtworkWidget({
     super.key,
@@ -18,13 +22,16 @@ class MediaArtworkWidget extends StatefulWidget {
     this.height = 48,
     this.borderRadius = 6,
     this.placeholderIcon = Icons.music_note,
+    this.fit = BoxFit.cover,
+    this.color,
+    this.colorBlendMode,
   });
 
   @override
-  State<MediaArtworkWidget> createState() => _MediaArtworkWidgetState();
+  ConsumerState<MediaArtworkWidget> createState() => _MediaArtworkWidgetState();
 }
 
-class _MediaArtworkWidgetState extends State<MediaArtworkWidget> {
+class _MediaArtworkWidgetState extends ConsumerState<MediaArtworkWidget> {
   String? _resolvedThumbnailUrl;
   bool _isLoading = false;
 
@@ -56,8 +63,9 @@ class _MediaArtworkWidgetState extends State<MediaArtworkWidget> {
     if (!widget.item.path.startsWith('http')) {
       if (mounted) setState(() => _isLoading = true);
       // Attempt to find inside cache
-      final songId = widget.item.path;
-      final path = await MediaCacheService().getCachedArtPath(songId);
+      final songId = widget.item.id ?? widget.item.path;
+      final cache = ref.read(mediaCacheServiceProvider);
+      final path = await cache.getCachedArtPath(songId);
       if (mounted) {
         setState(() {
           _resolvedThumbnailUrl = path;
@@ -90,7 +98,9 @@ class _MediaArtworkWidgetState extends State<MediaArtworkWidget> {
         widget.item.albumArt!,
         width: widget.width,
         height: widget.height,
-        fit: BoxFit.cover,
+        fit: widget.fit,
+        color: widget.color,
+        colorBlendMode: widget.colorBlendMode,
         errorBuilder: (_, __, ___) => fallback,
       );
     } else if (_resolvedThumbnailUrl != null) {
@@ -99,7 +109,9 @@ class _MediaArtworkWidgetState extends State<MediaArtworkWidget> {
           imageUrl: _resolvedThumbnailUrl!,
           width: widget.width,
           height: widget.height,
-          fit: BoxFit.cover,
+          fit: widget.fit,
+          color: widget.color,
+          colorBlendMode: widget.colorBlendMode,
           placeholder: (context, url) => fallback,
           errorWidget: (context, url, error) => fallback,
         );
@@ -108,7 +120,9 @@ class _MediaArtworkWidgetState extends State<MediaArtworkWidget> {
           File(_resolvedThumbnailUrl!),
           width: widget.width,
           height: widget.height,
-          fit: BoxFit.cover,
+          fit: widget.fit,
+          color: widget.color,
+          colorBlendMode: widget.colorBlendMode,
           errorBuilder: (_, __, ___) => fallback,
         );
       }

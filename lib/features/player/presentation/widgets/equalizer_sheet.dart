@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../data/repositories/audio_provider.dart';
+import '../../application/audio_provider.dart';
 
 class EqualizerSheet extends ConsumerWidget {
   const EqualizerSheet({Key? key}) : super(key: key);
@@ -161,73 +161,79 @@ class EqualizerSheet extends ConsumerWidget {
 
                 // Sliders
                 Expanded(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: List.generate(9, (index) {
-                      return Column(
-                        children: [
-                          Expanded(
-                            child: Stack(
-                              alignment: Alignment.center,
-                              children: [
-                                // Background Tick marks
-                                Column(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: List.generate(
-                                    5,
-                                    (_) => Container(
-                                      width: 24,
-                                      height: 1,
-                                      color: colorScheme.onSurface.withOpacity(0.1),
-                                    ),
-                                  ),
-                                ),
-                                // Slider
-                                RotatedBox(
-                                  quarterTurns: 3,
-                                  child: SliderTheme(
-                                    data: SliderTheme.of(context).copyWith(
-                                      trackHeight: 4,
-                                      activeTrackColor: colorScheme.primary,
-                                      inactiveTrackColor: colorScheme.surfaceVariant,
-                                      thumbColor: colorScheme.primary,
-                                      thumbShape: const RoundSliderThumbShape(
-                                        enabledThumbRadius: 9,
-                                        elevation: 2,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      children: List.generate(9, (index) {
+                        return Container(
+                          width: 56, // Fixed width for each band to ensure scrollability
+                          child: Column(
+                            children: [
+                              Expanded(
+                                child: Stack(
+                                  alignment: Alignment.center,
+                                  children: [
+                                    // Background Tick marks
+                                    Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: List.generate(
+                                        5,
+                                        (_) => Container(
+                                          width: 24,
+                                          height: 1,
+                                          color: colorScheme.onSurface.withOpacity(0.1),
+                                        ),
                                       ),
-                                      overlayShape:
-                                          SliderComponentShape.noOverlay,
                                     ),
-                                    child: Slider(
-                                      value: audioState.equalizerBands[index],
-                                      min: -12.0,
-                                      max: 12.0,
-                                      onChanged: audioState.isEqualizerEnabled
-                                          ? (val) {
-                                              audioNotifier.setEqualizerBand(
-                                                index,
-                                                val,
-                                              );
-                                            }
-                                          : null,
+                                    // Slider
+                                    RotatedBox(
+                                      quarterTurns: 3,
+                                      child: SliderTheme(
+                                        data: SliderTheme.of(context).copyWith(
+                                          trackHeight: 4,
+                                          activeTrackColor: colorScheme.primary,
+                                          inactiveTrackColor: colorScheme.surfaceVariant,
+                                          thumbColor: colorScheme.primary,
+                                          thumbShape: const RoundSliderThumbShape(
+                                            enabledThumbRadius: 9,
+                                            elevation: 2,
+                                          ),
+                                          overlayShape:
+                                              SliderComponentShape.noOverlay,
+                                        ),
+                                        child: Slider(
+                                          value: audioState.equalizerBands[index],
+                                          min: -12.0,
+                                          max: 12.0,
+                                          onChanged: audioState.isEqualizerEnabled
+                                              ? (val) {
+                                                  audioNotifier.setEqualizerBand(
+                                                    index,
+                                                    val,
+                                                  );
+                                                }
+                                              : null,
+                                        ),
+                                      ),
                                     ),
-                                  ),
+                                  ],
                                 ),
-                              ],
-                            ),
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                _bandLabels[index],
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: onSurfaceVariant,
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 12),
-                          Text(
-                            _bandLabels[index],
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      );
-                    }),
+                        );
+                      }),
+                    ),
                   ),
                 ),
               ],
@@ -242,31 +248,38 @@ class EqualizerSheet extends ConsumerWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               // Checkbox
-              Row(
-                children: [
-                  SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: Checkbox(
-                      value: audioState.linkEqualizerSliders,
-                      activeColor: colorScheme.primary,
-                      checkColor: colorScheme.onPrimary,
-                      side: BorderSide(color: onSurfaceVariant),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(4),
+              Expanded(
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: Checkbox(
+                        value: audioState.linkEqualizerSliders,
+                        activeColor: colorScheme.primary,
+                        checkColor: colorScheme.onPrimary,
+                        side: BorderSide(color: onSurfaceVariant),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        onChanged: (val) {
+                          if (val != null) audioNotifier.toggleLinkSliders(val);
+                        },
                       ),
-                      onChanged: (val) {
-                        if (val != null) audioNotifier.toggleLinkSliders(val);
-                      },
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Move nearby sliders together',
-                    style: TextStyle(color: onSurfaceVariant, fontSize: 14),
-                  ),
-                ],
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Move nearby sliders together',
+                        style: TextStyle(color: onSurfaceVariant, fontSize: 14),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 2,
+                      ),
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               // Close Button
               ElevatedButton(
                 onPressed: () => Navigator.pop(context),

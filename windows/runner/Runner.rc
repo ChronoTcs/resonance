@@ -94,7 +94,7 @@ BEGIN
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "Resonance" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.chronostudio. All rights reserved." "\0"
-            VALUE "OriginalFilename", "resonance_app.exe" "\0"
+            VALUE "OriginalFilename", "Resonance.exe" "\0"
             VALUE "ProductName", "Resonance" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END

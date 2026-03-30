@@ -1,3 +1,5 @@
+import 'package:youtube_explode_dart/youtube_explode_dart.dart';
+
 enum DownloadStatus { queued, downloading, done, error, cancelled }
 
 enum DownloadType { audio, video }
@@ -19,6 +21,8 @@ class DownloadItem {
   final String? statusMessage;
   final List<String> logs;
   final String? errorMessage;
+  final String? songId; // The permanent Unified ID (Video ID)
+  final Video? video; // Pre-fetched metadata to avoid rate limiting
 
   const DownloadItem({
     required this.id,
@@ -35,6 +39,8 @@ class DownloadItem {
     this.statusMessage,
     this.logs = const [],
     this.errorMessage,
+    this.songId,
+    this.video,
   });
 
   DownloadItem copyWith({
@@ -52,6 +58,8 @@ class DownloadItem {
     String? statusMessage,
     List<String>? logs,
     String? errorMessage,
+    String? songId,
+    Video? video,
   }) {
     return DownloadItem(
       id: id ?? this.id,
@@ -68,6 +76,8 @@ class DownloadItem {
       statusMessage: statusMessage ?? this.statusMessage,
       logs: logs ?? this.logs,
       errorMessage: errorMessage ?? this.errorMessage,
+      songId: songId ?? this.songId,
+      video: video ?? this.video,
     );
   }
 

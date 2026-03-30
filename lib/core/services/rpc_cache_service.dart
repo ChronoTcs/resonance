@@ -1,9 +1,15 @@
-import 'package:shared_preferences/shared_preferences.dart';
+
+
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'storage_service.dart';
+
+final rpcCacheServiceProvider = Provider<RpcCacheService>((ref) {
+  return RpcCacheService(ref);
+});
 
 class RpcCacheService {
-  static final RpcCacheService _instance = RpcCacheService._internal();
-  factory RpcCacheService() => _instance;
-  RpcCacheService._internal();
+  final Ref _ref;
+  RpcCacheService(this._ref);
 
   static const String _artCachePrefix = 'art_cache_';
 
@@ -12,7 +18,7 @@ class RpcCacheService {
     String title, 
     Future<String?> Function() fetchFromITunes,
   ) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = _ref.read(sharedPreferencesProvider);
     final key = '$_artCachePrefix${artist.toLowerCase()}_${title.toLowerCase()}';
 
     // Check cache
@@ -35,7 +41,7 @@ class RpcCacheService {
   }
 
   Future<void> clearRpcCache() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = _ref.read(sharedPreferencesProvider);
     final keys = prefs.getKeys().where((k) => k.startsWith(_artCachePrefix));
     for (final key in keys) {
       await prefs.remove(key);

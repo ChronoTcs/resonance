@@ -85,6 +85,17 @@ class AppTheme {
         inactiveTrackColor: accentSoft,
         thumbColor: textDark,
       ),
+      scrollbarTheme: ScrollbarThemeData(
+        thickness: MaterialStateProperty.resolveWith((states) => 
+          states.contains(MaterialState.hovered) ? 8.0 : 4.0),
+        radius: const Radius.circular(10),
+        thumbColor: MaterialStateProperty.resolveWith((states) =>
+          primary.withOpacity(states.contains(MaterialState.hovered) ? 0.5 : 0.2)),
+        crossAxisMargin: 2,
+        mainAxisMargin: 2,
+        minThumbLength: 48,
+        interactive: true,
+      ),
       listTileTheme: const ListTileThemeData(iconColor: textDark),
     );
   }
@@ -138,6 +149,17 @@ class AppTheme {
         activeTrackColor: creamBackground,
         inactiveTrackColor: accentGrey,
         thumbColor: creamBackground,
+      ),
+      scrollbarTheme: ScrollbarThemeData(
+        thickness: MaterialStateProperty.resolveWith((states) => 
+          states.contains(MaterialState.hovered) ? 8.0 : 4.0),
+        radius: const Radius.circular(10),
+        thumbColor: MaterialStateProperty.resolveWith((states) =>
+          primary.withOpacity(states.contains(MaterialState.hovered) ? 0.5 : 0.2)),
+        crossAxisMargin: 2,
+        mainAxisMargin: 2,
+        minThumbLength: 48,
+        interactive: true,
       ),
       listTileTheme: const ListTileThemeData(iconColor: textLight),
     );

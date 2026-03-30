@@ -9,6 +9,8 @@ list(APPEND FLUTTER_PLUGIN_LIST
   permission_handler_windows
   screen_retriever_windows
   system_theme
+  url_launcher_windows
+  webview_windows
   window_manager
   windows_taskbar
 )

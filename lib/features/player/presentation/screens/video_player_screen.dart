@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import '../../../library/data/models/media_item.dart';
-import '../../data/repositories/audio_provider.dart';
+import '../../application/audio_provider.dart';
 
 class VideoPlayerScreen extends ConsumerStatefulWidget {
   final MediaItem videoItem;

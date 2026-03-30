@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance_app/features/download/data/models/download_item.dart';
@@ -17,6 +18,14 @@ class _DownloadScreenState extends ConsumerState<DownloadScreen>
   final _urlController = TextEditingController();
   DownloadType _selectedType = DownloadType.audio;
   DownloadSource _selectedSource = DownloadSource.ytmusic;
+
+  @override
+  void initState() {
+    super.initState();
+    if (Platform.isAndroid) {
+      _selectedType = DownloadType.audio;
+    }
+  }
 
   @override
   void dispose() {
@@ -68,83 +77,86 @@ class _DownloadScreenState extends ConsumerState<DownloadScreen>
         .length;
 
     return Scaffold(
-      body: Column(
-        children: [
+      body: CustomScrollView(
+        slivers: [
           // ─── Header ──────────────────────────────────────────────
-          Container(
-            padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Download Manager',
-                        style: theme.textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
+          SliverToBoxAdapter(
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Download Manager',
+                          style: theme.textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '$activeCount active · $queuedCount queued · $doneCount done',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.hintColor,
+                        const SizedBox(height: 4),
+                        Text(
+                          '$activeCount active · $queuedCount queued · $doneCount done',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.hintColor,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton.outlined(
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const DownloadSettingsScreen(),
+                      ],
                     ),
                   ),
-                  icon: const Icon(Icons.settings_outlined),
-                  tooltip: 'Download Settings',
-                ),
-              ],
+                  IconButton.outlined(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const DownloadSettingsScreen(),
+                      ),
+                    ),
+                    icon: const Icon(Icons.settings_outlined),
+                    tooltip: 'Download Settings',
+                  ),
+                ],
+              ),
             ),
           ),
 
           // ─── Input Panel ──────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Card(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // URL input
-                    TextField(
-                      controller: _urlController,
-                      maxLines: 4,
-                      minLines: 2,
-                      decoration: InputDecoration(
-                        hintText:
-                            'Paste URL(s) or type a song name…\n(One per line for batch download)',
-                        border: const OutlineInputBorder(),
-                        suffixIcon: IconButton(
-                          icon: const Icon(Icons.clear),
-                          onPressed: () => _urlController.clear(),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Card(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // URL input
+                      TextField(
+                        controller: _urlController,
+                        maxLines: 4,
+                        minLines: 2,
+                        decoration: InputDecoration(
+                          hintText:
+                              'Paste URL(s) or type a song name…\n(One per line for batch download)',
+                          border: const OutlineInputBorder(),
+                          suffixIcon: IconButton(
+                            icon: const Icon(Icons.clear),
+                            onPressed: () => _urlController.clear(),
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 12),
+                      const SizedBox(height: 12),
 
-                    // Type + Source selectors
-                    Row(
-                      children: [
-                        // Type
-                        Expanded(
-                          child: Column(
+                      // Type + Source selectors
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final useStack = constraints.maxWidth < 450;
+
+                          final typeSelector = Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
@@ -154,31 +166,30 @@ class _DownloadScreenState extends ConsumerState<DownloadScreen>
                                 ),
                               ),
                               const SizedBox(height: 4),
-                              SegmentedButton<DownloadType>(
-                                segments: const [
-                                  ButtonSegment(
-                                    value: DownloadType.audio,
-                                    label: Text('Audio'),
-                                    icon: Icon(Icons.music_note, size: 16),
-                                  ),
-                                  ButtonSegment(
-                                    value: DownloadType.video,
-                                    label: Text('Video'),
-                                    icon: Icon(Icons.movie_outlined, size: 16),
-                                  ),
-                                ],
-                                selected: {_selectedType},
-                                onSelectionChanged: (s) =>
-                                    setState(() => _selectedType = s.first),
+                              SizedBox(
+                                width: double.infinity,
+                                child: SegmentedButton<DownloadType>(
+                                  segments: const [
+                                    ButtonSegment(
+                                      value: DownloadType.audio,
+                                      label: Text('Audio'),
+                                      icon: Icon(Icons.music_note, size: 16),
+                                    ),
+                                    ButtonSegment(
+                                      value: DownloadType.video,
+                                      label: Text('Video'),
+                                      icon: Icon(Icons.movie_outlined, size: 16),
+                                    ),
+                                  ],
+                                  selected: {_selectedType},
+                                  onSelectionChanged: (s) =>
+                                      setState(() => _selectedType = s.first),
+                                ),
                               ),
                             ],
-                          ),
-                        ),
-                        const SizedBox(width: 16),
+                          );
 
-                        // Source
-                        Expanded(
-                          child: Column(
+                          final sourceSelector = Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
@@ -217,101 +228,132 @@ class _DownloadScreenState extends ConsumerState<DownloadScreen>
                                     setState(() => _selectedSource = v!),
                               ),
                             ],
+                          );
+
+                          if (Platform.isAndroid) {
+                            return sourceSelector;
+                          }
+
+                          if (useStack) {
+                            return Column(
+                              children: [
+                                typeSelector,
+                                const SizedBox(height: 12),
+                                sourceSelector,
+                              ],
+                            );
+                          }
+
+                          return Row(
+                            children: [
+                              Expanded(child: typeSelector),
+                              const SizedBox(width: 16),
+                              Expanded(child: sourceSelector),
+                            ],
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Output path info
+                      if (settings != null)
+                        Text(
+                          _selectedType == DownloadType.audio
+                              ? '📁 ${settings.musicOutputPath}'
+                              : '📁 ${settings.videoOutputPath}',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.hintColor,
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
 
-                    // Output path info
-                    if (settings != null)
-                      Text(
-                        _selectedType == DownloadType.audio
-                            ? '📁 ${settings.musicOutputPath}'
-                            : '📁 ${settings.videoOutputPath}',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.hintColor,
+                      const SizedBox(height: 12),
+
+                      // Add button
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          onPressed: _addToQueue,
+                          icon: const Icon(Icons.add_circle_outline),
+                          label: const Text('Add to Queue'),
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
-
-                    const SizedBox(height: 12),
-
-                    // Add button
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton.icon(
-                        onPressed: _addToQueue,
-                        icon: const Icon(Icons.add_circle_outline),
-                        label: const Text('Add to Queue'),
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
 
           // ─── Queue Header ─────────────────────────────────────────
-          if (queue.isNotEmpty) ...[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
-              child: Row(
-                children: [
-                  Text(
-                    'Queue',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
+          if (queue.isNotEmpty)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+                child: Row(
+                  children: [
+                    Text(
+                      'Queue',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  ),
-                  const Spacer(),
-                  if (doneCount > 0)
-                    TextButton.icon(
-                      onPressed: () =>
-                          ref.read(downloadProvider.notifier).clearCompleted(),
-                      icon: const Icon(Icons.clear_all, size: 18),
-                      label: const Text('Clear done'),
-                    ),
-                ],
+                    const Spacer(),
+                    if (doneCount > 0)
+                      TextButton.icon(
+                        onPressed: () =>
+                            ref.read(downloadProvider.notifier).clearCompleted(),
+                        icon: const Icon(Icons.clear_all, size: 18),
+                        label: const Text('Clear done'),
+                      ),
+                  ],
+                ),
               ),
             ),
-          ],
 
-          // ─── Queue List ───────────────────────────────────────────
-          Expanded(
-            child: queue.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.download_outlined,
-                          size: 72,
-                          color: theme.disabledColor,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'No downloads yet',
-                          style: theme.textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Paste a URL or song name above',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.hintColor,
-                          ),
-                        ),
-                      ],
+          // ─── Queue List / Empty State ─────────────────────────────
+          if (queue.isEmpty)
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.download_outlined,
+                      size: 72,
+                      color: theme.disabledColor,
                     ),
-                  )
-                : ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
-                    itemCount: queue.length,
-                    itemBuilder: (ctx, i) => _DownloadTile(item: queue[i]),
+                    const SizedBox(height: 16),
+                    Text(
+                      'No downloads yet',
+                      style: theme.textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Paste a URL or song name above',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.hintColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (ctx, i) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: _DownloadTile(item: queue[i]),
                   ),
-          ),
+                  childCount: queue.length,
+                ),
+              ),
+            ),
         ],
       ),
     );

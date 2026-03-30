@@ -5,15 +5,20 @@ import 'package:flutter_discord_rpc/flutter_discord_rpc.dart';
 import '../../features/library/data/models/media_item.dart';
 import 'rpc_cache_service.dart';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+final discordRpcServiceProvider = Provider<DiscordRpcService>((ref) {
+  final rpcCache = ref.watch(rpcCacheServiceProvider);
+  return DiscordRpcService(rpcCache);
+});
+
 class DiscordRpcService {
-  static final DiscordRpcService _instance = DiscordRpcService._internal();
-  factory DiscordRpcService() => _instance;
-  DiscordRpcService._internal();
+  final RpcCacheService _rpcCache;
+  DiscordRpcService(this._rpcCache);
 
   bool _isInitialized = false;
   String? _lastTrackId;
   String _currentAlbumArtKey = 'resonance_logo';
-  final _rpcCache = RpcCacheService();
 
   // Throttling and Sequencing
   int _lastUpdateTime = 0;

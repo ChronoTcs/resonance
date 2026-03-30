@@ -1,11 +1,12 @@
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:resonance_app/features/player/data/repositories/audio_provider.dart';
+import 'package:resonance_app/features/player/application/audio_provider.dart';
 import 'package:resonance_app/features/playlist/presentation/providers/playlist_provider.dart';
-import 'package:resonance_app/features/library/data/repositories/library_provider.dart';
+import 'package:resonance_app/features/library/application/library_provider.dart';
 import 'package:resonance_app/core/widgets/media_actions_bottom_sheet.dart';
 import 'package:resonance_app/core/widgets/media_artwork_widget.dart';
+import 'package:resonance_app/core/widgets/hover_widgets.dart';
 
 class PlaylistDetailScreen extends ConsumerWidget {
   const PlaylistDetailScreen({super.key, required this.playlistId});
@@ -41,8 +42,37 @@ class PlaylistDetailScreen extends ConsumerWidget {
                 pinned: true,
                 elevation: 0,
                 backgroundColor: theme.colorScheme.surface.withOpacity(0.7),
+                leading: Center(
+                  child: ModernIconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    onPressed: () => ref.read(selectedPlaylistIdProvider.notifier).setSelectedId(null),
+                    tooltip: 'Back',
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
                 actions: [
-                  IconButton(
+                  ModernIconButton(
+                    icon: const Icon(Icons.sync_problem_rounded),
+                    tooltip: 'Repair Playlist',
+                    onPressed: () async {
+                      final libraryItems = ref.read(libraryProvider).allMedia;
+                      final count = await ref
+                          .read(playlistProvider.notifier)
+                          .repairPlaylist(playlistId, libraryItems);
+                      
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(count > 0 
+                              ? 'Repaired $count broken tracks!' 
+                              : 'No broken tracks found or no matches in library.'),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                  ModernIconButton(
                     icon: const Icon(Icons.add_circle_outline),
                     tooltip: 'Add Music',
                     onPressed: () {
@@ -123,12 +153,24 @@ class PlaylistDetailScreen extends ConsumerWidget {
                         ),
                       ),
                       if (tracks.isNotEmpty)
-                        FilledButton.icon(
-                          onPressed: () {
-                            ref.read(audioProvider.notifier).playPlaylist(tracks, initialIndex: 0);
+                        HoverWrapper(
+                          borderRadius: BorderRadius.circular(20),
+                          onTap: () {
+                            ref
+                                .read(audioProvider.notifier)
+                                .playPlaylist(tracks, initialIndex: 0);
                           },
-                          icon: const Icon(Icons.play_arrow_rounded),
-                          label: const Text('Play All'),
+                          child: FilledButton.icon(
+                            onPressed: null, // Let HoverWrapper handle tap
+                            icon: const Icon(Icons.play_arrow_rounded),
+                            label: const Text('Play All'),
+                            style: FilledButton.styleFrom(
+                              disabledBackgroundColor:
+                                  theme.colorScheme.primary,
+                              disabledForegroundColor:
+                                  theme.colorScheme.onPrimary,
+                            ),
+                          ),
                         ),
                     ],
                   ),
@@ -180,7 +222,7 @@ class PlaylistDetailScreen extends ConsumerWidget {
                           builder: (_) => MediaActionsBottomSheet(item: track),
                         );
                       },
-                      trailing: IconButton(
+                      trailing: ModernIconButton(
                         icon: const Icon(Icons.remove_circle_outline),
                         tooltip: 'Remove from playlist',
                         onPressed: () {

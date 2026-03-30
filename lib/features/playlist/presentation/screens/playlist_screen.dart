@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:resonance_app/features/player/data/repositories/audio_provider.dart';
+import 'package:resonance_app/features/player/application/audio_provider.dart';
 import 'package:resonance_app/features/playlist/data/models/playlist_model.dart';
 import 'package:resonance_app/features/playlist/presentation/providers/playlist_provider.dart';
 import 'package:resonance_app/features/playlist/presentation/screens/playlist_detail_screen.dart';
+import 'package:resonance_app/core/widgets/hover_widgets.dart';
 
 class PlaylistScreen extends ConsumerWidget {
   const PlaylistScreen({super.key});
@@ -12,7 +13,12 @@ class PlaylistScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final playlistsAsync = ref.watch(playlistProvider);
+    final selectedId = ref.watch(selectedPlaylistIdProvider);
     final theme = Theme.of(context);
+
+    if (selectedId != null) {
+      return PlaylistDetailScreen(playlistId: selectedId);
+    }
 
     return Scaffold(
       body: playlistsAsync.when(
@@ -21,7 +27,7 @@ class PlaylistScreen extends ConsumerWidget {
             slivers: [
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                   child: Row(
                     children: [
                       Expanded(
@@ -155,112 +161,106 @@ class _PlaylistTile extends ConsumerWidget {
     return Card(
       margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: InkWell(
+      child: HoverWrapper(
         borderRadius: BorderRadius.circular(12),
+        useScale: false,
         onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => PlaylistDetailScreen(playlistId: playlist.id),
-            ),
-          );
+          ref.read(selectedPlaylistIdProvider.notifier).setSelectedId(playlist.id);
         },
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            children: [
-              // Thumbnail
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: firstTrack?.albumArt != null
-                    ? Image.memory(
-                        firstTrack!.albumArt!,
-                        width: 56,
-                        height: 56,
-                        fit: BoxFit.cover,
-                      )
-                    : (firstTrack?.thumbnailUrl != null)
-                        ? CachedNetworkImage(
-                            imageUrl: firstTrack!.thumbnailUrl!,
-                            width: 56,
-                            height: 56,
-                            fit: BoxFit.cover,
-                            placeholder: (c, u) => Container(color: theme.colorScheme.surfaceContainerHighest, child: const Icon(Icons.music_note, size: 20)),
-                            errorWidget: (c, u, e) => Container(color: theme.colorScheme.surfaceContainerHighest, child: const Icon(Icons.music_note, size: 20)),
-                          )
-                        : Container(
-                            width: 56,
-                            height: 56,
-                            color: theme.colorScheme.surfaceContainerHighest,
-                            child: Icon(
-                              Icons.queue_music,
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            // Thumbnail
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: firstTrack?.albumArt != null
+                  ? Image.memory(
+                      firstTrack!.albumArt!,
+                      width: 56,
+                      height: 56,
+                      fit: BoxFit.cover,
+                    )
+                  : (firstTrack?.thumbnailUrl != null)
+                      ? CachedNetworkImage(
+                          imageUrl: firstTrack!.thumbnailUrl!,
+                          width: 56,
+                          height: 56,
+                          fit: BoxFit.cover,
+                          placeholder: (c, u) => Container(color: theme.colorScheme.surfaceContainerHighest, child: const Icon(Icons.music_note, size: 20)),
+                          errorWidget: (c, u, e) => Container(color: theme.colorScheme.surfaceContainerHighest, child: const Icon(Icons.music_note, size: 20)),
+                        )
+                      : Container(
+                          width: 56,
+                          height: 56,
+                          color: theme.colorScheme.surfaceContainerHighest,
+                          child: Icon(
+                            Icons.queue_music,
+                            color: theme.colorScheme.onSurfaceVariant,
                           ),
-              ),
-              const SizedBox(width: 12),
-              // Info
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      playlist.name,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                        ),
+            ),
+            const SizedBox(width: 12),
+            // Info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    playlist.name,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${playlist.tracks.length} track${playlist.tracks.length == 1 ? '' : 's'}',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.hintColor,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // Context menu
-              PopupMenuButton<_PlaylistAction>(
-                onSelected: (action) =>
-                    _handleAction(context, ref, action, playlist),
-                itemBuilder: (_) => [
-                  const PopupMenuItem(
-                    value: _PlaylistAction.play,
-                    child: ListTile(
-                      leading: Icon(Icons.play_arrow_rounded),
-                      title: Text('Play all'),
-                      contentPadding: EdgeInsets.zero,
-                      visualDensity: VisualDensity.compact,
-                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  const PopupMenuItem(
-                    value: _PlaylistAction.rename,
-                    child: ListTile(
-                      leading: Icon(Icons.edit_outlined),
-                      title: Text('Rename'),
-                      contentPadding: EdgeInsets.zero,
-                      visualDensity: VisualDensity.compact,
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: _PlaylistAction.delete,
-                    child: ListTile(
-                      leading: Icon(Icons.delete_outline, color: Colors.red),
-                      title: Text(
-                        'Delete',
-                        style: TextStyle(color: Colors.red),
-                      ),
-                      contentPadding: EdgeInsets.zero,
-                      visualDensity: VisualDensity.compact,
+                  const SizedBox(height: 2),
+                  Text(
+                    '${playlist.tracks.length} track${playlist.tracks.length == 1 ? '' : 's'}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.hintColor,
                     ),
                   ),
                 ],
               ),
-            ],
-          ),
+            ),
+            // Context menu
+            PopupMenuButton<_PlaylistAction>(
+              onSelected: (action) =>
+                  _handleAction(context, ref, action, playlist),
+              itemBuilder: (_) => [
+                const PopupMenuItem(
+                  value: _PlaylistAction.play,
+                  child: ListTile(
+                    leading: Icon(Icons.play_arrow_rounded),
+                    title: Text('Play all'),
+                    contentPadding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: _PlaylistAction.rename,
+                  child: ListTile(
+                    leading: Icon(Icons.edit_outlined),
+                    title: Text('Rename'),
+                    contentPadding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: _PlaylistAction.delete,
+                  child: ListTile(
+                    leading: Icon(Icons.delete_outline, color: Colors.red),
+                    title: Text(
+                      'Delete',
+                      style: TextStyle(color: Colors.red),
+                    ),
+                    contentPadding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );

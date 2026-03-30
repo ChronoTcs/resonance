@@ -3,7 +3,7 @@ import os
 import json
 import subprocess
 
-script_path = r"d:\File Mata Kuliah\Projek\streamly\resonance_app\python_engine\resonance_downloader.py"
+script_path = os.path.join(os.path.dirname(__file__), "resonance_downloader.py")
 cmd = [sys.executable, script_path]
 
 p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)

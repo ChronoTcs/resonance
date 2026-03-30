@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,17 +13,36 @@ class DownloadSettingsScreen extends ConsumerWidget {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Download Settings',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-      ),
-      body: settingsAsync.when(
-        data: (settings) {
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
+      body: SafeArea(
+        top: true,
+        bottom: false,
+        child: settingsAsync.when(
+          data: (settings) {
+            return ListView(
+              physics: const ClampingScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+              children: [
+                // ─── Header ──────────────────────────────────────────────
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.arrow_back),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Download Settings',
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              const SizedBox(height: 8),
+
               // ── Output Paths ──────────────────────────────────────
               _SectionHeader(
                 label: 'Output Paths',
@@ -58,21 +78,22 @@ class DownloadSettingsScreen extends ConsumerWidget {
                   }
                 },
               ),
-              const SizedBox(height: 8),
-
-              _PathTile(
-                label: 'Video Folder',
-                subtitle: settings.videoOutputPath,
-                icon: Icons.movie_outlined,
-                onPick: () async {
-                  final dir = await FilePicker.platform.getDirectoryPath();
-                  if (dir != null) {
-                    ref
-                        .read(downloadSettingsProvider.notifier)
-                        .saveSettings(settings.copyWith(videoOutputPath: dir));
-                  }
-                },
-              ),
+              if (!Platform.isAndroid) ...[
+                const SizedBox(height: 8),
+                _PathTile(
+                  label: 'Video Folder',
+                  subtitle: settings.videoOutputPath,
+                  icon: Icons.movie_outlined,
+                  onPick: () async {
+                    final dir = await FilePicker.platform.getDirectoryPath();
+                    if (dir != null) {
+                      ref
+                          .read(downloadSettingsProvider.notifier)
+                          .saveSettings(settings.copyWith(videoOutputPath: dir));
+                    }
+                  },
+                ),
+              ],
 
               const SizedBox(height: 24),
 
@@ -204,6 +225,7 @@ class DownloadSettingsScreen extends ConsumerWidget {
         },
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Error: $e')),
+        ),
       ),
     );
   }
