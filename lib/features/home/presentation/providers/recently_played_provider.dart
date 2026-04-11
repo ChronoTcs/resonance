@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance_app/features/library/data/models/media_item.dart';
-import 'package:resonance_app/core/services/media_cache_service.dart';
-import 'package:resonance_app/core/services/storage_service.dart';
+import 'package:resonance_app/core/data/services/media_cache_service.dart';
+import 'package:resonance_app/core/data/services/storage_service.dart';
 
 const _recentlyPlayedKey = 'recently_played_items';
 const _maxRecentlyPlayed = 20;
@@ -45,7 +45,7 @@ class RecentlyPlayedNotifier extends AsyncNotifier<List<MediaItem>> {
           itemToSave = item.copyWith(thumbnailUrl: cachePath);
         }
       } catch (e) {
-        print('Error caching art in recently played: $e');
+        debugPrint('Error caching art in recently played: $e');
       }
     }
 
@@ -80,7 +80,7 @@ List<MediaItem> _parseRecentlyPlayedJson(List<String> jsonList) {
   try {
     return jsonList.map((item) => MediaItem.fromJson(jsonDecode(item))).toList();
   } catch (e) {
-    print('RecentlyPlayed Isolate: Failed to parse JSON: $e');
+    debugPrint('RecentlyPlayed Isolate: Failed to parse JSON: $e');
     return [];
   }
 }

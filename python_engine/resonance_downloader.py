@@ -19,6 +19,10 @@ import json
 import os
 import sys
 from typing import Optional
+import threading
+
+_active_events = {}
+_events_lock = threading.Lock()
 
 try:
     import yt_dlp
@@ -173,6 +177,11 @@ class YDLimiterLogger:
 
 def build_progress_hook(download_id: str):
     def hook(d):
+        with _events_lock:
+            event = _active_events.get(download_id)
+        if event and event.is_set():
+            raise Exception("CANCELLED_BY_USER")
+
         if d["status"] == "downloading":
             raw_percent = d.get("_percent_str", "0%").strip().replace("%", "")
             try: percent = float(raw_percent)
@@ -194,12 +203,19 @@ def handle_download(cmd: dict):
     lyrics_path = cmd.get("lyrics_path", "")
     images_path = cmd.get("images_path", "")
     quality = str(cmd.get("quality", "192"))
+    ffmpeg_path = cmd.get("ffmpeg_path")
+    
+    emit({"id": download_id, "type": "log", "message": f"ℹ FFmpeg Internal Path: {ffmpeg_path}"})
     
     os.makedirs(music_path, exist_ok=True)
     os.makedirs(video_path, exist_ok=True)
     os.makedirs(lyrics_path, exist_ok=True)
     if images_path:
         os.makedirs(images_path, exist_ok=True)
+
+    event = threading.Event()
+    with _events_lock:
+        _active_events[download_id] = event
 
     is_direct_url = url.startswith("http://") or url.startswith("https://")
     
@@ -224,14 +240,16 @@ def handle_download(cmd: dict):
             # Use stable hashed loc_ prefix instead of raw video ID
             "outtmpl": os.path.join(output_dir, "temp_%(id)s.%(ext)s"),
             "logger": YDLimiterLogger(download_id),
+            "ffmpeg_location": ffmpeg_path,
         }
     else:
         output_dir = video_path
         ydl_opts = {
-            **common_opts, "format": "bestvideo+bestaudio/best", "merge_output_format": "mp4",
+            **common_opts, "format": "bestvideo[ext=mp4][height<=1080]+bestaudio[ext=m4a]/best[ext=mp4][height<=1080]/best", "merge_output_format": "mp4",
             "writethumbnail": True,
-            "outtmpl": os.path.join(output_dir, "loc_%(id)s.%(ext)s"),
+            "outtmpl": os.path.join(output_dir, "temp_%(id)s.%(ext)s"),
             "logger": YDLimiterLogger(download_id),
+            "ffmpeg_location": ffmpeg_path,
         }
 
     try:
@@ -300,12 +318,22 @@ def handle_download(cmd: dict):
             if dl_type == "audio":
                 fetch_lyrics(title, lyrics_path, download_id, loc_id, artist=artist, duration=duration)
 
+            if not os.path.exists(final_path):
+                raise Exception("Download failed: Video file missing or merge failed (check ffmpeg installation).")
+
             emit({
                 "id": download_id, "type": "done", "title": title, "path": final_path, "songId": loc_id, "art_path": target_art
             })
 
     except Exception as e:
-        emit({"id": download_id, "type": "error", "message": str(e)})
+        if str(e) == "CANCELLED_BY_USER":
+            emit({"id": download_id, "type": "error", "message": "Download cancelled."})
+        else:
+            emit({"id": download_id, "type": "error", "message": str(e)})
+    finally:
+        with _events_lock:
+            if download_id in _active_events:
+                del _active_events[download_id]
 
 
 def main():
@@ -317,6 +345,11 @@ def main():
             cmd = json.loads(line)
             if cmd.get("action") == "download":
                 threading.Thread(target=handle_download, args=(cmd,), daemon=True).start()
+            elif cmd.get("action") == "cancel":
+                cid = cmd.get("id")
+                with _events_lock:
+                    if cid in _active_events:
+                        _active_events[cid].set()
             elif cmd.get("action") == "ping": emit({"type": "pong"})
             elif cmd.get("action") == "quit": break
         except: continue

@@ -37,6 +37,25 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+
+    applicationVariants.all {
+        val variant = this
+        if (variant.buildType.name == "release") {
+            val copyTask = tasks.register<Copy>("copy${variant.name.capitalize()}Apk") {
+                // Flutter typically places the final APK here
+                from(layout.buildDirectory.dir("outputs/flutter-apk/app-release.apk"))
+                into(layout.buildDirectory.dir("outputs/resonance/"))
+                rename { "Resonance-v${variant.versionName}-Android.apk" }
+                
+                doFirst {
+                    mkdir(layout.buildDirectory.dir("outputs/resonance/"))
+                }
+            }
+            variant.assembleProvider.configure {
+                finalizedBy(copyTask)
+            }
+        }
+    }
 }
 
 flutter {

@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance_app/features/home/presentation/providers/recently_played_provider.dart';
 import 'package:resonance_app/features/library/data/models/media_item.dart';
 import 'package:resonance_app/features/library/application/library_provider.dart';
-import 'package:resonance_app/features/player/application/audio_provider.dart';
+import 'package:resonance_app/features/player/application/services/queue_orchestrator.dart';
 import 'package:resonance_app/core/widgets/media_actions_bottom_sheet.dart';
 import 'package:resonance_app/core/widgets/media_artwork_widget.dart';
 
@@ -229,7 +229,9 @@ class _TrackCard extends ConsumerWidget {
       padding: const EdgeInsets.only(right: 12),
       child: InkWell(
         onTap: () {
-          ref.read(audioProvider.notifier).playPlaylist([track]);
+          final library = ref.read(libraryProvider);
+          final audioTracks = library.allMedia.where((m) => m.type == 'audio').toList();
+          ref.read(queueOrchestratorProvider).playWithLocalRadioFallback(track, audioTracks);
         },
         onLongPress: () {
           showModalBottomSheet(
@@ -299,7 +301,11 @@ class _TrackListTile extends ConsumerWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
-      onTap: () => ref.read(audioProvider.notifier).playTrack(track),
+      onTap: () {
+        final library = ref.read(libraryProvider);
+        final audioTracks = library.allMedia.where((m) => m.type == 'audio').toList();
+        ref.read(queueOrchestratorProvider).playSequentialContext(track, audioTracks);
+      },
       onLongPress: () {
         showModalBottomSheet(
           context: context,

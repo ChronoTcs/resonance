@@ -2,12 +2,11 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
-import 'package:audiotags/audiotags.dart';
+import 'package:metadata_god/metadata_god.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/media_item.dart';
 
-import 'package:resonance_app/core/services/cache_manager.dart';
+import 'package:resonance_app/core/data/services/cache_manager.dart';
 import 'package:resonance_app/core/utils/path_utils.dart';
 
 class LibraryRepository {
@@ -95,10 +94,13 @@ class LibraryRepository {
       }
     }
 
-    // 2. Differential Scan (Use Path as key since we haven't resolved IDs for these yet)
-    final Map<String, MediaItem> existingMap = {
-      for (var item in existingItems) item.path: item,
-    };
+    // 2. Differential Scan (Use Path and ID to prevent OS-level Absolute Path mismatches)
+    final Map<String, MediaItem> existingMapByPath = {};
+    final Map<String, MediaItem> existingMapById = {};
+    for (var item in existingItems) {
+      existingMapByPath[item.path] = item;
+      if (item.id != null) existingMapById[item.id!] = item;
+    }
 
     final List<String> pathsToParse = [];
     final List<MediaItem> finalItems = [...videoItems];
@@ -106,8 +108,17 @@ class LibraryRepository {
     final imagesDir = await _cacheManager.getImagesDir();
 
     for (var path in audioPaths) {
-      if (existingMap.containsKey(path)) {
-        MediaItem item = existingMap[path]!;
+      MediaItem? existingItem = existingMapByPath[path];
+      
+      if (existingItem == null) {
+        final fileName = p.basenameWithoutExtension(path);
+        if (fileName.startsWith('loc_')) {
+          existingItem = existingMapById[fileName];
+        }
+      }
+
+      if (existingItem != null) {
+        MediaItem item = existingItem;
         
         // Robust thumbnail check: Reconnect them whether they are null or pointing to a dead file
         if (item.thumbnailUrl == null || !item.thumbnailUrl!.startsWith('http')) {
@@ -172,12 +183,18 @@ String _generateLocId(String path) {
 }
 
 Future<List<MediaItem>> _parseBatch(Map<String, dynamic> args) async {
+  // SOTA V11.2: Isolate Awakening
+  // Fungsi ini berjalan di background Isolate (via compute), sehingga tidak mewarisi
+  // inisialisasi dari main thread. Kita WAJIB menginisialisasi ulang FFI agar tidak crash.
+  try {
+    await MetadataGod.initialize();
+  } catch (e) {
+    debugPrint('LibraryRepository Isolate: Failed to initialize MetadataGod: $e');
+  }
+
   final List<String> paths = args['paths'] as List<String>;
   final String imagesDirPath = args['imagesDirPath'] as String;
   final List<MediaItem> results = [];
-  
-
-
   for (var path in paths) {
     String title = p.basenameWithoutExtension(path);
     String? artist;
@@ -194,14 +211,14 @@ Future<List<MediaItem>> _parseBatch(Map<String, dynamic> args) async {
     }
 
     try {
-      final tag = await AudioTags.read(path);
-      if (tag != null) {
-        title = (tag.title != null && tag.title!.isNotEmpty) 
-            ? tag.title! 
-            : title;
-        artist = tag.trackArtist ?? tag.albumArtist;
-      }
-    } catch (_) {}
+      final tag = await MetadataGod.readMetadata(file: path);
+      title = (tag.title != null && tag.title!.isNotEmpty) 
+          ? tag.title! 
+          : title;
+      artist = tag.artist;
+    } catch (e) {
+      debugPrint('LibraryRepository Isolate: Metadata extraction error for $path: $e');
+    }
 
     // Attach local art cover if exists (New strict loc_ format)
     final dir = p.dirname(path);

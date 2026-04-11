@@ -4,10 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:webview_windows/webview_windows.dart';
-import '../../application/video_player_notifier.dart';
-import '../../application/webview_provider.dart'; // GLOBAL PROVIDER
+import '../../application/providers/video_player_notifier.dart';
+import '../../application/providers/webview_provider.dart'; // GLOBAL PROVIDER
 import '../../../library/data/models/media_item.dart';
-import 'package:resonance_app/core/widgets/hover_widgets.dart';
+import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
 import 'dart:ui'; // For BackdropFilter
 
 class WebVideoSnifferScreen extends ConsumerStatefulWidget {
@@ -161,7 +161,7 @@ class _WebVideoSnifferScreenState extends ConsumerState<WebVideoSnifferScreen> {
                       })();
                     """;
                     await controller.executeScript(focusJs);
-                    if (mounted) {
+                    if (context.mounted) {
                       Navigator.pop(context); // Close sheet
                       _showSnack('Mode Fokus Aktif! (Video ini dienkripsi, tonton langsung di sini)');
                     }
@@ -185,7 +185,7 @@ class _WebVideoSnifferScreenState extends ConsumerState<WebVideoSnifferScreen> {
                       })();
                     """;
                     await controller.executeScript(diveJs);
-                    if (mounted) {
+                    if (context.mounted) {
                       Navigator.pop(context); // Close sheet
                       _showSnack('Masuk ke Host Player. Tekan "Sniff Video" LAGI untuk mengambil videonya!');
                     }
@@ -221,14 +221,13 @@ class _WebVideoSnifferScreenState extends ConsumerState<WebVideoSnifferScreen> {
     final interceptedUrl = webviewState.interceptedUrl;
     final hasInterception = interceptedUrl != null && interceptedUrl.isNotEmpty;
     final host = hasInterception ? (Uri.tryParse(interceptedUrl)?.host.toLowerCase() ?? '') : '';
-;
 
     return Scaffold(
       appBar: AppBar(
-        leading: ModernIconButton(
-          icon: const Icon(Icons.close),
+        leading: ReusableHoverIconButton(
+          icon: Icons.close,
           tooltip: 'Minimize Sniffer',
-          onPressed: () {
+          onTap: () {
             ref.read(webviewProvider.notifier).setMinimized(true);
             Navigator.pop(context);
           },
@@ -238,7 +237,7 @@ class _WebVideoSnifferScreenState extends ConsumerState<WebVideoSnifferScreen> {
           style: const TextStyle(color: Colors.white, fontSize: 14),
           decoration: InputDecoration(
             hintText: 'Enter URL (e.g., https://...)',
-            hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
+            hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
             border: InputBorder.none,
             contentPadding: const EdgeInsets.symmetric(vertical: 12),
           ),
@@ -253,30 +252,33 @@ class _WebVideoSnifferScreenState extends ConsumerState<WebVideoSnifferScreen> {
           },
         ),
         actions: [
-          ModernIconButton(
-            icon: const Icon(Icons.arrow_back, size: 24),
+          ReusableHoverIconButton(
+            icon: Icons.arrow_back,
+            iconSize: 24,
             tooltip: 'Browser Back',
-            onPressed: () async {
+            onTap: () async {
               await controller?.goBack();
             },
           ),
-          ModernIconButton(
-            icon: const Icon(Icons.arrow_forward, size: 24),
+          ReusableHoverIconButton(
+            icon: Icons.arrow_forward,
+            iconSize: 24,
             tooltip: 'Browser Forward',
-            onPressed: () async {
+            onTap: () async {
               await controller?.goForward();
             },
           ),
-          ModernIconButton(
-            icon: const Icon(Icons.refresh),
+          ReusableHoverIconButton(
+            icon: Icons.refresh,
             tooltip: 'Reload',
-            onPressed: () => controller?.reload(),
+            onTap: () => controller?.reload(),
           ),
           // Total Clean Exit
-          ModernIconButton(
-            icon: const Icon(Icons.exit_to_app, color: Colors.redAccent),
+          ReusableHoverIconButton(
+            icon: Icons.exit_to_app,
+            color: Colors.redAccent,
             tooltip: 'Kill Sniffer Session',
-            onPressed: () {
+            onTap: () {
               ref.read(webviewProvider.notifier).reset();
               Navigator.pop(context);
             },
@@ -378,12 +380,12 @@ class _InterceptionCardState extends ConsumerState<_InterceptionCard> {
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: colorScheme.surface.withOpacity(0.85),
+            color: colorScheme.surface.withValues(alpha: 0.85),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: colorScheme.primary.withOpacity(0.2)),
+            border: Border.all(color: colorScheme.primary.withValues(alpha: 0.2)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.2),
+                color: Colors.black.withValues(alpha: 0.2),
                 blurRadius: 20,
                 offset: const Offset(0, 10),
               )
@@ -408,7 +410,7 @@ class _InterceptionCardState extends ConsumerState<_InterceptionCard> {
               const SizedBox(height: 8),
               Text(
                 'Aplikasi mencegah navigasi otomatis ke:',
-                style: TextStyle(color: colorScheme.onSurface.withOpacity(0.7), fontSize: 13),
+                style: TextStyle(color: colorScheme.onSurface.withValues(alpha: 0.7), fontSize: 13),
               ),
               Text(
                 widget.host,
@@ -431,7 +433,7 @@ class _InterceptionCardState extends ConsumerState<_InterceptionCard> {
                   ),
                    TextButton(
                     onPressed: widget.onDismiss,
-                    child: Text('Abaikan', style: TextStyle(color: colorScheme.onSurface.withOpacity(0.6))),
+                    child: Text('Abaikan', style: TextStyle(color: colorScheme.onSurface.withValues(alpha: 0.6))),
                   ),
                   const SizedBox(width: 8),
                   ElevatedButton(

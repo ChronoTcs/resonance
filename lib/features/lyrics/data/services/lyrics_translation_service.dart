@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import '../models/lyric_line.dart';
-import '../../../../core/services/data_usage_service.dart';
+import '../../../../core/data/services/data_usage_service.dart';
 
 class UnifiedLyricsResult {
   final List<LyricLine> translated;
@@ -41,7 +41,7 @@ class LyricsTranslationService {
       final response = await http.post(
         url,
         body: {'q': combinedText},
-      );
+      ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode != 200) {
         throw Exception('Google Translate API error: ${response.statusCode}');

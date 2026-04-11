@@ -47,8 +47,6 @@ class AppTheme {
         primary: primary,
         secondary: accentGrey,
         surface: creamSurface,
-        background: creamBackground,
-        onBackground: textDark,
         onSurface: textDark,
       ),
       textTheme: GoogleFonts.interTextTheme(
@@ -86,17 +84,40 @@ class AppTheme {
         thumbColor: textDark,
       ),
       scrollbarTheme: ScrollbarThemeData(
-        thickness: MaterialStateProperty.resolveWith((states) => 
-          states.contains(MaterialState.hovered) ? 8.0 : 4.0),
+        thickness: WidgetStateProperty.resolveWith((states) => 
+          states.contains(WidgetState.hovered) ? 8.0 : 4.0),
         radius: const Radius.circular(10),
-        thumbColor: MaterialStateProperty.resolveWith((states) =>
-          primary.withOpacity(states.contains(MaterialState.hovered) ? 0.5 : 0.2)),
+        thumbColor: WidgetStateProperty.resolveWith((states) =>
+          primary.withValues(alpha: states.contains(WidgetState.hovered) ? 0.5 : 0.2)),
         crossAxisMargin: 2,
         mainAxisMargin: 2,
         minThumbLength: 48,
         interactive: true,
       ),
       listTileTheme: const ListTileThemeData(iconColor: textDark),
+      tooltipTheme: TooltipThemeData(
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A1A1A).withValues(alpha: 0.9),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.1), width: 1),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.3),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        textStyle: GoogleFonts.inter(
+          color: Colors.white,
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+        ),
+        waitDuration: const Duration(milliseconds: 700),
+        showDuration: const Duration(seconds: 1),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        margin: const EdgeInsets.all(8),
+      ),
     );
   }
 
@@ -112,8 +133,6 @@ class AppTheme {
         primary: primary,
         secondary: accentSoft,
         surface: darkSurface,
-        background: darkBackground,
-        onBackground: textLight,
         onSurface: textLight,
       ),
       textTheme: GoogleFonts.interTextTheme(
@@ -151,17 +170,40 @@ class AppTheme {
         thumbColor: creamBackground,
       ),
       scrollbarTheme: ScrollbarThemeData(
-        thickness: MaterialStateProperty.resolveWith((states) => 
-          states.contains(MaterialState.hovered) ? 8.0 : 4.0),
+        thickness: WidgetStateProperty.resolveWith((states) => 
+          states.contains(WidgetState.hovered) ? 8.0 : 4.0),
         radius: const Radius.circular(10),
-        thumbColor: MaterialStateProperty.resolveWith((states) =>
-          primary.withOpacity(states.contains(MaterialState.hovered) ? 0.5 : 0.2)),
+        thumbColor: WidgetStateProperty.resolveWith((states) =>
+          primary.withValues(alpha: states.contains(WidgetState.hovered) ? 0.5 : 0.2)),
         crossAxisMargin: 2,
         mainAxisMargin: 2,
         minThumbLength: 48,
         interactive: true,
       ),
       listTileTheme: const ListTileThemeData(iconColor: textLight),
+      tooltipTheme: TooltipThemeData(
+        decoration: BoxDecoration(
+          color: const Color(0xFF000000).withValues(alpha: 0.85),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.1), width: 1),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.4),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        textStyle: GoogleFonts.inter(
+          color: Colors.white,
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+        ),
+        waitDuration: const Duration(milliseconds: 700),
+        showDuration: const Duration(seconds: 1),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        margin: const EdgeInsets.all(8),
+      ),
     );
   }
 }

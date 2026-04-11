@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:resonance_app/features/player/application/audio_provider.dart';
+import 'package:resonance_app/features/player/application/providers/audio_provider.dart';
 import 'package:resonance_app/features/playlist/data/models/playlist_model.dart';
-import 'package:resonance_app/features/playlist/presentation/providers/playlist_provider.dart';
+import 'package:resonance_app/features/playlist/application/playlist_provider.dart';
 import 'package:resonance_app/features/playlist/presentation/screens/playlist_detail_screen.dart';
-import 'package:resonance_app/core/widgets/hover_widgets.dart';
+import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
+// import 'package:resonance_app/core/widgets/hover_widgets.dart'; // Removed
 
 class PlaylistScreen extends ConsumerWidget {
   const PlaylistScreen({super.key});
@@ -14,91 +15,192 @@ class PlaylistScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final playlistsAsync = ref.watch(playlistProvider);
     final selectedId = ref.watch(selectedPlaylistIdProvider);
-    final theme = Theme.of(context);
 
     if (selectedId != null) {
+      // Logic to check if selectedId is online or local
       return PlaylistDetailScreen(playlistId: selectedId);
     }
 
-    return Scaffold(
-      body: playlistsAsync.when(
-        data: (playlists) {
-          return CustomScrollView(
-            slivers: [
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'My Playlists',
-                          style: theme.textTheme.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      FilledButton.icon(
-                        onPressed: () => _showCreateDialog(context, ref),
-                        icon: const Icon(Icons.add, size: 18),
-                        label: const Text('New'),
-                      ),
-                    ],
-                  ),
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        resizeToAvoidBottomInset: false,
+        appBar: AppBar(
+          toolbarHeight: 0, // Hide main toolbar for custom silver header
+          bottom: TabBar(
+            dividerColor: Colors.transparent,
+            indicatorSize: TabBarIndicatorSize.label,
+            tabs: [
+              Tab(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Icon(Icons.folder_outlined, size: 18),
+                    SizedBox(width: 8),
+                    Text('Local'),
+                  ],
                 ),
               ),
-              const SliverToBoxAdapter(child: SizedBox(height: 16)),
-              if (playlists.isEmpty)
-                SliverFillRemaining(
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.queue_music_rounded,
-                          size: 72,
-                          color: theme.disabledColor,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'No playlists yet',
-                          style: theme.textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Create one to organise your music',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.hintColor,
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        FilledButton.icon(
-                          onPressed: () => _showCreateDialog(context, ref),
-                          icon: const Icon(Icons.add),
-                          label: const Text('Create Playlist'),
-                        ),
-                      ],
+              Tab(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Icon(Icons.public_rounded, size: 18),
+                    SizedBox(width: 8),
+                    Text('YouTube Music'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        body: playlistsAsync.when(
+          data: (state) {
+            return TabBarView(
+              children: [
+                _buildLocalSection(context, ref, state.local),
+                _buildOnlineSection(context, ref, state),
+              ],
+            );
+          },
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (e, _) => Center(child: Text('Error: $e')),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLocalSection(BuildContext context, WidgetRef ref, List<Playlist> playlists) {
+    final theme = Theme.of(context);
+    return CustomScrollView(
+      slivers: [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'My Local Playlists',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                )
-              else
-                SliverPadding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  sliver: SliverList.separated(
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
-                    itemCount: playlists.length,
-                    itemBuilder: (ctx, i) {
-                      final playlist = playlists[i];
-                      return _PlaylistTile(playlist: playlist);
-                    },
+                ),
+                FilledButton.tonalIcon(
+                  onPressed: () => _showCreateDialog(context, ref),
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('New'),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SliverToBoxAdapter(child: SizedBox(height: 16)),
+        if (playlists.isEmpty)
+          _buildEmptyState(context, ref, 'No local playlists', 'Create one to organize your files.')
+        else
+          _buildPlaylistList(playlists),
+        const SliverToBoxAdapter(child: SizedBox(height: 100)),
+      ],
+    );
+  }
+
+  Widget _buildOnlineSection(BuildContext context, WidgetRef ref, PlaylistState state) {
+    final theme = Theme.of(context);
+    final playlists = state.online;
+    
+    return CustomScrollView(
+      slivers: [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Liked & Saved Playlists',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
-              const SliverToBoxAdapter(child: SizedBox(height: 100)),
-            ],
-          );
+                if (state.isLoadingOnline)
+                  const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                else
+                  IconButton(
+                    onPressed: () => ref.read(playlistProvider.notifier).refreshOnlinePlaylists(),
+                    icon: const Icon(Icons.refresh, size: 20),
+                    tooltip: 'Refresh Online',
+                  ),
+              ],
+            ),
+          ),
+        ),
+        const SliverToBoxAdapter(child: SizedBox(height: 16)),
+        if (playlists.isEmpty && !state.isLoadingOnline)
+          _buildEmptyState(
+            context, 
+            ref, 
+            'No online playlists', 
+            'Login to sync your YouTube Music library.',
+            isOnline: true
+          )
+        else
+          _buildPlaylistList(playlists, isOnline: true),
+        const SliverToBoxAdapter(child: SizedBox(height: 100)),
+      ],
+    );
+  }
+
+  Widget _buildPlaylistList(List<Playlist> playlists, {bool isOnline = false}) {
+    return SliverPadding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      sliver: SliverList.separated(
+        separatorBuilder: (_, _) => const SizedBox(height: 8),
+        itemCount: playlists.length,
+        itemBuilder: (ctx, i) {
+          final playlist = playlists[i];
+          return _PlaylistTile(playlist: playlist, isOnline: isOnline);
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(BuildContext context, WidgetRef ref, String title, String subtitle, {bool isOnline = false}) {
+    final theme = Theme.of(context);
+    return SliverFillRemaining(
+      hasScrollBody: false,
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              isOnline ? Icons.cloud_off_rounded : Icons.queue_music_rounded,
+              size: 64,
+              color: theme.disabledColor,
+            ),
+            const SizedBox(height: 16),
+            Text(title, style: theme.textTheme.titleMedium),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Text(
+                subtitle,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
+              ),
+            ),
+            if (!isOnline) ...[
+              const SizedBox(height: 24),
+              FilledButton.icon(
+                onPressed: () => _showCreateDialog(context, ref),
+                icon: const Icon(Icons.add),
+                label: const Text('Create Local Playlist'),
+              ),
+            ]
+          ],
+        ),
       ),
     );
   }
@@ -148,26 +250,31 @@ class PlaylistScreen extends ConsumerWidget {
 
 // ──────────────────────────────────────────────────────────
 class _PlaylistTile extends ConsumerWidget {
-  const _PlaylistTile({required this.playlist});
+  const _PlaylistTile({required this.playlist, this.isOnline = false});
   final Playlist playlist;
+  final bool isOnline;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-
-    // Resolve first track art
     final firstTrack = playlist.tracks.isNotEmpty ? playlist.tracks.first : null;
+
+    // Detect if this is an online playlist and needs track loading
+    final bool isEmptyOnline = isOnline && playlist.tracks.isEmpty;
 
     return Card(
       margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: HoverWrapper(
-        borderRadius: BorderRadius.circular(12),
-        useScale: false,
+      child: ReusableHoverIconButton(
+        tooltip: 'Open Playlist',
+        padding: 12,
+        scaleOnHover: 1.0, // No scale for list tile card
         onTap: () {
+          if (isEmptyOnline) {
+             ref.read(playlistProvider.notifier).loadOnlinePlaylistTracks(playlist.id);
+          }
           ref.read(selectedPlaylistIdProvider.notifier).setSelectedId(playlist.id);
         },
-        padding: const EdgeInsets.all(12),
         child: Row(
           children: [
             // Thumbnail
@@ -215,9 +322,12 @@ class _PlaylistTile extends ConsumerWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    '${playlist.tracks.length} track${playlist.tracks.length == 1 ? '' : 's'}',
+                    isEmptyOnline 
+                      ? 'Click to sync tracks' 
+                      : '${playlist.tracks.length} track${playlist.tracks.length == 1 ? '' : 's'} • ${isOnline ? 'Online' : 'Local'}',
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.hintColor,
+                      color: isOnline ? theme.colorScheme.primary : theme.hintColor,
+                      fontWeight: isEmptyOnline ? FontWeight.bold : null,
                     ),
                   ),
                 ],
@@ -237,27 +347,39 @@ class _PlaylistTile extends ConsumerWidget {
                     visualDensity: VisualDensity.compact,
                   ),
                 ),
-                const PopupMenuItem(
-                  value: _PlaylistAction.rename,
-                  child: ListTile(
-                    leading: Icon(Icons.edit_outlined),
-                    title: Text('Rename'),
-                    contentPadding: EdgeInsets.zero,
-                    visualDensity: VisualDensity.compact,
-                  ),
-                ),
-                const PopupMenuItem(
-                  value: _PlaylistAction.delete,
-                  child: ListTile(
-                    leading: Icon(Icons.delete_outline, color: Colors.red),
-                    title: Text(
-                      'Delete',
-                      style: TextStyle(color: Colors.red),
+                if (isOnline)
+                  const PopupMenuItem(
+                    value: _PlaylistAction.convertToLocal,
+                    child: ListTile(
+                      leading: Icon(Icons.download_rounded),
+                      title: Text('Convert to Local'),
+                      contentPadding: EdgeInsets.zero,
+                      visualDensity: VisualDensity.compact,
                     ),
-                    contentPadding: EdgeInsets.zero,
-                    visualDensity: VisualDensity.compact,
                   ),
-                ),
+                if (!isOnline) ...[
+                  const PopupMenuItem(
+                    value: _PlaylistAction.rename,
+                    child: ListTile(
+                      leading: Icon(Icons.edit_outlined),
+                      title: Text('Rename'),
+                      contentPadding: EdgeInsets.zero,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: _PlaylistAction.delete,
+                    child: ListTile(
+                      leading: Icon(Icons.delete_outline, color: Colors.red),
+                      title: Text(
+                        'Delete',
+                        style: TextStyle(color: Colors.red),
+                      ),
+                      contentPadding: EdgeInsets.zero,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                ],
               ],
             ),
           ],
@@ -275,6 +397,12 @@ class _PlaylistTile extends ConsumerWidget {
     switch (action) {
       case _PlaylistAction.play:
         _playAll(context, ref, playlist);
+        break;
+      case _PlaylistAction.convertToLocal:
+        ref.read(playlistProvider.notifier).convertOnlineToLocal(playlist);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Converted "${playlist.name}" to local.')),
+        );
         break;
       case _PlaylistAction.rename:
         _showRenameDialog(context, ref, playlist);
@@ -360,4 +488,4 @@ class _PlaylistTile extends ConsumerWidget {
   }
 }
 
-enum _PlaylistAction { play, rename, delete }
+enum _PlaylistAction { play, rename, delete, convertToLocal }

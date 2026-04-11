@@ -4,39 +4,48 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:media_kit/media_kit.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:media_kit_video/media_kit_video.dart' hide VideoState;
-import '../../application/video_player_notifier.dart';
-import '../../../../core/widgets/seek_slider.dart';
-import 'package:resonance_app/core/widgets/hover_widgets.dart';
+import '../../application/providers/video_player_notifier.dart';
+import 'package:resonance_app/core/utils/formatters.dart';
+import 'package:resonance_app/core/widgets/reusable_seek_slider.dart';
+import '../notifiers/player_ui_controller.dart';
+import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
 
-class DedicatedFullscreenVideo extends StatefulWidget {
+class DedicatedFullscreenVideo extends ConsumerStatefulWidget {
   const DedicatedFullscreenVideo({super.key});
 
   @override
-  State<DedicatedFullscreenVideo> createState() => _DedicatedFullscreenVideoState();
+  ConsumerState<DedicatedFullscreenVideo> createState() => _DedicatedFullscreenVideoState();
 }
 
-class _DedicatedFullscreenVideoState extends State<DedicatedFullscreenVideo> {
-  bool _showControls = true;
-  Timer? _hideTimer;
+class _DedicatedFullscreenVideoState extends ConsumerState<DedicatedFullscreenVideo> {
+  bool _isExiting = false;
 
   @override
   void initState() {
     super.initState();
     HardwareKeyboard.instance.addHandler(_handleKey);
     
-    // Set active view to fullscreen and delay window mutation
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        final container = ProviderScope.containerOf(context);
-        container.read(videoPlayerProvider.notifier).setActiveViewType(VideoPlayerViewType.fullscreen);
-        _enterFullScreen();
-      }
+    // Delay attaching the native texture until the window manager has completed its resize
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      
+      // 1. Tell OS to enter fullscreen
+      await _enterFullScreen();
+      
+      // 2. Wait for DWM to finish drawing the expanded window
+      await Future.delayed(const Duration(milliseconds: 300));
+      
+      if (!mounted) return;
+      
+      // 3. ONLY THEN attach the native texture (prevents freeze)
+      ref.read(videoPlayerProvider.notifier).setActiveViewType(VideoPlayerViewType.fullscreen);
+      
+      // 4. Initial show controls based on current playback state
+      final isPlaying = ref.read(videoPlayerProvider.select((s) => s.isPlaying));
+      ref.read(playerUIProvider.notifier).show(isPlaying);
     });
-    
-    _startHideTimer();
   }
 
   bool _handleKey(KeyEvent event) {
@@ -47,23 +56,23 @@ class _DedicatedFullscreenVideoState extends State<DedicatedFullscreenVideo> {
     return false;
   }
 
-  bool _isExiting = false;
-
   Future<void> _handlePop() async {
     if (_isExiting) return;
     _isExiting = true;
     
-    // 1. Exit fullscreen first
+    // 1. Detach texture to prevent native crash during resize
+    ref.read(videoPlayerProvider.notifier).setActiveViewType(VideoPlayerViewType.none);
+    
+    // 2. Exit fullscreen first
     await _exitFullScreen();
     
-    // 2. Small delay for DWM to normalize
-    await Future.delayed(const Duration(milliseconds: 200));
+    // 3. Small delay for DWM to normalize
+    await Future.delayed(const Duration(milliseconds: 300));
     
     if (!mounted) return;
     
-    // 3. Revert active view and pop
-    final container = ProviderScope.containerOf(context);
-    container.read(videoPlayerProvider.notifier).setActiveViewType(VideoPlayerViewType.full);
+    // 4. Mount back to normal view and pop
+    ref.read(videoPlayerProvider.notifier).setActiveViewType(VideoPlayerViewType.full);
     Navigator.pop(context);
   }
 
@@ -81,94 +90,119 @@ class _DedicatedFullscreenVideoState extends State<DedicatedFullscreenVideo> {
     }
   }
 
-  void _startHideTimer() {
-    _hideTimer?.cancel();
-    _hideTimer = Timer(const Duration(seconds: 3), () {
-      if (mounted && _showControls) {
-        setState(() => _showControls = false);
-      }
-    });
-  }
-
-  void _onPointerMove(PointerEvent event) {
-    if (!_showControls) {
-      setState(() => _showControls = true);
-    }
-    _startHideTimer();
-  }
-
   @override
   void dispose() {
     HardwareKeyboard.instance.removeHandler(_handleKey);
-    _hideTimer?.cancel();
     if (!_isExiting) {
       _exitFullScreen();
     }
     super.dispose();
   }
 
-  String _formatDuration(Duration d) {
-    if (d.isNegative) return "00:00";
-    String twoDigits(int n) => n.toString().padLeft(2, '0');
-    final hours = d.inHours;
-    final minutes = d.inMinutes.remainder(60);
-    final seconds = d.inSeconds.remainder(60);
-
-    if (hours > 0) {
-      return '$hours:${twoDigits(minutes)}:${twoDigits(seconds)}';
-    }
-    return '${twoDigits(minutes)}:${twoDigits(seconds)}';
-  }
-
   @override
   Widget build(BuildContext context) {
-    return Consumer(
-      builder: (context, ref, _) {
-        final videoState = ref.watch(videoPlayerProvider);
-        final videoNotifier = ref.read(videoPlayerProvider.notifier);
+    if (!Platform.isWindows) {
+      return Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.computer, size: 64, color: Colors.white70),
+              const SizedBox(height: 16),
+              const Text(
+                'Fullscreen Video is only supported on Windows.',
+                style: TextStyle(fontSize: 16, color: Colors.white70),
+              ),
+              const SizedBox(height: 24),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Go Back'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    final videoState = ref.watch(videoPlayerProvider);
+    final videoNotifier = ref.read(videoPlayerProvider.notifier);
+    final showControls = ref.watch(playerUIProvider);
+    final theme = Theme.of(context);
 
-        return Scaffold(
-          backgroundColor: Colors.black,
-          body: MouseRegion(
-            cursor: _showControls ? SystemMouseCursors.basic : SystemMouseCursors.none,
-            onHover: (_) => _onPointerMove(const PointerMoveEvent()),
-            onExit: (_) => _startHideTimer(),
-            child: GestureDetector(
-              onTap: () {
-                setState(() => _showControls = !_showControls);
-                if (_showControls) _startHideTimer();
-              },
-              child: Column(
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: MouseRegion(
+        cursor: showControls ? SystemMouseCursors.basic : SystemMouseCursors.none,
+        onHover: (_) => ref.read(playerUIProvider.notifier).onInteraction(videoState.isPlaying),
+        onExit: (_) => ref.read(playerUIProvider.notifier).onInteraction(videoState.isPlaying),
+        child: GestureDetector(
+          onTap: () => ref.read(playerUIProvider.notifier).toggle(videoState.isPlaying),
+          child: Stack(
+            children: [
+              // 1. Video Surface (Background)
+              Positioned.fill(
+                child: Center(
+                  child: videoNotifier.controller != null
+                      ? Video(
+                          controller: videoNotifier.controller!,
+                          controls: NoVideoControls,
+                        )
+                      : const CircularProgressIndicator(),
+                ),
+              ),
+
+              // 2. Overlay Layer (Controls)
+              Column(
                 children: [
-                  // 1. Top Bar - Thinner, only shown when _showControls is true
+                  // Top Bar (Exit Button & Title)
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 300),
-                    height: _showControls ? MediaQuery.of(context).padding.top + 50 : 0,
+                    height: showControls ? 80 : 0,
                     curve: Curves.easeOutCubic,
                     child: SingleChildScrollView(
                       physics: const NeverScrollableScrollPhysics(),
                       child: Container(
-                        height: MediaQuery.of(context).padding.top + 50,
-                        padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
+                        height: 80,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
                         decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.8),
-                          border: Border(
-                            bottom: BorderSide(color: Colors.white.withOpacity(0.05), width: 1),
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.black.withValues(alpha: 0.7),
+                              Colors.transparent,
+                            ],
                           ),
                         ),
                         child: Row(
                           children: [
-                            ModernIconButton(
-                              icon: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
-                              onPressed: () => _handlePop(),
-                            ),
                             Expanded(
-                              child: Text(
-                                videoState.currentVideo?.title ?? '',
-                                style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    videoState.currentVideo?.title ?? 'Full Screen Video',
+                                    style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  if (videoState.currentVideo?.artist != null)
+                                    Text(
+                                      videoState.currentVideo!.artist!,
+                                      style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 13),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                ],
                               ),
+                            ),
+                            ReusableHoverIconButton(
+                              icon: Icons.close,
+                              color: Colors.white,
+                              iconSize: 24,
+                              tooltip: 'Exit Fullscreen',
+                              onTap: _handlePop,
                             ),
                           ],
                         ),
@@ -176,164 +210,104 @@ class _DedicatedFullscreenVideoState extends State<DedicatedFullscreenVideo> {
                     ),
                   ),
 
-                  // 2. Video Output - Fills remaining space
-                  Expanded(
-                    child: Container(
-                      color: Colors.black,
-                      child: videoNotifier.controller != null
-                          ? Center(
-                              child: videoState.activeViewType == VideoPlayerViewType.fullscreen
-                                  ? Hero(
-                                      tag: 'video_player_surface',
-                                      child: Video(
-                                        controller: videoNotifier.controller!,
-                                        controls: NoVideoControls,
-                                      ),
-                                    )
-                                  : const Center(
-                                      child: CircularProgressIndicator(),
-                                    ),
-                            )
-                          : const Center(child: CircularProgressIndicator()),
-                    ),
-                  ),
+                  const Spacer(),
 
-                  // 3. Bottom Controls - Thinner, only shown when _showControls is true
+                  // Bottom Controls
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 300),
-                    height: _showControls ? 108 : 0, // Increased height to prevent overflow
+                    height: showControls ? 120 : 0,
                     curve: Curves.easeOutCubic,
                     child: SingleChildScrollView(
                       physics: const NeverScrollableScrollPhysics(),
                       child: Container(
-                        height: 108,
+                        height: 120,
                         decoration: BoxDecoration(
-                          color: Colors.black,
-                          border: Border(
-                            top: BorderSide(color: Colors.white.withOpacity(0.1), width: 1),
+                          gradient: LinearGradient(
+                            begin: Alignment.bottomCenter,
+                            end: Alignment.topCenter,
+                            colors: [
+                              Colors.black.withValues(alpha: 0.7),
+                              Colors.transparent,
+                            ],
                           ),
                         ),
                         child: Column(
-                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.end,
                           children: [
-                            // Progress
+                            // Progress bar
                             Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 2.0),
-                              child: SeekSlider(
+                              padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                              child: ReusableSeekSlider(
                                 value: videoState.position.inSeconds.toDouble(),
                                 max: videoState.duration.inSeconds.toDouble() > 0 
                                     ? videoState.duration.inSeconds.toDouble() 
                                     : 1.0,
                                 onChanged: (val) {
                                   videoNotifier.seek(Duration(seconds: val.toInt()));
-                                  _startHideTimer();
+                                  ref.read(playerUIProvider.notifier).onInteraction(videoState.isPlaying);
                                 },
                               ),
                             ),
                             Padding(
-                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                              padding: const EdgeInsets.fromLTRB(32, 0, 32, 16),
                               child: Row(
                                 children: [
-                                  // Left: Duration
-                                  Expanded(
-                                    flex: 2,
-                                    child: Text(
-                                      "${_formatDuration(videoState.position)} / ${_formatDuration(videoState.duration)}",
-                                      style: TextStyle(
-                                        color: Colors.white.withOpacity(0.7),
-                                        fontSize: 12,
-                                      ),
-                                    ),
+                                  // Duration
+                                  Text(
+                                    "${AppFormatters.formatDuration(videoState.position)} / ${AppFormatters.formatDuration(videoState.duration)}",
+                                    style: const TextStyle(color: Colors.white70, fontSize: 14),
                                   ),
-
-                                  // Center: Playback Controls (Tighter)
-                                  Expanded(
-                                    flex: 3,
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        ModernIconButton(
-                                          tooltip: 'Skip Back 10s',
-                                          icon: const Icon(Icons.replay_10, size: 24, color: Colors.white),
-                                          onPressed: () {
-                                            videoNotifier.jump(const Duration(seconds: -10));
-                                            _startHideTimer();
-                                          },
-                                        ),
-                                        const SizedBox(width: 12),
-                                        ModernIconButton(
-                                          icon: Icon(
-                                            videoState.isPlaying 
-                                                ? Icons.pause_circle_filled 
-                                                : Icons.play_circle_filled,
-                                          ),
-                                          iconSize: 48,
-                                          color: Colors.white,
-                                          onPressed: () {
-                                            videoNotifier.togglePlayPause();
-                                            _startHideTimer();
-                                          },
-                                        ),
-                                        const SizedBox(width: 12),
-                                        ModernIconButton(
-                                          tooltip: 'Skip Forward 10s',
-                                          icon: const Icon(Icons.forward_10, size: 24, color: Colors.white),
-                                          onPressed: () {
-                                            videoNotifier.jump(const Duration(seconds: 10));
-                                            _startHideTimer();
-                                          },
-                                        ),
-                                      ],
-                                    ),
+                                  const Spacer(),
+                                  // Media Controls
+                                  ReusableHoverIconButton(
+                                    icon: Icons.replay_10,
+                                    iconSize: 28,
+                                    tooltip: 'Skip back 10s',
+                                    color: Colors.white,
+                                    onTap: () {
+                                      videoNotifier.jump(const Duration(seconds: -10));
+                                      ref.read(playerUIProvider.notifier).onInteraction(videoState.isPlaying);
+                                    },
                                   ),
-
-                                  // Right: Actions
-                                  Expanded(
-                                    flex: 2,
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.end,
-                                      children: [
-                                        // Quality Selector
-                                        if (videoState.uniqueVideoTracks.length > 1 && 
-                                            (videoState.currentVideo?.path.startsWith('http') ?? false))
-                                          PopupMenuButton<VideoTrack>(
-                                            tooltip: 'Quality',
-                                            icon: const Icon(Icons.hd_outlined, color: Colors.white, size: 20),
-                                            onSelected: (track) {
-                                              videoNotifier.setVideoTrack(track);
-                                              _startHideTimer();
-                                            },
-                                            itemBuilder: (context) => videoState.uniqueVideoTracks.map((track) {
-                                              final trackLabel = track.title ?? ((track.h ?? 0) > 0 ? '${track.h}p' : 'Auto');
-                                              return PopupMenuItem<VideoTrack>(
-                                                value: track,
-                                                child: Text(trackLabel),
-                                              );
-                                            }).toList(),
-                                          ),
-                                        
-                                        // Volume
-                                        ModernIconButton(
-                                          tooltip: 'Volume',
-                                          icon: Icon(
-                                            videoState.volume == 0
-                                                ? Icons.volume_off
-                                                : videoState.volume < 0.5
-                                                    ? Icons.volume_down
-                                                    : Icons.volume_up,
-                                            color: Colors.white,
-                                            size: 20,
-                                          ),
-                                          onPressed: () => _showVolumeDialog(context, videoState, videoNotifier),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        ModernIconButton(
-                                          tooltip: 'Exit Fullscreen',
-                                          icon: const Icon(Icons.fullscreen_exit, color: Colors.white, size: 24),
-                                          onPressed: () => _handlePop(),
-                                        ),
-                                      ],
-                                    ),
+                                  const SizedBox(width: 24),
+                                  ReusableHoverIconButton(
+                                    icon: videoState.isPlaying 
+                                        ? Icons.pause_circle_filled 
+                                        : Icons.play_circle_filled,
+                                    iconSize: 56,
+                                    tooltip: videoState.isPlaying ? 'Pause' : 'Play',
+                                    color: theme.primaryColor,
+                                    onTap: () {
+                                      videoNotifier.togglePlayPause();
+                                      ref.read(playerUIProvider.notifier).onInteraction(videoState.isPlaying);
+                                    },
+                                  ),
+                                  const SizedBox(width: 24),
+                                  ReusableHoverIconButton(
+                                    icon: Icons.forward_10,
+                                    iconSize: 28,
+                                    tooltip: 'Skip forward 10s',
+                                    color: Colors.white,
+                                    onTap: () {
+                                      videoNotifier.jump(const Duration(seconds: 10));
+                                      ref.read(playerUIProvider.notifier).onInteraction(videoState.isPlaying);
+                                    },
+                                  ),
+                                  const Spacer(),
+                                  // Volume / Other actions
+                                  ReusableHoverIconButton(
+                                    icon: videoState.volume == 0
+                                        ? Icons.volume_off
+                                        : videoState.volume < 0.5
+                                            ? Icons.volume_down
+                                            : Icons.volume_up,
+                                    iconSize: 24,
+                                    tooltip: 'Volume',
+                                    color: Colors.white70,
+                                    onTap: () {
+                                      _showVolumeDialog(context, videoState, videoNotifier);
+                                      ref.read(playerUIProvider.notifier).onInteraction(videoState.isPlaying);
+                                    },
                                   ),
                                 ],
                               ),
@@ -345,14 +319,15 @@ class _DedicatedFullscreenVideoState extends State<DedicatedFullscreenVideo> {
                   ),
                 ],
               ),
-            ),
+            ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 
   void _showVolumeDialog(BuildContext context, VideoState videoState, VideoPlayerNotifier videoNotifier) {
+    final theme = Theme.of(context);
     showDialog(
       context: context,
       useSafeArea: false,
@@ -369,12 +344,12 @@ class _DedicatedFullscreenVideoState extends State<DedicatedFullscreenVideo> {
                   child: BackdropFilter(
                     filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                     child: Container(
-                      width: 300,
-                      height: 64,
+                      width: 320,
+                      height: 72,
                       decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.6),
+                        color: Colors.black.withValues(alpha: 0.6),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.white.withOpacity(0.1)),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
                       ),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -389,35 +364,35 @@ class _DedicatedFullscreenVideoState extends State<DedicatedFullscreenVideo> {
                                       : currentVolume < 0.5
                                           ? Icons.volume_down
                                           : Icons.volume_up,
-                                  color: Colors.white,
-                                  size: 20,
+                                  color: Colors.white70,
+                                  size: 24,
                                 ),
-                                const SizedBox(width: 12),
+                                const SizedBox(width: 16),
                                 Expanded(
                                   child: SliderTheme(
                                     data: SliderTheme.of(context).copyWith(
-                                      activeTrackColor: Colors.white,
-                                      inactiveTrackColor: Colors.white.withOpacity(0.2),
-                                      thumbColor: Colors.white,
-                                      thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                                      activeTrackColor: theme.primaryColor,
+                                      inactiveTrackColor: Colors.white24,
+                                      thumbColor: theme.primaryColor,
                                       trackHeight: 4,
-                                      overlayShape: SliderComponentShape.noOverlay,
                                     ),
                                     child: Slider(
                                       value: currentVolume,
                                       min: 0.0,
                                       max: 1.0,
-                                      onChanged: (val) {
-                                        ref.read(videoPlayerProvider.notifier).setVolume(val);
-                                        _startHideTimer();
-                                      },
+                                      onChanged: (val) => ref.read(videoPlayerProvider.notifier).setVolume(val),
                                     ),
                                   ),
                                 ),
-                                const SizedBox(width: 12),
-                                Text(
-                                  "${(currentVolume * 100).toInt()}",
-                                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                                const SizedBox(width: 16),
+                                SizedBox(
+                                  width: 44,
+                                  child: Text(
+                                    "${(currentVolume * 100).toInt()}%",
+                                    softWrap: false,
+                                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                                    textAlign: TextAlign.right,
+                                  ),
                                 ),
                               ],
                             );
@@ -435,4 +410,3 @@ class _DedicatedFullscreenVideoState extends State<DedicatedFullscreenVideo> {
     );
   }
 }
-

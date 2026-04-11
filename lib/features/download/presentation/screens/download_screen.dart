@@ -2,8 +2,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance_app/features/download/data/models/download_item.dart';
-import 'package:resonance_app/features/download/data/repositories/download_provider.dart';
-import 'package:resonance_app/features/download/data/repositories/download_settings_provider.dart';
+import 'package:resonance_app/features/download/application/providers/download_provider.dart';
+import 'package:resonance_app/features/download/application/providers/download_settings_provider.dart';
 import 'package:resonance_app/features/download/presentation/screens/download_settings_screen.dart';
 
 class DownloadScreen extends ConsumerStatefulWidget {
@@ -182,8 +182,15 @@ class _DownloadScreenState extends ConsumerState<DownloadScreen>
                                     ),
                                   ],
                                   selected: {_selectedType},
-                                  onSelectionChanged: (s) =>
-                                      setState(() => _selectedType = s.first),
+                                  onSelectionChanged: (s) {
+                                    setState(() {
+                                      _selectedType = s.first;
+                                      if (_selectedType == DownloadType.video && 
+                                          _selectedSource == DownloadSource.ytmusic) {
+                                        _selectedSource = DownloadSource.youtube;
+                                      }
+                                    });
+                                  },
                                 ),
                               ),
                             ],
@@ -200,7 +207,7 @@ class _DownloadScreenState extends ConsumerState<DownloadScreen>
                               ),
                               const SizedBox(height: 4),
                               DropdownButtonFormField<DownloadSource>(
-                                value: _selectedSource,
+                                initialValue: _selectedSource,
                                 isExpanded: true,
                                 decoration: const InputDecoration(
                                   border: OutlineInputBorder(),
@@ -234,21 +241,44 @@ class _DownloadScreenState extends ConsumerState<DownloadScreen>
                             return sourceSelector;
                           }
 
-                          if (useStack) {
-                            return Column(
-                              children: [
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (useStack) ...[
                                 typeSelector,
                                 const SizedBox(height: 12),
                                 sourceSelector,
-                              ],
-                            );
-                          }
-
-                          return Row(
-                            children: [
-                              Expanded(child: typeSelector),
-                              const SizedBox(width: 16),
-                              Expanded(child: sourceSelector),
+                              ] else 
+                                Row(
+                                  children: [
+                                    Expanded(child: typeSelector),
+                                    const SizedBox(width: 16),
+                                    Expanded(child: sourceSelector),
+                                  ],
+                                ),
+                              if (_selectedType == DownloadType.video)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 8, left: 4),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.info_outline,
+                                        size: 14,
+                                        color: theme.colorScheme.primary.withValues(alpha: 0.8),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                        child: Text(
+                                          'YouTube source is recommended for HD video content.',
+                                          style: theme.textTheme.labelSmall?.copyWith(
+                                            color: theme.colorScheme.primary.withValues(alpha: 0.8),
+                                            fontStyle: FontStyle.italic,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                             ],
                           );
                         },
@@ -454,8 +484,11 @@ class _DownloadTileState extends ConsumerState<_DownloadTile> {
                           vertical: 2,
                         ),
                         decoration: BoxDecoration(
-                          color: color.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(20),
+                          color: color.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: color.withValues(alpha: 0.2),
+                          ),
                         ),
                         child: Text(
                           _statusLabel(),
@@ -493,8 +526,7 @@ class _DownloadTileState extends ConsumerState<_DownloadTile> {
                         child: Text(
                           item.statusMessage!,
                           style: theme.textTheme.labelSmall?.copyWith(
-                            color: theme.colorScheme.primary,
-                            fontWeight: FontWeight.bold,
+                            color: theme.colorScheme.onSurface.withValues(alpha: 0.38),
                           ),
                         ),
                       ),
@@ -543,9 +575,7 @@ class _DownloadTileState extends ConsumerState<_DownloadTile> {
               width: double.infinity,
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
               decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest.withOpacity(
-                  0.5,
-                ),
+                color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -559,7 +589,9 @@ class _DownloadTileState extends ConsumerState<_DownloadTile> {
                         'LOGS / STATUS',
                         style: theme.textTheme.labelSmall?.copyWith(
                           fontWeight: FontWeight.bold,
-                          color: theme.hintColor,
+                          color: Theme.of(context).brightness == Brightness.light
+                              ? Colors.black.withValues(alpha: 0.6)
+                              : Colors.white.withValues(alpha: 0.6),
                           letterSpacing: 1.2,
                         ),
                       ),
@@ -580,8 +612,9 @@ class _DownloadTileState extends ConsumerState<_DownloadTile> {
                     constraints: const BoxConstraints(maxHeight: 150),
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(6),
+                      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
                     ),
                     child: item.logs.isEmpty && item.errorMessage == null
                         ? Center(

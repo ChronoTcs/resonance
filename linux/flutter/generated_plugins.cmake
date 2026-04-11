@@ -3,17 +3,19 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
-  audiotags
+  flutter_js
   media_kit_libs_linux
   media_kit_video
   screen_retriever_linux
   system_theme
+  tray_manager
   url_launcher_linux
   window_manager
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST
   flutter_discord_rpc
+  metadata_god
 )
 
 set(PLUGIN_BUNDLED_LIBRARIES)

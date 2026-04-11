@@ -123,3 +123,13 @@ else()
     "  Run  python build_downloader.py  from the project root before flutter build windows.\n"
     "  The download feature will not work until this step is completed.")
 endif()
+
+# FFmpeg Portable Bundling
+# Copy the FFmpeg binaries (bin folder) next to the main application executable.
+set(FFMPEG_BIN_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../python_engine/bin")
+if(EXISTS "${FFMPEG_BIN_DIR}")
+  install(DIRECTORY "${FFMPEG_BIN_DIR}"
+    DESTINATION "${CMAKE_INSTALL_PREFIX}"
+    COMPONENT Runtime)
+  message(STATUS "[Resonance] FFmpeg bin folder will be bundled.")
+endif()

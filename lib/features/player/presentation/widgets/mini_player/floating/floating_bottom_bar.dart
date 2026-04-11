@@ -1,0 +1,180 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:resonance_app/features/player/application/providers/audio_provider.dart';
+import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
+import 'package:resonance_app/core/widgets/reusable_seek_slider.dart';
+
+class FloatingBottomBar extends ConsumerWidget {
+  const FloatingBottomBar({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final audioState = ref.watch(audioProvider);
+    final audioNotifier = ref.read(audioProvider.notifier);
+    final track = ref.watch(currentTrackProvider);
+
+    if (track == null) return const SizedBox.shrink();
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.95),
+        border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.1), width: 0.5)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // 1. Interactive Progress Bar (ReusableSeekSlider SOTA V13.14)
+          ReusableSeekSlider(
+            value: audioState.position.inSeconds.toDouble(),
+            max: audioState.duration.inSeconds > 0 
+              ? audioState.duration.inSeconds.toDouble() 
+              : 0.0,
+            onChanged: (v) => audioNotifier.seek(Duration(seconds: v.toInt())),
+            trackHeight: 2,
+            height: 4,
+            thumbRadius: 0, // Sempit untuk miniplayer, thumb muncul saat hover/drag (Slider default)
+          ),
+
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+            child: Row(
+              children: [
+                // Info Lagu (Marquee Title)
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        height: 18,
+                        child: _MarqueeText(
+                          text: track.title,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        track.artist ?? 'Unknown Artist',
+                        maxLines: 1,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                
+                const SizedBox(width: 8),
+                
+                // Kontrol Navigasi (Standardized)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ReusableHoverIconButton(
+                      icon: Icons.skip_previous,
+                      onTap: audioNotifier.skipToPrevious,
+                      tooltip: 'Previous',
+                      iconSize: 18,
+                      padding: 4,
+                      isDisabled: audioState.currentIndex <= 0,
+                    ),
+                    const SizedBox(width: 4),
+                    ReusableHoverIconButton(
+                      onTap: audioNotifier.togglePlayPause,
+                      tooltip: audioState.isPlaying ? 'Pause' : 'Play',
+                      backgroundColor: Theme.of(context).primaryColor,
+                      iconColor: Theme.of(context).colorScheme.onPrimary,
+                      padding: 6,
+                      iconSize: 20,
+                      icon: audioState.isPlaying ? Icons.pause : Icons.play_arrow,
+                    ),
+                    const SizedBox(width: 4),
+                    ReusableHoverIconButton(
+                      icon: Icons.skip_next,
+                      onTap: audioNotifier.skipToNext,
+                      tooltip: 'Next',
+                      iconSize: 18,
+                      padding: 4,
+                      isDisabled: audioState.nextTrack == null,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// SOTA Marquee Implementation (No External Packages)
+class _MarqueeText extends StatefulWidget {
+  final String text;
+  final TextStyle style;
+
+  const _MarqueeText({required this.text, required this.style});
+
+  @override
+  State<_MarqueeText> createState() => _MarqueeTextState();
+}
+
+class _MarqueeTextState extends State<_MarqueeText> with SingleTickerProviderStateMixin {
+  late ScrollController _scrollController;
+  late AnimationController _animationController;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController = ScrollController();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 10),
+    );
+
+    _startScrolling();
+  }
+
+  void _startScrolling() async {
+    await Future.delayed(const Duration(seconds: 2));
+    if (!mounted) return;
+
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    if (maxScroll <= 0) return;
+
+    _animationController.duration = Duration(milliseconds: (maxScroll * 40).toInt());
+
+    while (mounted) {
+      await _scrollController.animateTo(
+        maxScroll,
+        duration: _animationController.duration!,
+        curve: Curves.linear,
+      );
+      await Future.delayed(const Duration(seconds: 2));
+      if (!mounted) break;
+      _scrollController.jumpTo(0);
+      await Future.delayed(const Duration(seconds: 1));
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      controller: _scrollController,
+      scrollDirection: Axis.horizontal,
+      physics: const NeverScrollableScrollPhysics(),
+      child: Text(widget.text, style: widget.style),
+    );
+  }
+}

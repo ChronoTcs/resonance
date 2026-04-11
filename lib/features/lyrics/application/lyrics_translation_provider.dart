@@ -5,11 +5,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/models/lyric_line.dart';
 import '../data/services/lyrics_translation_service.dart';
 import 'lyrics_provider.dart';
-import '../../player/application/audio_provider.dart';
-import '../../../../core/services/cache_manager.dart';
-import '../../../../core/services/storage_service.dart';
+import '../../player/application/providers/audio_provider.dart';
+import '../../../core/data/services/cache_manager.dart';
+import '../../../core/data/services/storage_service.dart';
 import 'package:path/path.dart' as p;
-import 'translation_cache_cleanup.dart';
+import 'translation_cache_cleanup_service.dart';
 
 enum LyricsTranslationMode { original, translated, romanized }
 
@@ -19,6 +19,7 @@ class LyricsTranslationState {
   final String targetLanguage;
   final List<LyricLine>? translatedLyrics;
   final List<LyricLine>? romanizedLyrics;
+  final String? lastTrackId; // Tracks which song the translations belong to
   final bool isLoading;
   final String? error;
 
@@ -28,6 +29,7 @@ class LyricsTranslationState {
     this.targetLanguage = 'id',
     this.translatedLyrics,
     this.romanizedLyrics,
+    this.lastTrackId,
     this.isLoading = false,
     this.error,
   });
@@ -38,6 +40,7 @@ class LyricsTranslationState {
     String? targetLanguage,
     List<LyricLine>? translatedLyrics,
     List<LyricLine>? romanizedLyrics,
+    String? lastTrackId,
     bool? isLoading,
     String? error,
   }) {
@@ -47,6 +50,7 @@ class LyricsTranslationState {
       targetLanguage: targetLanguage ?? this.targetLanguage,
       translatedLyrics: translatedLyrics ?? this.translatedLyrics,
       romanizedLyrics: romanizedLyrics ?? this.romanizedLyrics,
+      lastTrackId: lastTrackId ?? this.lastTrackId,
       isLoading: isLoading ?? this.isLoading,
       error: error ?? this.error,
     );
@@ -55,6 +59,7 @@ class LyricsTranslationState {
 
 class LyricsTranslationNotifier extends Notifier<LyricsTranslationState> {
   Timer? _debounceTimer;
+  bool _isWaitingForBaseLyrics = false;
 
   @override
   LyricsTranslationState build() {
@@ -74,24 +79,45 @@ class LyricsTranslationNotifier extends Notifier<LyricsTranslationState> {
 
     // Listen for track changes to clear translation or trigger it
     ref.listen(audioProvider.select((s) => s.currentTrack), (prev, next) {
-      if (prev?.id != next?.id || prev?.path != next?.path) {
+      final effectiveId = next?.id ?? next?.path;
+      final prevId = prev?.id ?? prev?.path;
+
+      if (effectiveId != prevId) {
         // Cancel any pending request for the previous track immediately
         _debounceTimer?.cancel();
+        _isWaitingForBaseLyrics = false; // Reset waiting flag for NEW track
         
         state = state.copyWith(
           translatedLyrics: null, 
           romanizedLyrics: null,
+          lastTrackId: null, // Clear identity to prevent staleness
           error: null,
           isLoading: false, 
         );
+        
+        // SOTA V3.3: Attempt early cache discovery immediately
+        if (effectiveId != null) {
+          _tryEarlyCacheLoad(effectiveId);
+        }
+        
         _triggerLoadingForCurrentMode();
       }
     });
 
     // Also listen to lyricsProvider changes (when base lyrics are loaded)
     ref.listen(lyricsProvider, (prev, next) {
-      if (next.lyrics.isNotEmpty) {
-        _triggerLoadingForCurrentMode();
+      if (!next.isLoading && next.lyrics.isNotEmpty) {
+        if (_isWaitingForBaseLyrics) {
+          // Double check if state is still null (ensure early load didn't already finish)
+          if (state.translatedLyrics == null || state.romanizedLyrics == null) {
+            _isWaitingForBaseLyrics = false;
+            debugPrint('LyricsTranslation: Base lyrics READY. Evaluating fetch...');
+            _triggerLoadingForCurrentMode();
+          } else {
+            _isWaitingForBaseLyrics = false;
+            debugPrint('LyricsTranslation: Base lyrics READY but cache already loaded. Skipping.');
+          }
+        }
       }
     });
 
@@ -124,21 +150,88 @@ class LyricsTranslationNotifier extends Notifier<LyricsTranslationState> {
   /// PROACTIVE: Checks if either translation or romanization is missing
   /// even if not currently in that mode, to ensure background self-healing.
   void _triggerLoadingForCurrentMode() {
-    if (!state.isSystemEnabled) return;
+    if (!state.isSystemEnabled) {
+       _isWaitingForBaseLyrics = false;
+       return;
+    }
 
     // 1. Cancel any existing timer
     _debounceTimer?.cancel();
 
-    // 2. Determine if fetching is needed (Check BOTH for healing)
-    final needsTranslation = state.translatedLyrics == null;
-    final needsRomanization = state.romanizedLyrics == null;
+    // 2. Check if we already have sufficient data in state (from early load)
+    final bool hasTranslated = state.translatedLyrics != null;
+    final bool hasRomanized = state.romanizedLyrics != null;
+    
+    // Healing check: if we are in Translated mode but have no TRN, or Romanized mode but no ROM
+    bool needsWait = false;
+    if (state.mode == LyricsTranslationMode.translated && !hasTranslated) needsWait = true;
+    if (state.mode == LyricsTranslationMode.romanized && !hasRomanized) needsWait = true;
+    
+    if (!needsWait && hasTranslated && hasRomanized) return;
 
-    if (!needsTranslation && !needsRomanization) return;
+    // 3. Check if base lyrics are ready. If not, wait for them.
+    final lyricsState = ref.read(lyricsProvider);
+    if (lyricsState.isLoading || lyricsState.lyrics.isEmpty) {
+        _isWaitingForBaseLyrics = true;
+        return; // Silent wait
+    }
 
-    // 3. Start a new timer (1.5 seconds debounce)
-    _debounceTimer = Timer(const Duration(milliseconds: 1500), () {
+    // 4. Start a new timer (Short debounce for UX stability)
+    _debounceTimer = Timer(const Duration(milliseconds: 500), () {
       _fetchAndCacheUnified();
     });
+  }
+
+  /// SOTA V3.3: Instant disk discovery without waiting for LRC parser.
+  /// Uses a Race Condition guard to prevent stale state updates.
+  Future<void> _tryEarlyCacheLoad(String trackId) async {
+    final cacheManager = ref.read(cacheManagerProvider);
+    final translateDir = await cacheManager.getTranslateDir();
+    final safeId = cacheManager.getSafeFilename(trackId);
+    
+    final String transSuffix = state.targetLanguage.toUpperCase();
+    final transFile = File(p.join(translateDir.path, '${safeId}_$transSuffix.lrc'));
+    final romanFile = File(p.join(translateDir.path, '${safeId}_romanized.lrc'));
+
+    List<LyricLine>? earlyTRN;
+    List<LyricLine>? earlyROM;
+
+    if (await transFile.exists()) {
+      try {
+        final content = await transFile.readAsString();
+        if (content.isNotEmpty) earlyTRN = _internalParseLrc(content);
+      } catch (_) {}
+    }
+
+    if (await romanFile.exists()) {
+      try {
+        final content = await romanFile.readAsString();
+        if (content.isNotEmpty) earlyROM = _internalParseLrc(content);
+      } catch (_) {}
+    }
+
+    // RACE CONDITION GUARD: Verify we are still on the same track
+    final currentId = ref.read(audioProvider).currentTrack?.id ?? 
+                      ref.read(audioProvider).currentTrack?.path;
+    
+    if (currentId != trackId) {
+      debugPrint('LyricsTranslation: Early load CANCELED (User skipped fast).');
+      return;
+    }
+
+    if (earlyTRN != null || earlyROM != null) {
+      debugPrint('LyricsTranslation: Early Cache Hit for $trackId');
+      state = state.copyWith(
+        translatedLyrics: earlyTRN,
+        romanizedLyrics: earlyROM,
+        lastTrackId: trackId,
+      );
+      
+      // If we got everything, stop waiting for base lyrics
+      if (earlyTRN != null && earlyROM != null) {
+        _isWaitingForBaseLyrics = false;
+      }
+    }
   }
 
   void toggleSystemEnabled() {
@@ -148,6 +241,10 @@ class LyricsTranslationNotifier extends Notifier<LyricsTranslationState> {
       mode: newValue ? state.mode : LyricsTranslationMode.original,
     );
     ref.read(sharedPreferencesProvider).setBool('lyrics_translation_system_enabled', newValue);
+    
+    if (newValue) {
+      _triggerLoadingForCurrentMode();
+    }
   }
 
   void cycleMode() {
@@ -165,12 +262,18 @@ class LyricsTranslationNotifier extends Notifier<LyricsTranslationState> {
 
   void setTargetLanguage(String lang) {
     if (state.targetLanguage == lang) return;
-    state = state.copyWith(targetLanguage: lang, translatedLyrics: null);
+    state = state.copyWith(targetLanguage: lang, translatedLyrics: null, error: null);
     ref.read(sharedPreferencesProvider).setString('lyrics_translation_lang', lang);
     
-    if (state.mode == LyricsTranslationMode.translated) {
-      _triggerLoadingForCurrentMode();
-    }
+    // Trigger loading regardless of mode, to pre-fetch for other modes
+    _triggerLoadingForCurrentMode();
+  }
+
+  /// Manually retries the failed fetch for the current mode.
+  void retry() {
+    if (state.isLoading) return;
+    state = state.copyWith(error: null);
+    _triggerLoadingForCurrentMode();
   }
 
   /// Unified fetcher that populates both translation and romanization.
@@ -180,58 +283,66 @@ class LyricsTranslationNotifier extends Notifier<LyricsTranslationState> {
     if (currentTrack == null) return;
     final trackIdAtStart = currentTrack.id ?? currentTrack.path;
 
+    // IDENTTY GUARD: Always claim the track ID early if it's missing or changed.
+    // This ensures that displayLyricsProvider knows we are tracking the current song,
+    // even if we haven't fetched the translations yet.
+    if (state.lastTrackId != trackIdAtStart) {
+      state = state.copyWith(lastTrackId: trackIdAtStart);
+    }
+
     final originalLyrics = ref.read(lyricsProvider).lyrics;
-    if (originalLyrics.isEmpty) return;
+    if (originalLyrics.isEmpty) {
+      debugPrint('LyricsTranslation: Base lyrics not yet available for $trackIdAtStart. Waiting...');
+      return;
+    }
 
     if (state.isLoading) return; 
 
+    // SOTA V3.3: State-First Discovery. If early loader already finished, use that data.
+    List<LyricLine>? fetchedTranslated = state.translatedLyrics;
+    List<LyricLine>? fetchedRomanized = state.romanizedLyrics;
+
+    final songId = trackIdAtStart;
+    final cacheManager = ref.read(cacheManagerProvider);
+    final translateDir = await cacheManager.getTranslateDir();
+    final safeId = cacheManager.getSafeFilename(songId);
+    
+    final String transSuffix = state.targetLanguage.toUpperCase();
+    final transCacheFile = File(p.join(translateDir.path, '${safeId}_$transSuffix.lrc'));
+    final romanCacheFile = File(p.join(translateDir.path, '${safeId}_romanized.lrc'));
+
+    // 1. Discovery Phase (PRE-LOADING): Only read from disk if state is missing
+    if (fetchedTranslated == null && await transCacheFile.exists()) {
+      try {
+        final content = await transCacheFile.readAsString();
+        if (content.isNotEmpty) fetchedTranslated = _internalParseLrc(content);
+      } catch (_) {}
+    }
+
+    if (fetchedRomanized == null && await romanCacheFile.exists()) {
+      try {
+        final content = await romanCacheFile.readAsString();
+        if (content.isNotEmpty) fetchedRomanized = _internalParseLrc(content);
+      } catch (_) {}
+    }
+
+    // Check if we hit everything from cache
+    final hasAllNeeded = fetchedTranslated != null && fetchedRomanized != null;
+    
+    if (hasAllNeeded) {
+      state = state.copyWith(
+        translatedLyrics: fetchedTranslated,
+        romanizedLyrics: fetchedRomanized,
+        lastTrackId: trackIdAtStart,
+        isLoading: false,
+      );
+      return;
+    }
+
+    // 2. Network Phase: Only now we show loading
     state = state.copyWith(isLoading: true, error: null);
 
     try {
-      final songId = trackIdAtStart;
-      final cacheManager = ref.read(cacheManagerProvider);
-      final translateDir = await cacheManager.getTranslateDir();
-      final safeId = cacheManager.getSafeFilename(songId);
-      
-      final String transSuffix = state.targetLanguage.toUpperCase();
-      final transCacheFile = File(p.join(translateDir.path, '${safeId}_$transSuffix.lrc'));
-      final romanCacheFile = File(p.join(translateDir.path, '${safeId}_romanized.lrc'));
-
-      List<LyricLine>? fetchedTranslated;
-      List<LyricLine>? fetchedRomanized;
-
-      // 1. Discovery Phase: Try to load whatever exists on disk
-      if (await transCacheFile.exists()) {
-        try {
-          final content = await transCacheFile.readAsString();
-          if (content.isNotEmpty) {
-            fetchedTranslated = _internalParseLrc(content);
-            if (fetchedTranslated.isNotEmpty) {
-              await cacheManager.updateLastAccessed(transCacheFile);
-            } else {
-              fetchedTranslated = null; 
-            }
-          }
-        } catch (e) {
-          debugPrint('LyricsTranslation: FAILED to read trans cache: $e');
-        }
-      }
-
-      if (await romanCacheFile.exists()) {
-        try {
-          final content = await romanCacheFile.readAsString();
-          if (content.isNotEmpty) {
-            fetchedRomanized = _internalParseLrc(content);
-            if (fetchedRomanized.isNotEmpty) {
-              await cacheManager.updateLastAccessed(romanCacheFile);
-            } else {
-              fetchedRomanized = null;
-            }
-          }
-        } catch (e) {
-          debugPrint('LyricsTranslation: FAILED to read roman cache: $e');
-        }
-      }
 
       // 2. Decision Phase: Choose between API call or local generation (ROM only)
       final trackIdConfirm = ref.read(audioProvider).currentTrack?.id ?? 
@@ -252,9 +363,14 @@ class LyricsTranslationNotifier extends Notifier<LyricsTranslationState> {
             if (_needsRomanization(originalLyrics)) {
               requiresNetwork = true;
             } else {
-              // OPTIMIZATION: Lirik Latin, gunakan original sebagai Romanized
+              // OPTIMIZATION SOTA V3.3: Lirik Latin, gunakan original sebagai Romanized (Silent Healing)
               fetchedRomanized ??= List.from(originalLyrics);
-              await romanCacheFile.writeAsString(service.stringify(fetchedRomanized));
+              // Background fire-and-forget write to satisfy hasAllNeeded in future
+              romanCacheFile.writeAsString(service.stringify(fetchedRomanized)).catchError((e) {
+                debugPrint('LyricsTranslation: Silent ROM healing failed - $e');
+                return romanCacheFile;
+              });
+              
               requiresNetwork = (fetchedTranslated == null && state.mode == LyricsTranslationMode.translated);
             }
           }
@@ -281,21 +397,34 @@ class LyricsTranslationNotifier extends Notifier<LyricsTranslationState> {
       // 5. Completion State (Only if still on the same track)
       final trackIdFinal = ref.read(audioProvider).currentTrack?.id ?? 
                            ref.read(audioProvider).currentTrack?.path;
+
       if (trackIdFinal == trackIdAtStart) {
         state = state.copyWith(
-          translatedLyrics: fetchedTranslated,
-          romanizedLyrics: fetchedRomanized,
+          translatedLyrics: fetchedTranslated ?? state.translatedLyrics,
+          romanizedLyrics: fetchedRomanized ?? state.romanizedLyrics,
+          lastTrackId: trackIdAtStart,
           isLoading: false,
+          error: null,
         );
       } else {
+        // Track changed during fetch, just clear loading
         state = state.copyWith(isLoading: false);
       }
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
-      debugPrint('LyricsTranslation: UNIFIED FETCH FAILED - $e');
-    } finally {
-      if (state.isLoading) {
+      debugPrint('LyricsTranslation: FAILED fetch for $trackIdAtStart - $e');
+      
+      // Only set error if we are still on the same track
+      final trackIdError = ref.read(audioProvider).currentTrack?.id ?? 
+                           ref.read(audioProvider).currentTrack?.path;
+      if (trackIdError == trackIdAtStart) {
+        state = state.copyWith(isLoading: false, error: e.toString());
+      } else {
         state = state.copyWith(isLoading: false);
+      }
+    } finally {
+      // Safety guarantee: Always reset loading if it stays hanging
+      if (state.isLoading) {
+         state = state.copyWith(isLoading: false);
       }
     }
   }
@@ -343,6 +472,13 @@ final displayLyricsProvider = Provider<List<LyricLine>>((ref) {
   if (!translationState.isSystemEnabled) return baseLyrics;
 
   final mode = translationState.mode;
+
+  // STALENESS GUARD: If the translation state belongs to a different track, fallback to base.
+  final currentTrack = ref.watch(audioProvider.select((s) => s.currentTrack));
+  final effectiveId = currentTrack?.id ?? currentTrack?.path;
+  if (translationState.lastTrackId != effectiveId) {
+     return baseLyrics;
+  }
 
   if (mode == LyricsTranslationMode.translated) {
     final translated = translationState.translatedLyrics;

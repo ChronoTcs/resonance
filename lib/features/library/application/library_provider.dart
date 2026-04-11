@@ -3,12 +3,12 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../../../core/services/storage_service.dart';
-import '../../../../core/services/media_cache_service.dart';
+import '../../../core/data/services/storage_service.dart';
+import '../../../core/data/services/media_cache_service.dart';
 import '../data/models/media_item.dart';
 import '../data/repositories/library_repository.dart';
-import '../../download/data/repositories/download_settings_provider.dart';
-import '../../playlist/presentation/providers/playlist_provider.dart';
+import '../../download/application/providers/download_settings_provider.dart';
+import '../../playlist/application/playlist_provider.dart';
 import '../../../core/utils/path_utils.dart';
 
 class LibraryState {
@@ -209,16 +209,16 @@ class LibraryNotifier extends Notifier<LibraryState> {
       final file = File(path);
       if (await file.exists()) {
         await file.delete();
-        print('Library removal: Deleted main file $path');
+        debugPrint('Library removal: Deleted main file $path');
       }
 
       // 2. Delete Local Lyrics (.lrc in same folder)
       if (path.contains('.')) {
-        final lrcPath = path.substring(0, path.lastIndexOf('.')) + '.lrc';
+        final lrcPath = '${path.substring(0, path.lastIndexOf('.'))}.lrc';
         final lrcFile = File(lrcPath);
         if (await lrcFile.exists()) {
           await lrcFile.delete();
-          print('Library removal: Deleted local lyrics $lrcPath');
+          debugPrint('Library removal: Deleted local lyrics $lrcPath');
         }
       }
 
@@ -230,7 +230,7 @@ class LibraryNotifier extends Notifier<LibraryState> {
         final customLrcFile = File(customLrcPath);
         if (await customLrcFile.exists()) {
           await customLrcFile.delete();
-          print('Library removal: Deleted custom lyrics $customLrcPath');
+          debugPrint('Library removal: Deleted custom lyrics $customLrcPath');
         }
       }
 
@@ -238,7 +238,7 @@ class LibraryNotifier extends Notifier<LibraryState> {
       await ref.read(mediaCacheServiceProvider).removeFromCache(songId);
 
     } catch (e) {
-      print('Library removal error: $e');
+        debugPrint('Error caching art in recently played: $e');
     }
     
     state = state.copyWith(
@@ -259,6 +259,17 @@ class LibraryNotifier extends Notifier<LibraryState> {
     
     // Debounced persistent save to prevent "Write Data Leak" (multiple writes during batch download)
     _scheduleSave();
+  }
+
+  /// SOTA V13.6: Instant Awakening - Reload library from JSON cache
+  Future<void> loadMetadataFromCache() async {
+    final repo = ref.read(libraryRepositoryProvider);
+    final cachedMedia = await repo.loadLibraryCache();
+    if (cachedMedia.isNotEmpty) {
+      cachedMedia.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+      state = state.copyWith(allMedia: cachedMedia);
+      debugPrint('LibraryNotifier: Instant Awakening! Loaded ${cachedMedia.length} items.');
+    }
   }
 }
 

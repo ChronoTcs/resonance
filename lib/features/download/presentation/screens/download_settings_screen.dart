@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:resonance_app/features/download/data/repositories/download_settings_provider.dart';
+import 'package:resonance_app/features/download/application/providers/download_settings_provider.dart';
 
 class DownloadSettingsScreen extends ConsumerWidget {
   const DownloadSettingsScreen({super.key});

@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/models/lyric_line.dart';
-import '../../player/application/audio_provider.dart';
+import '../../player/application/providers/audio_provider.dart';
 import '../../library/application/library_provider.dart';
 import '../../library/data/models/media_item.dart';
 import '../data/repositories/lyrics_repository.dart';
@@ -68,7 +68,7 @@ class LyricsNotifier extends Notifier<LyricsState> {
 
   Future<void> _loadLyrics(MediaItem track) async {
     final String songId = track.id ?? track.path;
-    state = state.copyWith(isLoading: true, error: null);
+    state = state.copyWith(lyrics: [], isLoading: true, error: null);
     
     try {
       final repo = ref.read(lyricsRepositoryProvider);
@@ -83,6 +83,14 @@ class LyricsNotifier extends Notifier<LyricsState> {
       if (_lastLoadingPath == songId) {
         state = state.copyWith(error: e.toString(), isLoading: false);
       }
+    }
+  }
+
+  /// Reloads lyrics for the current track (used when background sync finishes).
+  void refresh() {
+    final audioState = ref.read(audioProvider);
+    if (audioState.currentTrack != null) {
+      _loadLyrics(audioState.currentTrack!);
     }
   }
 }

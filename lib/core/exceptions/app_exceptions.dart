@@ -9,13 +9,13 @@ class AppException implements Exception {
 }
 
 class StorageException extends AppException {
-  StorageException(String message, [String? code]) : super(message, code);
+  StorageException(super.message, [super.code]);
 }
 
 class NetworkException extends AppException {
-  NetworkException(String message, [String? code]) : super(message, code);
+  NetworkException(super.message, [super.code]);
 }
 
 class PlayerException extends AppException {
-  PlayerException(String message, [String? code]) : super(message, code);
+  PlayerException(super.message, [super.code]);
 }

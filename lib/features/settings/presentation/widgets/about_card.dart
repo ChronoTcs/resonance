@@ -1,12 +1,133 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:resonance_app/features/library/application/services/music_restore_service.dart';
 import '../providers/package_info_provider.dart';
 
-class AboutCard extends ConsumerWidget {
+class AboutCard extends ConsumerStatefulWidget {
   const AboutCard({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AboutCard> createState() => _AboutCardState();
+}
+
+class _AboutCardState extends ConsumerState<AboutCard> {
+  int _tapCount = 0;
+  bool _showRestore = false;
+
+  void _handleTap() {
+    setState(() {
+      _tapCount++;
+      if (_tapCount == 5) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('5 tap more to open the secret protocol...'),
+            duration: Duration(seconds: 1),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      if (_tapCount >= 10 && !_showRestore) {
+        _showRestore = true;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Restore Protocol: Restricted Access Granted.'),
+            duration: Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    });
+  }
+
+  Future<void> _handleRestore() async {
+    // SOTA V13.11: Source Selection Dialog
+    final source = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Restore Protocol'),
+        content: const Text('Choose your music backup source:'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, 'android'),
+            child: const Text('Android (Internal)'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, 'windows'),
+            child: const Text('Windows (USB/OTG)'),
+          ),
+        ],
+      ),
+    );
+
+    if (source == null) return;
+
+    String? selectedDirectory;
+    if (source == 'windows') {
+      selectedDirectory = await FilePicker.platform.getDirectoryPath();
+      if (selectedDirectory == null) return;
+    }
+    
+    if (!mounted) return;
+    
+    // Tampilkan progress dialog (Penanda sistem sedang bekerja)
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: Card(
+          child: Padding(
+            padding: EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('Restore Protocol...'),
+                SizedBox(height: 8),
+                Text(
+                  'Scanning & syncing metadata...',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    try {
+      // Pada Android, jika memilih 'android', selectedDirectory akan null dan memicu Auto-Detection
+      await ref.read(musicRestoreServiceProvider).restoreFromSource(selectedDirectory);
+      
+      if (!mounted) return;
+      Navigator.pop(context); // Tutup dialog
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Restore Protocol: SUCCESS. Metadata & Media re-synced.'),
+          backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context); // Tutup dialog
+      
+      // Notifikasi Kegagalan
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Protocol Failed: ${e.toString().replaceAll('Exception: ', '')}'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final packageInfo = ref.watch(packageInfoProvider);
     final theme = Theme.of(context);
 
@@ -17,7 +138,7 @@ class AboutCard extends ConsumerWidget {
         clipBehavior: Clip.antiAlias,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
-          side: BorderSide(color: theme.dividerColor.withOpacity(0.1)),
+          side: BorderSide(color: theme.dividerColor.withValues(alpha: 0.1)),
         ),
         child: Theme(
           data: theme.copyWith(dividerColor: Colors.transparent),
@@ -63,7 +184,7 @@ class AboutCard extends ConsumerWidget {
                     height: 12,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   ),
-                  error: (_, __) => const Text('v?.?.?'),
+                  error: (_, _) => const Text('v?.?.?'),
                 ),
                 const SizedBox(width: 8),
                 const Icon(Icons.expand_more, size: 20),
@@ -74,15 +195,43 @@ class AboutCard extends ConsumerWidget {
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
-                color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+                color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'An alternative, cross-platform media player',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: _handleTap,
+                            child: Text(
+                              'An alternative, cross-platform media player',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (_showRestore)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 8),
+                            child: TextButton.icon(
+                              onPressed: _handleRestore,
+                              style: TextButton.styleFrom(
+                                visualDensity: VisualDensity.compact,
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                                foregroundColor: theme.primaryColor,
+                                backgroundColor: theme.primaryColor.withValues(alpha: 0.1),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                              ),
+                              icon: const Icon(Icons.settings_backup_restore, size: 14),
+                              label: const Text(
+                                'Restore music',
+                                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                     const SizedBox(height: 16),
                     _buildLink(context, 'Licence Terms'),

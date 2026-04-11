@@ -2,14 +2,15 @@ import 'dart:ui';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:resonance_app/features/player/application/audio_provider.dart';
+import 'package:resonance_app/features/player/application/providers/audio_provider.dart';
 import 'package:resonance_app/features/lyrics/presentation/providers/lyrics_ui_provider.dart';
 import 'package:resonance_app/core/widgets/media_artwork_widget.dart';
 import 'package:resonance_app/core/widgets/media_actions_bottom_sheet.dart';
-import 'package:resonance_app/features/player/application/video_player_notifier.dart' as v;
+import 'package:resonance_app/features/player/application/providers/video_player_notifier.dart' as v;
 import '../widgets/player_cards.dart';
 import '../widgets/equalizer_sheet.dart';
-import 'package:resonance_app/core/widgets/hover_widgets.dart';
+import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
+// import 'package:resonance_app/core/widgets/hover_widgets.dart'; // Unused
 
 class NowPlayingScreen extends ConsumerWidget {
   const NowPlayingScreen({super.key});
@@ -99,14 +100,14 @@ class NowPlayingScreen extends ConsumerWidget {
   Widget _buildSettingLabel(BuildContext context, String label) {
     return Text(
       label,
-      style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.7)),
+      style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.7)),
     );
   }
 
   Widget _buildSliderRow(BuildContext context, String minLabel, String maxLabel, double value, double min, double max, int divisions, Function(double) onChanged) {
     return Row(
       children: [
-        Text(minLabel, style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.5))),
+        Text(minLabel, style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5))),
         Expanded(
           child: Slider(
             value: value,
@@ -117,44 +118,58 @@ class NowPlayingScreen extends ConsumerWidget {
             onChanged: onChanged,
           ),
         ),
-        Text(maxLabel, style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.5))),
+        Text(maxLabel, style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5))),
       ],
     );
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final audioState = ref.watch(audioProvider);
+    // OPTIMIZATION: Only watch properties that affect the general layout.
+    // Watching the full audioProvider causes rebuilds every second (position change).
+    final currentTrack = ref.watch(audioProvider.select((s) => s.currentTrack));
     final videoState = ref.watch(v.videoPlayerProvider);
     final isVideo = videoState.currentVideo != null;
-    final track = isVideo ? videoState.currentVideo : audioState.currentTrack;
+    final track = isVideo ? videoState.currentVideo : currentTrack;
+
+    final isAndroid = Platform.isAndroid;
+    final blurSigma = isAndroid ? 40.0 : 80.0;
 
     return Stack(
       clipBehavior: Clip.antiAlias,
       children: [
         // Dynamic Background (Consistent with FullScreenPlayer)
+        // OPTIMIZATION: RepaintBoundary prevents blur from re-calculating during lyrics scroll
         Positioned.fill(
-          child: track != null 
-            ? MediaArtworkWidget(
-                item: track,
-                fit: BoxFit.cover,
-                color: Theme.of(context).brightness == Brightness.light
-                    ? Colors.white.withOpacity(0.6)
-                    : Colors.black.withOpacity(0.6),
-                colorBlendMode: Theme.of(context).brightness == Brightness.light
-                    ? BlendMode.lighten
-                    : BlendMode.darken,
-              )
-            : Container(color: Theme.of(context).colorScheme.surface),
-        ),
-        Positioned.fill(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 80, sigmaY: 80),
-            child: Container(
-              color: (Theme.of(context).brightness == Brightness.light
-                      ? Colors.white
-                      : Colors.black)
-                  .withOpacity(0.4),
+          child: RepaintBoundary(
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: track != null 
+                    ? MediaArtworkWidget(
+                        item: track,
+                        fit: BoxFit.cover,
+                        color: Theme.of(context).brightness == Brightness.light
+                            ? Colors.white.withValues(alpha: 0.6)
+                            : Colors.black.withValues(alpha: 0.6),
+                        colorBlendMode: Theme.of(context).brightness == Brightness.light
+                            ? BlendMode.lighten
+                            : BlendMode.darken,
+                      )
+                    : Container(color: Theme.of(context).colorScheme.surface),
+                ),
+                Positioned.fill(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
+                    child: Container(
+                      color: (Theme.of(context).brightness == Brightness.light
+                              ? Colors.white
+                              : Colors.black)
+                          .withValues(alpha: 0.4),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -168,10 +183,12 @@ class NowPlayingScreen extends ConsumerWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Row(
                   children: [
-                    ModernIconButton(
-                      icon: Icon(Icons.keyboard_arrow_down, size: 32, 
-                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7)),
-                      onPressed: () => ref.read(nowPlayingOverlayProvider.notifier).setVisible(false),
+                    ReusableHoverIconButton(
+                      icon: Icons.keyboard_arrow_down,
+                      tooltip: 'Tutup',
+                      iconSize: 32,
+                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                      onTap: () => ref.read(nowPlayingOverlayProvider.notifier).setVisible(false),
                     ),
                     const Spacer(),
                     Text(
@@ -180,19 +197,21 @@ class NowPlayingScreen extends ConsumerWidget {
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
                         letterSpacing: 2,
-                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
                       ),
                     ),
                     const Spacer(),
-                    ModernIconButton(
-                      icon: Icon(Icons.playlist_add, 
-                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7)),
-                      onPressed: () => _showMediaActions(context, track),
+                    ReusableHoverIconButton(
+                      icon: Icons.playlist_add,
+                      tooltip: 'Media Actions',
+                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                      onTap: () => _showMediaActions(context, track),
                     ),
-                    ModernIconButton(
-                      icon: Icon(Icons.more_vert, 
-                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7)),
-                      onPressed: () => _showAudioSettings(context),
+                    ReusableHoverIconButton(
+                      icon: Icons.more_vert,
+                      tooltip: 'Audio Settings',
+                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                      onTap: () => _showAudioSettings(context),
                     ),
                   ],
                 ),
@@ -241,7 +260,7 @@ class NowPlayingScreen extends ConsumerWidget {
                                             borderRadius: BorderRadius.circular(20),
                                             boxShadow: [
                                               BoxShadow(
-                                                color: Colors.black.withOpacity(0.5),
+                                                color: Colors.black.withValues(alpha: 0.5),
                                                 blurRadius: 40,
                                                 offset: const Offset(0, 20),
                                               ),
@@ -299,7 +318,7 @@ class NowPlayingScreen extends ConsumerWidget {
                                                   borderRadius: BorderRadius.circular(20),
                                                   boxShadow: [
                                                     BoxShadow(
-                                                      color: Colors.black.withOpacity(0.5),
+                                                      color: Colors.black.withValues(alpha: 0.5),
                                                       blurRadius: 40,
                                                       offset: const Offset(0, 20),
                                                     ),
@@ -333,7 +352,7 @@ class NowPlayingScreen extends ConsumerWidget {
                                             Expanded(
                                               child: MiniLyricsCard(),
                                             ),
-                                            const SizedBox(height: 24),
+                                            SizedBox(height: 24),
                                             NextInQueueCard(),
                                           ],
                                         ),

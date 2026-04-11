@@ -1,12 +1,13 @@
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:resonance_app/features/player/application/audio_provider.dart';
-import 'package:resonance_app/features/playlist/presentation/providers/playlist_provider.dart';
+import 'package:resonance_app/features/player/application/providers/audio_provider.dart';
+import 'package:resonance_app/features/playlist/application/playlist_provider.dart';
 import 'package:resonance_app/features/library/application/library_provider.dart';
 import 'package:resonance_app/core/widgets/media_actions_bottom_sheet.dart';
 import 'package:resonance_app/core/widgets/media_artwork_widget.dart';
-import 'package:resonance_app/core/widgets/hover_widgets.dart';
+import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
+// import 'package:resonance_app/core/widgets/hover_widgets.dart'; // Unused
 
 class PlaylistDetailScreen extends ConsumerWidget {
   const PlaylistDetailScreen({super.key, required this.playlistId});
@@ -20,8 +21,9 @@ class PlaylistDetailScreen extends ConsumerWidget {
 
     return Scaffold(
       body: playlistsAsync.when(
-        data: (playlists) {
-          final playlist = playlists
+        data: (state) {
+          final allPlaylists = [...state.local, ...state.online];
+          final playlist = allPlaylists
               .where((p) => p.id == playlistId)
               .firstOrNull;
           if (playlist == null) {
@@ -41,20 +43,20 @@ class PlaylistDetailScreen extends ConsumerWidget {
                 expandedHeight: 240,
                 pinned: true,
                 elevation: 0,
-                backgroundColor: theme.colorScheme.surface.withOpacity(0.7),
+                backgroundColor: theme.colorScheme.surface.withValues(alpha: 0.7),
                 leading: Center(
-                  child: ModernIconButton(
-                    icon: const Icon(Icons.arrow_back),
-                    onPressed: () => ref.read(selectedPlaylistIdProvider.notifier).setSelectedId(null),
+                  child: ReusableHoverIconButton(
+                    icon: Icons.arrow_back,
                     tooltip: 'Back',
+                    onTap: () => ref.read(selectedPlaylistIdProvider.notifier).setSelectedId(null),
                     color: theme.colorScheme.onSurface,
                   ),
                 ),
                 actions: [
-                  ModernIconButton(
-                    icon: const Icon(Icons.sync_problem_rounded),
+                  ReusableHoverIconButton(
+                    icon: Icons.sync_problem_rounded,
                     tooltip: 'Repair Playlist',
-                    onPressed: () async {
+                    onTap: () async {
                       final libraryItems = ref.read(libraryProvider).allMedia;
                       final count = await ref
                           .read(playlistProvider.notifier)
@@ -72,10 +74,10 @@ class PlaylistDetailScreen extends ConsumerWidget {
                       }
                     },
                   ),
-                  ModernIconButton(
-                    icon: const Icon(Icons.add_circle_outline),
+                  ReusableHoverIconButton(
+                    icon: Icons.add_circle_outline,
                     tooltip: 'Add Music',
-                    onPressed: () {
+                    onTap: () {
                       showModalBottomSheet(
                         context: context,
                         isScrollControlled: true,
@@ -97,7 +99,7 @@ class PlaylistDetailScreen extends ConsumerWidget {
                           shadows: [
                             Shadow(
                               blurRadius: 4,
-                              color: theme.colorScheme.shadow.withOpacity(0.5),
+                              color: theme.colorScheme.shadow.withValues(alpha: 0.5),
                             ),
                           ],
                         ),
@@ -106,7 +108,7 @@ class PlaylistDetailScreen extends ConsumerWidget {
                       background: firstTrack != null
                           ? ColorFiltered(
                               colorFilter: ColorFilter.mode(
-                                Colors.black.withOpacity(0.4),
+                                Colors.black.withValues(alpha: 0.4),
                                 BlendMode.darken,
                               ),
                               child: MediaArtworkWidget(
@@ -123,15 +125,15 @@ class PlaylistDetailScreen extends ConsumerWidget {
                                   begin: Alignment.topLeft,
                                   end: Alignment.bottomRight,
                                   colors: [
-                                    theme.colorScheme.primary.withOpacity(0.8),
-                                    theme.colorScheme.secondary.withOpacity(0.6),
+                                    theme.colorScheme.primary.withValues(alpha: 0.8),
+                                    theme.colorScheme.secondary.withValues(alpha: 0.6),
                                   ],
                                 ),
                               ),
                               child: Icon(
                                 Icons.queue_music_rounded,
                                 size: 100,
-                                color: Colors.white.withOpacity(0.3),
+                                color: Colors.white.withValues(alpha: 0.3),
                               ),
                             ),
                     ),
@@ -153,24 +155,18 @@ class PlaylistDetailScreen extends ConsumerWidget {
                         ),
                       ),
                       if (tracks.isNotEmpty)
-                        HoverWrapper(
-                          borderRadius: BorderRadius.circular(20),
+                        ReusableHoverIconButton(
+                          icon: Icons.play_arrow_rounded,
+                          label: 'Play All',
+                          tooltip: 'Play all tracks',
+                          backgroundColor: theme.colorScheme.primary,
+                          iconColor: theme.colorScheme.onPrimary,
+                          labelStyle: TextStyle(color: theme.colorScheme.onPrimary, fontWeight: FontWeight.bold),
                           onTap: () {
                             ref
                                 .read(audioProvider.notifier)
                                 .playPlaylist(tracks, initialIndex: 0);
                           },
-                          child: FilledButton.icon(
-                            onPressed: null, // Let HoverWrapper handle tap
-                            icon: const Icon(Icons.play_arrow_rounded),
-                            label: const Text('Play All'),
-                            style: FilledButton.styleFrom(
-                              disabledBackgroundColor:
-                                  theme.colorScheme.primary,
-                              disabledForegroundColor:
-                                  theme.colorScheme.onPrimary,
-                            ),
-                          ),
                         ),
                     ],
                   ),
@@ -222,10 +218,10 @@ class PlaylistDetailScreen extends ConsumerWidget {
                           builder: (_) => MediaActionsBottomSheet(item: track),
                         );
                       },
-                      trailing: ModernIconButton(
-                        icon: const Icon(Icons.remove_circle_outline),
+                      trailing: ReusableHoverIconButton(
+                        icon: Icons.remove_circle_outline,
                         tooltip: 'Remove from playlist',
-                        onPressed: () {
+                        onTap: () {
                           ref
                               .read(playlistProvider.notifier)
                               .removeTrackFromPlaylist(playlistId, track.id ?? track.path);
@@ -293,7 +289,7 @@ class _MusicPickerSheetState extends ConsumerState<_MusicPickerSheet> {
                           .where((m) => _selectedIds.contains(m.id ?? m.path))
                           .toList();
                       await ref.read(playlistProvider.notifier).addTracksToPlaylist(widget.playlistId, selectedTracks);
-                      if (mounted) Navigator.pop(context);
+                      if (context.mounted) Navigator.pop(context);
                     },
                     child: Text('Add (${_selectedIds.length})'),
                   ),
@@ -307,7 +303,7 @@ class _MusicPickerSheetState extends ConsumerState<_MusicPickerSheet> {
                   hintText: 'Search my music...',
                   prefixIcon: const Icon(Icons.search),
                   filled: true,
-                  fillColor: theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
+                  fillColor: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none,

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../application/audio_provider.dart';
+import '../../application/providers/equalizer_controller.dart';
 
 class EqualizerSheet extends ConsumerWidget {
-  const EqualizerSheet({Key? key}) : super(key: key);
+  const EqualizerSheet({super.key});
 
   static const List<String> _bandLabels = [
     '62 Hz',
@@ -19,8 +19,8 @@ class EqualizerSheet extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final audioState = ref.watch(audioProvider);
-    final audioNotifier = ref.read(audioProvider.notifier);
+    final eqState = ref.watch(equalizerControllerProvider);
+    final eqNotifier = ref.read(equalizerControllerProvider.notifier);
 
     final colorScheme = Theme.of(context).colorScheme;
     final onSurface = colorScheme.onSurface;
@@ -55,7 +55,7 @@ class EqualizerSheet extends ConsumerWidget {
               Row(
                 children: [
                   Text(
-                    audioState.isEqualizerEnabled ? 'On' : 'Off',
+                    eqState.isEnabled ? 'On' : 'Off',
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -63,9 +63,9 @@ class EqualizerSheet extends ConsumerWidget {
                   ),
                   const SizedBox(width: 12),
                   Switch(
-                    value: audioState.isEqualizerEnabled,
+                    value: eqState.isEnabled,
                     onChanged: (val) {
-                      audioNotifier.toggleEqualizer(val);
+                      eqNotifier.toggleEqualizer(val);
                     },
                   ),
                 ],
@@ -86,13 +86,13 @@ class EqualizerSheet extends ConsumerWidget {
                 height: 36,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 decoration: BoxDecoration(
-                  color: colorScheme.surfaceVariant.withOpacity(0.5),
+                  color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<String>(
-                    value: audioState.equalizerPreset,
-                    dropdownColor: colorScheme.surfaceVariant,
+                    value: eqState.preset,
+                    dropdownColor: colorScheme.surfaceContainerHighest,
                     icon: Icon(
                       Icons.keyboard_arrow_down,
                       color: onSurfaceVariant,
@@ -106,7 +106,7 @@ class EqualizerSheet extends ConsumerWidget {
                         child: Text(
                           value,
                           style: TextStyle(
-                            color: audioState.equalizerPreset == value
+                            color: eqState.preset == value
                                 ? colorScheme.primary
                                 : onSurface,
                             fontSize: 14,
@@ -116,7 +116,7 @@ class EqualizerSheet extends ConsumerWidget {
                     }).toList(),
                     onChanged: (newValue) {
                       if (newValue != null && newValue != 'Custom') {
-                        audioNotifier.setEqualizerPreset(newValue);
+                        eqNotifier.setEqualizerPreset(newValue);
                       }
                     },
                   ),
@@ -166,7 +166,7 @@ class EqualizerSheet extends ConsumerWidget {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.start,
                       children: List.generate(9, (index) {
-                        return Container(
+                        return SizedBox(
                           width: 56, // Fixed width for each band to ensure scrollability
                           child: Column(
                             children: [
@@ -183,7 +183,7 @@ class EqualizerSheet extends ConsumerWidget {
                                         (_) => Container(
                                           width: 24,
                                           height: 1,
-                                          color: colorScheme.onSurface.withOpacity(0.1),
+                                          color: colorScheme.onSurface.withValues(alpha: 0.1),
                                         ),
                                       ),
                                     ),
@@ -194,7 +194,7 @@ class EqualizerSheet extends ConsumerWidget {
                                         data: SliderTheme.of(context).copyWith(
                                           trackHeight: 4,
                                           activeTrackColor: colorScheme.primary,
-                                          inactiveTrackColor: colorScheme.surfaceVariant,
+                                          inactiveTrackColor: colorScheme.surfaceContainerHighest,
                                           thumbColor: colorScheme.primary,
                                           thumbShape: const RoundSliderThumbShape(
                                             enabledThumbRadius: 9,
@@ -204,12 +204,12 @@ class EqualizerSheet extends ConsumerWidget {
                                               SliderComponentShape.noOverlay,
                                         ),
                                         child: Slider(
-                                          value: audioState.equalizerBands[index],
+                                          value: eqState.bands[index],
                                           min: -12.0,
                                           max: 12.0,
-                                          onChanged: audioState.isEqualizerEnabled
+                                          onChanged: eqState.isEnabled
                                               ? (val) {
-                                                  audioNotifier.setEqualizerBand(
+                                                  eqNotifier.setEqualizerBand(
                                                     index,
                                                     val,
                                                   );
@@ -255,7 +255,7 @@ class EqualizerSheet extends ConsumerWidget {
                       width: 24,
                       height: 24,
                       child: Checkbox(
-                        value: audioState.linkEqualizerSliders,
+                        value: eqState.linkSliders,
                         activeColor: colorScheme.primary,
                         checkColor: colorScheme.onPrimary,
                         side: BorderSide(color: onSurfaceVariant),
@@ -263,7 +263,7 @@ class EqualizerSheet extends ConsumerWidget {
                           borderRadius: BorderRadius.circular(4),
                         ),
                         onChanged: (val) {
-                          if (val != null) audioNotifier.toggleLinkSliders(val);
+                          if (val != null) eqNotifier.toggleLinkSliders(val);
                         },
                       ),
                     ),
@@ -284,7 +284,7 @@ class EqualizerSheet extends ConsumerWidget {
               ElevatedButton(
                 onPressed: () => Navigator.pop(context),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: colorScheme.surfaceVariant,
+                  backgroundColor: colorScheme.surfaceContainerHighest,
                   foregroundColor: colorScheme.onSurfaceVariant,
                   elevation: 0,
                   shape: RoundedRectangleBorder(

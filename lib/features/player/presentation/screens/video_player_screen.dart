@@ -3,13 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import '../../../library/data/models/media_item.dart';
-import '../../application/audio_provider.dart';
+import '../../application/providers/audio_provider.dart';
 
 class VideoPlayerScreen extends ConsumerStatefulWidget {
   final MediaItem videoItem;
 
-  const VideoPlayerScreen({Key? key, required this.videoItem})
-    : super(key: key);
+  const VideoPlayerScreen({super.key, required this.videoItem});
 
   @override
   ConsumerState<VideoPlayerScreen> createState() => _VideoPlayerScreenState();

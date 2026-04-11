@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../features/library/data/models/media_item.dart';
-import '../services/media_cache_service.dart';
+import '../data/services/media_cache_service.dart';
 
 class MediaArtworkWidget extends ConsumerStatefulWidget {
   final MediaItem item;
@@ -101,7 +101,7 @@ class _MediaArtworkWidgetState extends ConsumerState<MediaArtworkWidget> {
         fit: widget.fit,
         color: widget.color,
         colorBlendMode: widget.colorBlendMode,
-        errorBuilder: (_, __, ___) => fallback,
+        errorBuilder: (_, _, _) => fallback,
       );
     } else if (_resolvedThumbnailUrl != null) {
       if (_resolvedThumbnailUrl!.startsWith('http')) {
@@ -123,7 +123,7 @@ class _MediaArtworkWidgetState extends ConsumerState<MediaArtworkWidget> {
           fit: widget.fit,
           color: widget.color,
           colorBlendMode: widget.colorBlendMode,
-          errorBuilder: (_, __, ___) => fallback,
+          errorBuilder: (_, _, _) => fallback,
         );
       }
     } else {

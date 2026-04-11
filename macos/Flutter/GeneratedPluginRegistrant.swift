@@ -7,8 +7,8 @@ import Foundation
 
 import audio_service
 import audio_session
-import audiotags
 import file_picker
+import flutter_js
 import just_audio
 import media_kit_libs_macos_video
 import media_kit_video
@@ -17,6 +17,7 @@ import screen_retriever_macos
 import shared_preferences_foundation
 import sqflite_darwin
 import system_theme
+import tray_manager
 import url_launcher_macos
 import wakelock_plus
 import window_manager
@@ -24,8 +25,8 @@ import window_manager
 func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
   AudioServicePlugin.register(with: registry.registrar(forPlugin: "AudioServicePlugin"))
   AudioSessionPlugin.register(with: registry.registrar(forPlugin: "AudioSessionPlugin"))
-  AudiotagsPlugin.register(with: registry.registrar(forPlugin: "AudiotagsPlugin"))
   FilePickerPlugin.register(with: registry.registrar(forPlugin: "FilePickerPlugin"))
+  FlutterJsPlugin.register(with: registry.registrar(forPlugin: "FlutterJsPlugin"))
   JustAudioPlugin.register(with: registry.registrar(forPlugin: "JustAudioPlugin"))
   MediaKitLibsMacosVideoPlugin.register(with: registry.registrar(forPlugin: "MediaKitLibsMacosVideoPlugin"))
   MediaKitVideoPlugin.register(with: registry.registrar(forPlugin: "MediaKitVideoPlugin"))
@@ -34,6 +35,7 @@ func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
   SharedPreferencesPlugin.register(with: registry.registrar(forPlugin: "SharedPreferencesPlugin"))
   SqflitePlugin.register(with: registry.registrar(forPlugin: "SqflitePlugin"))
   SystemThemePlugin.register(with: registry.registrar(forPlugin: "SystemThemePlugin"))
+  TrayManagerPlugin.register(with: registry.registrar(forPlugin: "TrayManagerPlugin"))
   UrlLauncherPlugin.register(with: registry.registrar(forPlugin: "UrlLauncherPlugin"))
   WakelockPlusMacosPlugin.register(with: registry.registrar(forPlugin: "WakelockPlusMacosPlugin"))
   WindowManagerPlugin.register(with: registry.registrar(forPlugin: "WindowManagerPlugin"))

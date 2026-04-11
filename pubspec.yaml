@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.1+2
+version: 1.0.0+1
 
 environment:
   sdk: ^3.11.1
@@ -43,14 +43,15 @@ dependencies:
   media_kit_video: ^2.0.1
   media_kit_libs_video: ^1.0.7
   audio_service: any
-  smtc_windows: any
+  smtc_windows: ^1.1.0
   path: ^1.9.1
   windows_taskbar: ^1.1.2
-  flutter_discord_rpc: ^0.1.0+1
-  permission_handler: ^11.3.1
-  audiotags: ^1.2.0
+  flutter_discord_rpc: ^1.1.0
+  permission_handler: ^12.0.1
+  metadata_god: ^1.1.0
+  mime: ^2.0.0
   scrollable_positioned_list: ^0.3.8
-  window_manager: ^0.4.3
+  window_manager: ^0.5.1
   cached_network_image: ^3.4.1
   youtube_explode_dart: ^3.0.5
   system_theme: 3.2.0
@@ -60,6 +61,10 @@ dependencies:
   dio: ^5.9.2
   open_filex: ^4.7.0
   crypto: ^3.0.7
+  tray_manager: ^0.5.2
+  flutter_js: ^0.8.7
+  sqlite3: ^3.3.0
+  sqlite3_flutter_libs: ^0.6.0+eol
 
 dev_dependencies:
   flutter_test:
@@ -71,7 +76,7 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
-  flutter_launcher_icons: ^0.13.1
+  flutter_launcher_icons: ^0.14.4
 
 flutter_launcher_icons:
   android: true
@@ -123,3 +128,5 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+dependency_overrides:
+  flutter_rust_bridge: 2.11.1

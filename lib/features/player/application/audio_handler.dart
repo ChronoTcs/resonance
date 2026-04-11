@@ -16,6 +16,8 @@ class ResonanceAudioHandler extends BaseAudioHandler with QueueHandler, SeekHand
     player.stream.playing.listen((playing) {
       playbackState.add(playbackState.value.copyWith(
         playing: playing,
+        updatePosition: player.state.position,
+        speed: player.state.rate,
         controls: [
           MediaControl.skipToPrevious,
           if (playing) MediaControl.pause else MediaControl.play,
@@ -44,6 +46,21 @@ class ResonanceAudioHandler extends BaseAudioHandler with QueueHandler, SeekHand
     player.stream.duration.listen((duration) {
       if (mediaItem.value != null) {
         mediaItem.add(mediaItem.value!.copyWith(duration: duration));
+      }
+    });
+
+    player.stream.buffer.listen((buffer) {
+      playbackState.add(playbackState.value.copyWith(
+        bufferedPosition: buffer,
+      ));
+    });
+
+    player.stream.completed.listen((completed) {
+      if (completed) {
+        playbackState.add(playbackState.value.copyWith(
+          playing: false,
+          processingState: AudioProcessingState.completed,
+        ));
       }
     });
 

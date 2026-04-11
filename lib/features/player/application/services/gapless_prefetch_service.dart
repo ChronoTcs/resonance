@@ -1,0 +1,66 @@
+import 'dart:async';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/audio_provider.dart';
+import '../services/queue_service.dart';
+import '../services/stream_resolution_service.dart';
+
+/// Service responsible for proactive pre-fetching of the next track (V17.5).
+/// 
+/// Triggered reactively by AudioOrchestrator when current track duration is near end.
+class GaplessPrefetchService {
+  final Ref _ref;
+  
+  // Guardrail 1: The Gapless Spam Guard
+  bool _isFetching = false;
+
+  GaplessPrefetchService(this._ref);
+
+  /// Proactively fetches the next track and appends it to the MediaKit playlist.
+  /// [V20.7 SOTA] Uses JIT (Just-In-Time) prefetching to ensure URL validity.
+  Future<void> proactiveFetch() async {
+    if (_isFetching) return;
+
+    final audioState = _ref.read(audioProvider);
+    final queueService = _ref.read(queueServiceProvider);
+    
+    // Get the next track in current queue
+    final nextTrack = queueService.peekNextTrack(
+      audioState.loopMode,
+      audioState.isShuffleEnabled,
+    );
+
+    if (nextTrack == null || !nextTrack.isStreaming) return;
+
+    _isFetching = true;
+    debugPrint('[Gapless] JIT Prefetching (TTL Safe): ${nextTrack.title}');
+
+    try {
+      final resolver = _ref.read(streamResolutionServiceProvider);
+      final player = _ref.read(audioProvider.notifier).player;
+      
+      // Resolve using InnerTube (calls YoutubeService internally)
+      final resolvedPath = await resolver.resolve(nextTrack);
+      
+      // Append to the active player playlist for gapless transition
+      await player.add(resolver.buildMedia(resolvedPath));
+      
+      debugPrint('[Gapless] Next track resolved and buffered: ${nextTrack.title}');
+    } catch (e) {
+      debugPrint('[Gapless] JIT Prefetch failed: $e');
+      _isFetching = false;
+    }
+  }
+
+  /// Reset the fetch lock. Called by AudioOrchestrator on track change.
+  void resetLock() {
+    if (_isFetching) {
+      debugPrint('[Gapless] Resetting pre-fetch lock.');
+      _isFetching = false;
+    }
+  }
+}
+
+final gaplessPrefetchServiceProvider = Provider<GaplessPrefetchService>((ref) {
+  return GaplessPrefetchService(ref);
+});

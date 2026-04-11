@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
-import '../../../core/services/permission_service.dart';
+import '../../../core/application/services/permission_service.dart';
 
 class UpdateState {
   final bool isChecking;
@@ -178,6 +178,7 @@ class UpdateNotifier extends Notifier<UpdateState> {
     try {
       if (Platform.isAndroid) {
         // --- NEW: Check for Install Packages Permission ---
+        if (!context.mounted) return;
         final hasPermission = await PermissionService.checkAndRequestInstallPermission(context);
         if (!hasPermission) {
           state = state.copyWith(error: 'Permission to install unknown apps was denied.');

@@ -2,12 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:resonance_app/features/explore/presentation/providers/explore_provider.dart';
-import 'package:resonance_app/features/player/application/audio_provider.dart';
+import 'package:resonance_app/features/player/application/providers/audio_provider.dart';
 import 'package:resonance_app/features/library/data/models/media_item.dart';
 import 'package:resonance_app/features/home/presentation/providers/recently_played_provider.dart';
 import 'package:resonance_app/core/widgets/media_actions_bottom_sheet.dart';
 import 'package:resonance_app/core/widgets/media_artwork_widget.dart';
-import 'package:resonance_app/core/widgets/hover_widgets.dart';
+import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
+import '../../application/services/youtube_auth_service.dart';
+
+import 'youtube_login_screen.dart';
+// import 'package:resonance_app/core/widgets/hover_widgets.dart'; // Unused
 
 class ExploreScreen extends ConsumerStatefulWidget {
   const ExploreScreen({super.key});
@@ -53,9 +57,10 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
               decoration: InputDecoration(
                 hintText: 'Search songs online...',
                 prefixIcon: const Icon(Icons.search),
-                suffixIcon: ModernIconButton(
-                  icon: const Icon(Icons.clear),
-                  onPressed: () {
+                suffixIcon: ReusableHoverIconButton(
+                  icon: Icons.clear,
+                  tooltip: 'Clear search',
+                  onTap: () {
                     _searchController.clear();
                     ref.read(searchQueryProvider.notifier).setQuery('');
                   },
@@ -70,6 +75,10 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
               textInputAction: TextInputAction.search,
               onSubmitted: (_) => _onSearch(),
             ),
+            actions: [
+              _buildAuthButton(context, ref),
+              const SizedBox(width: 8),
+            ],
           ),
 
           // ─── Content Area ───────────────────────────────────────────────
@@ -80,9 +89,13 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      'Recently Played (Online)',
-                      style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                    Expanded(
+                      child: Text(
+                        'Recently Played',
+                        style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                     TextButton.icon(
                       onPressed: () {
@@ -127,7 +140,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
 
                         final mediaItem = MediaItem(
                           id: item.id,
-                          path: item.thumbnailUrl,
+                          path: item.id, // Gunakan ID sebagai path awal agar isStreaming terpicu
                           title: item.title,
                           artist: item.author,
                           thumbnailUrl: item.thumbnailUrl,
@@ -145,7 +158,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                               height: 60,
                               fit: BoxFit.cover,
                               placeholder: (context, url) => Container(
-                                color: theme.colorScheme.surfaceContainerHighest,
+                                color: Colors.blueAccent.withValues(alpha: 0.1),
                                 child: const Icon(Icons.music_note),
                               ),
                               errorWidget: (context, url, error) => const Icon(Icons.error),
@@ -174,9 +187,10 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               const SizedBox(width: 8),
-                              ModernIconButton(
-                                icon: const Icon(Icons.more_vert),
-                                onPressed: () {
+                              ReusableHoverIconButton(
+                                icon: Icons.more_vert,
+                                tooltip: 'Actions',
+                                onTap: () {
                                   showModalBottomSheet(
                                     context: context,
                                     builder: (_) => MediaActionsBottomSheet(
@@ -207,6 +221,44 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
     );
   }
 
+  Widget _buildAuthButton(BuildContext context, WidgetRef ref) {
+    final authService = ref.watch(youtubeAuthServiceProvider);
+    final isLoggedIn = authService.isLoggedIn;
+
+    return ReusableHoverIconButton(
+      icon: isLoggedIn ? Icons.account_circle : Icons.login,
+      tooltip: isLoggedIn ? 'YouTube Account Active' : 'Login to YouTube',
+      color: isLoggedIn ? Colors.redAccent : null,
+      onTap: () async {
+        if (isLoggedIn) {
+          final confirm = await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('YouTube Logout'),
+              content: const Text('Are you sure you want to logout from YouTube?'),
+              actions: [
+                TextButton(child: const Text('Cancel'), onPressed: () => Navigator.pop(context, false)),
+                TextButton(
+                  child: const Text('Logout', style: TextStyle(color: Colors.red)),
+                  onPressed: () => Navigator.pop(context, true),
+                ),
+              ],
+            ),
+          );
+          if (confirm == true) {
+            await ref.read(youtubeAuthServiceProvider).logout();
+            setState(() {});
+          }
+        } else {
+          final success = await Navigator.of(context).push<bool>(
+            MaterialPageRoute(builder: (_) => const YoutubeLoginScreen()),
+          );
+          if (success == true) setState(() {});
+        }
+      },
+    );
+  }
+
   Widget _buildRecentPlays(WidgetRef ref, ThemeData theme) {
     final recentAsync = ref.watch(recentlyPlayedProvider).whenData(
       (items) => items.where((item) => item.id != null && !item.isLocal).toList(),
@@ -222,9 +274,9 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                 height: 100,
                 width: double.infinity,
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+                  color: theme.primaryColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
+                  border: Border.all(color: theme.primaryColor.withValues(alpha: 0.2)),
                 ),
                 child: const Center(
                   child: Text('Play some online songs to see them here!', style: TextStyle(color: Colors.grey)),
@@ -267,9 +319,10 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                   builder: (_) => MediaActionsBottomSheet(item: item),
                 );
               },
-              trailing: ModernIconButton(
-                icon: const Icon(Icons.more_vert),
-                onPressed: () {
+              trailing: ReusableHoverIconButton(
+                icon: Icons.more_vert,
+                tooltip: 'Actions',
+                onTap: () {
                   showModalBottomSheet(
                     context: context,
                     builder: (_) => MediaActionsBottomSheet(item: item),

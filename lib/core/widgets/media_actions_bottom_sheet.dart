@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart' as yt;
 import '../../features/library/data/models/media_item.dart';
-import '../../features/playlist/presentation/providers/playlist_provider.dart';
-import '../../features/download/data/repositories/download_provider.dart';
+import '../../features/playlist/application/playlist_provider.dart';
+import '../../features/download/application/providers/download_provider.dart';
 import '../../features/download/data/models/download_item.dart';
 import '../../core/providers/navigation_provider.dart';
 
@@ -155,7 +155,7 @@ class MediaActionsBottomSheet extends ConsumerWidget {
           final theme = Theme.of(context);
           final playlistsAsync = ref.watch(playlistProvider);
           return playlistsAsync.when(
-            data: (playlists) => Column(
+            data: (state) => Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 AppBar(
@@ -175,18 +175,18 @@ class MediaActionsBottomSheet extends ConsumerWidget {
                   },
                 ),
                 const Divider(height: 1),
-                if (playlists.isEmpty)
+                if (state.local.isEmpty)
                   const Padding(
                     padding: EdgeInsets.all(24.0),
-                    child: Text('No playlists found.'),
+                    child: Text('No local playlists found.'),
                   )
                 else
                   Flexible(
                     child: ListView.builder(
                       shrinkWrap: true,
-                      itemCount: playlists.length,
+                      itemCount: state.local.length,
                       itemBuilder: (ctx, i) {
-                        final pl = playlists[i];
+                        final pl = state.local[i];
                         return ListTile(
                           leading: const Icon(Icons.queue_music_rounded),
                           title: Text(pl.name),
@@ -237,9 +237,9 @@ class MediaActionsBottomSheet extends ConsumerWidget {
                   // 1. Create the playlist
                   await ref.read(playlistProvider.notifier).createPlaylist(name);
                   
-                  // 2. Get the new playlist ID
-                  final updatedPlaylists = await ref.read(playlistProvider.future);
-                  final newPl = updatedPlaylists.firstWhere((p) => p.name == name);
+                  // 2. Get the new playlist ID from local list
+                  final stateObj = await ref.read(playlistProvider.future);
+                  final newPl = stateObj.local.firstWhere((p) => p.name == name);
                   
                   // 3. Add the track to it
                   await ref.read(playlistProvider.notifier).addTrackToPlaylist(newPl.id, item);

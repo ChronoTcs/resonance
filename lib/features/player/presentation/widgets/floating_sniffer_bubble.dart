@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:webview_windows/webview_windows.dart';
-import '../../application/webview_provider.dart';
+import '../../application/providers/webview_provider.dart';
 import '../screens/web_video_sniffer_screen.dart';
 import '../../../../main.dart';
-import '../../../../core/services/route_provider.dart';
-import '../../application/video_player_notifier.dart' as v;
-import 'package:resonance_app/core/widgets/hover_widgets.dart';
+import '../../../../core/routing/route_provider.dart';
+import '../../application/providers/video_player_notifier.dart' as v;
+import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
+// import 'package:resonance_app/core/widgets/hover_widgets.dart'; // Unused
 
 class FloatingSnifferBubble extends ConsumerStatefulWidget {
   const FloatingSnifferBubble({super.key});
@@ -56,7 +57,7 @@ class _FloatingSnifferBubbleState extends ConsumerState<FloatingSnifferBubble> {
             child: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.8),
+                color: Colors.black.withValues(alpha: 0.8),
                 borderRadius: BorderRadius.circular(30),
                 border: Border.all(
                   color: isLoading ? Colors.blueAccent : Colors.white24,
@@ -64,7 +65,7 @@ class _FloatingSnifferBubbleState extends ConsumerState<FloatingSnifferBubble> {
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: (isLoading ? Colors.blue : Colors.black).withOpacity(0.5),
+                    color: (isLoading ? Colors.blue : Colors.black).withValues(alpha: 0.5),
                     blurRadius: 10,
                     spreadRadius: 2,
                   ),
@@ -95,7 +96,17 @@ class _FloatingSnifferBubbleState extends ConsumerState<FloatingSnifferBubble> {
                   ),
                   const SizedBox(width: 8),
                   // "Restore" Button
-                  HoverWrapper(
+                  ReusableHoverIconButton(
+                    tooltip: 'Restore Sniffer',
+                    icon: Icons.open_in_full,
+                    iconSize: 16,
+                    color: Colors.greenAccent,
+                    label: "Restore",
+                    labelStyle: const TextStyle(
+                      color: Colors.greenAccent, 
+                      fontSize: 12, 
+                      fontWeight: FontWeight.bold
+                    ),
                     onTap: () {
                       ref.read(webviewProvider.notifier).setMinimized(false);
                       navigatorKey.currentState?.push(
@@ -105,32 +116,17 @@ class _FloatingSnifferBubbleState extends ConsumerState<FloatingSnifferBubble> {
                         ),
                       );
                     },
-                    borderRadius: BorderRadius.circular(20),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    hoverColor: Colors.white.withOpacity(0.1),
-                    child: const Row(
-                      children: [
-                        Icon(Icons.open_in_full, color: Colors.greenAccent, size: 16),
-                        SizedBox(width: 6),
-                        Text(
-                          "Restore",
-                          style: TextStyle(
-                            color: Colors.greenAccent, 
-                            fontSize: 12, 
-                            fontWeight: FontWeight.bold
-                          ),
-                        ),
-                      ],
-                    ),
                   ),
                   const SizedBox(width: 4),
-                  // "Kill" Button (No tooltip for stability)
-                  ModernIconButton(
-                    icon: const Icon(Icons.close, color: Colors.redAccent, size: 20),
-                    onPressed: () {
+                  // "Kill" Button
+                  ReusableHoverIconButton(
+                    tooltip: 'Close Sniffer',
+                    icon: Icons.close,
+                    iconSize: 20,
+                    color: Colors.redAccent,
+                    onTap: () {
                       ref.read(webviewProvider.notifier).reset();
                     },
-                    padding: 8,
                   ),
                 ],
               ),

@@ -1,20 +1,20 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:resonance_app/features/playlist/data/models/playlist_model.dart';
 import '../../application/library_provider.dart';
 import '../../data/models/media_item.dart';
-import '../../../player/application/audio_provider.dart';
+import '../../../player/application/services/queue_orchestrator.dart';
 import '../../../player/presentation/screens/dedicated_video_player.dart';
 import '../../../../core/widgets/media_actions_bottom_sheet.dart';
 import '../../../../core/widgets/media_artwork_widget.dart';
 import '../../../player/presentation/screens/web_video_sniffer_screen.dart';
-import '../../../player/application/video_player_notifier.dart';
-import 'package:resonance_app/core/widgets/hover_widgets.dart';
+import '../../../player/application/providers/video_player_notifier.dart';
+import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
+// import 'package:resonance_app/core/widgets/hover_widgets.dart'; // Removed
 import 'package:resonance_app/features/playlist/presentation/screens/playlist_screen.dart';
 
 class LibraryScreen extends ConsumerStatefulWidget {
-  const LibraryScreen({Key? key}) : super(key: key);
+  const LibraryScreen({super.key});
 
   @override
   ConsumerState<LibraryScreen> createState() => _LibraryScreenState();
@@ -105,6 +105,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
     }
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(
         primary: false,
         title: _isSearching
@@ -135,9 +136,10 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                 ],
         ),
         actions: [
-          ModernIconButton(
-            icon: Icon(_isSearching ? Icons.close : Icons.search),
-            onPressed: () {
+          ReusableHoverIconButton(
+            icon: _isSearching ? Icons.close : Icons.search,
+            tooltip: _isSearching ? 'Close search' : 'Search library',
+            onTap: () {
               setState(() {
                 if (_isSearching) {
                   _isSearching = false;
@@ -149,33 +151,27 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
               });
             },
           ),
-          Stack(
-            children: [
-              ModernIconButton(
-                icon: const Icon(Icons.refresh),
-                tooltip: 'Scan folders',
-                onPressed: () {
-                  // Only scan if on Local Library tab (index 0)
-                  if (_tabController.index == 0) {
-                    ref.read(libraryProvider.notifier).scanLibrary();
-                  } else {
-                    // Maybe refresh playlist data? 
-                    // playlistProvider is usually auto-refreshing but we can force it
-                    // ref.invalidate(playlistProvider);
-                  }
-                },
-              ),
-              if (libraryState.isLoading)
-                const Positioned(
-                  right: 8,
-                  top: 8,
-                  child: SizedBox(
-                    width: 12,
-                    height: 12,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                ),
-            ],
+          ReusableHoverIconButton(
+            icon: libraryState.isLoading ? null : Icons.refresh,
+            tooltip: 'Scan folders',
+            onTap: () {
+              // Only scan if on Local Library tab (index 0)
+              if (_tabController.index == 0) {
+                ref.read(libraryProvider.notifier).scanLibrary();
+              }
+            },
+            child: libraryState.isLoading
+                ? SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        Theme.of(context).primaryColor,
+                      ),
+                    ),
+                  )
+                : null,
           ),
         ],
       ),
@@ -226,7 +222,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                   width: 48,
                   height: 48,
                   decoration: BoxDecoration(
-                    color: Colors.blueAccent.withOpacity(0.1),
+                  color: Colors.blueAccent.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: const Icon(
@@ -240,10 +236,10 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-          trailing: ModernIconButton(
-            icon: const Icon(Icons.more_vert),
+          trailing: ReusableHoverIconButton(
+            icon: Icons.more_vert,
             tooltip: 'More options',
-            onPressed: () {
+            onTap: () {
               showModalBottomSheet(
                 context: context,
                 builder: (_) => MediaActionsBottomSheet(
@@ -255,7 +251,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
           ),
           onTap: () {
             if (isAudio) {
-              ref.read(audioProvider.notifier).playPlaylist(mediaList, initialIndex: index);
+              ref.read(queueOrchestratorProvider).playSequentialContext(item, mediaList);
             } else {
               ref.read(videoPlayerProvider.notifier).playVideo(item);
               Navigator.of(context).push(
@@ -334,17 +330,18 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
     required VoidCallback onTap,
     Color? color,
   }) {
-    return HoverWrapper(
+    return ReusableHoverIconButton(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      padding: EdgeInsets.zero,
+      tooltip: title,
+      padding: 0,
+      scaleOnHover: 1.05,
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: (color ?? Theme.of(context).primaryColor).withOpacity(0.1),
+          color: (color ?? Theme.of(context).primaryColor).withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: (color ?? Theme.of(context).primaryColor).withOpacity(0.2),
+            color: (color ?? Theme.of(context).primaryColor).withValues(alpha: 0.2),
           ),
         ),
         child: Column(
