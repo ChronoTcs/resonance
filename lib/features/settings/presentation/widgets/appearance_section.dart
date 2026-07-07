@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:resonance_app/core/utils/uicons.dart';
 import '../../../../core/theme/theme_provider.dart';
 import 'settings_widgets.dart';
 
@@ -26,7 +27,7 @@ class AppearanceSection extends ConsumerWidget {
   Widget _buildThemeSetting(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeProvider);
     return SettingsItemTile(
-      icon: Icons.palette,
+      icon: UIcons.regular.palette,
       title: 'App Theme',
       subtitle: 'Select visual mode',
       trailing: DropdownButton<ThemeMode>(
@@ -50,7 +51,7 @@ class AppearanceSection extends ConsumerWidget {
   Widget _buildAccentSetting(BuildContext context, WidgetRef ref) {
     final accentMode = ref.watch(accentColorProvider);
     return SettingsItemTile(
-      icon: Icons.color_lens,
+      icon: UIcons.regular.paint_brush,
       title: 'Accent colour',
       subtitle: 'Select primary accent',
       trailing: DropdownButton<String?>(
@@ -59,15 +60,17 @@ class AppearanceSection extends ConsumerWidget {
         borderRadius: BorderRadius.circular(12),
         focusColor: Colors.transparent,
         underline: const SizedBox(),
-        items: [
-          const DropdownMenuItem(value: null, child: Text('System setting')),
-          const DropdownMenuItem(value: 'windows', child: Text('Windows Accent')),
-          const DropdownMenuItem(value: 'cream', child: Text('Soft Cream')),
-          DropdownMenuItem(value: '0x${Colors.red.toARGB32().toRadixString(16)}', child: const Text('Red')),
-          DropdownMenuItem(value: '0x${Colors.blue.toARGB32().toRadixString(16)}', child: const Text('Blue')),
-          DropdownMenuItem(value: '0x${Colors.green.toARGB32().toRadixString(16)}', child: const Text('Green')),
-          DropdownMenuItem(value: '0x${Colors.orange.toARGB32().toRadixString(16)}', child: const Text('Orange')),
-          DropdownMenuItem(value: '0x${Colors.purple.toARGB32().toRadixString(16)}', child: const Text('Purple')),
+        items: const [
+          DropdownMenuItem(value: null, child: Text('Default Accent')),
+          DropdownMenuItem(value: 'windows', child: Text('Windows Accent')),
+          DropdownMenuItem(value: 'palette1', child: Text('Palette 1 (Muted Sand)')),
+          DropdownMenuItem(value: 'palette2', child: Text('Palette 2 (Cream Alabaster)')),
+          DropdownMenuItem(value: 'palette3', child: Text('Palette 3 (Sage & Slate Mint)')),
+          DropdownMenuItem(value: 'palette4', child: Text('Palette 4 (Glacier Steel)')),
+          DropdownMenuItem(value: 'palette5', child: Text('Palette 5 (Nordic Blue)')),
+          DropdownMenuItem(value: 'palette6', child: Text('Palette 6 (Deep Dusk Blue)')),
+          DropdownMenuItem(value: 'palette7', child: Text('Palette 7 (Auroral Glow)')),
+          DropdownMenuItem(value: 'palette8', child: Text('Palette 8 (Copper-Amber)')),
         ],
         onChanged: (mode) => ref.read(accentColorProvider.notifier).setAccentColor(mode),
       ),

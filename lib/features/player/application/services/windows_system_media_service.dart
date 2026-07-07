@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:smtc_windows/smtc_windows.dart';
 import 'package:windows_taskbar/windows_taskbar.dart';
 import 'package:window_manager/window_manager.dart';
 import '../../../library/data/models/media_item.dart';
@@ -15,14 +14,11 @@ final windowsSystemMediaServiceProvider = Provider<WindowsSystemMediaService>((
 });
 
 class WindowsSystemMediaService with WindowListener {
-  SMTCWindows? _smtc;
-  StreamSubscription? _buttonSub;
-
   VoidCallback? _onPlay;
   VoidCallback? _onPause;
   VoidCallback? _onNext;
   VoidCallback? _onPrevious;
-  VoidCallback? _onStop;
+
 
   bool _isTaskbarReady = false;
   Timer? _readinessTimer;
@@ -37,79 +33,23 @@ class WindowsSystemMediaService with WindowListener {
     VoidCallback? onStop,
   }) async {
     if (!Platform.isWindows) return;
-    if (_smtc != null) {
-      setCallbacks(
-        onPlay: onPlay,
-        onPause: onPause,
-        onNext: onNext,
-        onPrevious: onPrevious,
-        onStop: onStop,
-      );
-      return;
-    }
-
+    
     _onPlay = onPlay;
     _onPause = onPause;
     _onNext = onNext;
     _onPrevious = onPrevious;
-    _onStop = onStop;
 
-    try {
-      _smtc = SMTCWindows(
-        // PERBAIKAN: displayName dihapus karena tidak ada di SMTCConfig
-        config: const SMTCConfig(
-          playEnabled: true,
-          pauseEnabled: true,
-          nextEnabled: true,
-          prevEnabled: true,
-          stopEnabled: true,
-          fastForwardEnabled: false,
-          rewindEnabled: false,
-        ),
+
+    _readinessTimer?.cancel();
+    _readinessTimer = Timer(const Duration(milliseconds: 2500), () {
+      _isTaskbarReady = true;
+      debugPrint(
+        '[WindowsTaskbar] HWND stabilization complete. Taskbar ready.',
       );
+    });
 
-      // [V17.9 SOTA] Taskbar Readiness Guard:
-      // Give the OS 2.5 seconds to stabilize the Window Handle (HWND)
-      // before attempting to set Thumbnail Toolbar buttons.
-      _readinessTimer?.cancel();
-      _readinessTimer = Timer(const Duration(milliseconds: 2500), () {
-        _isTaskbarReady = true;
-        debugPrint(
-          '[WindowsTaskbar] HWND stabilization complete. Taskbar ready.',
-        );
-      });
-
-      _buttonSub = _smtc?.buttonPressStream.listen((event) {
-        try {
-          switch (event) {
-            case PressedButton.play:
-              _onPlay?.call();
-              break;
-            case PressedButton.pause:
-              _onPause?.call();
-              break;
-            case PressedButton.next:
-              _onNext?.call();
-              break;
-            case PressedButton.previous:
-              _onPrevious?.call();
-              break;
-            case PressedButton.stop:
-              _onStop?.call();
-              break;
-            default:
-              break;
-          }
-        } catch (e) {
-          debugPrint("SMTC button press handling error: $e");
-        }
-      });
-
-      // [V18.1 SOTA] Listen for Window Events to sync Taskbar state (Show/Restore)
-      windowManager.addListener(this);
-    } catch (e) {
-      debugPrint("SMTC initialization error: $e");
-    }
+    // Listen for Window Events to sync Taskbar state (Show/Restore)
+    windowManager.addListener(this);
   }
 
   void setCallbacks({
@@ -123,7 +63,7 @@ class WindowsSystemMediaService with WindowListener {
     _onPause = onPause;
     _onNext = onNext;
     _onPrevious = onPrevious;
-    _onStop = onStop;
+
   }
 
   String? _lastSMTCTitle;
@@ -145,7 +85,6 @@ class WindowsSystemMediaService with WindowListener {
         _lastSMTCTitle = null;
         _lastSMTCArtist = null;
         _lastSMTCThumb = null;
-        await _smtc?.setPlaybackStatus(PlaybackStatus.stopped);
         if (Platform.isWindows) {
           await windowManager.setTitle('Resonance');
         }
@@ -171,8 +110,7 @@ class WindowsSystemMediaService with WindowListener {
       if (_lastSMTCTitle == track.title &&
           _lastSMTCArtist == track.artist &&
           _lastSMTCThumb == formattedThumbnail) {
-        // Meskipun metadata sama, pastikan status playback tetap sinkron
-        await updatePlaybackStatus(isPlaying);
+        await _updateTaskbarThumbnail(isPlaying);
         return;
       }
 
@@ -186,31 +124,18 @@ class WindowsSystemMediaService with WindowListener {
         );
       }
 
-      await _smtc?.updateMetadata(
-        MusicMetadata(
-          title: track.title,
-          artist: track.artist ?? 'Unknown Artist',
-          albumArtist: track.artist ?? 'Unknown Artist',
-          album: track.album ?? 'Unknown Album',
-          thumbnail: formattedThumbnail,
-        ),
-      );
-
-      await updatePlaybackStatus(isPlaying);
+      await _updateTaskbarThumbnail(isPlaying);
     } catch (e) {
-      debugPrint("SMTC metadata update error: $e");
+      debugPrint("Metadata update error: $e");
     }
   }
 
   Future<void> updatePlaybackStatus(bool isPlaying) async {
     if (!Platform.isWindows) return;
     try {
-      await _smtc?.setPlaybackStatus(
-        isPlaying ? PlaybackStatus.playing : PlaybackStatus.paused,
-      );
       await _updateTaskbarThumbnail(isPlaying);
     } catch (e) {
-      debugPrint("SMTC status error: $e");
+      debugPrint("Taskbar status update error: $e");
     }
   }
 
@@ -226,14 +151,6 @@ class WindowsSystemMediaService with WindowListener {
     if (!Platform.isWindows) return;
 
     try {
-      await _smtc?.setTimeline(
-        PlaybackTimeline(
-          startTimeMs: 0,
-          endTimeMs: duration.inMilliseconds,
-          positionMs: position.inMilliseconds,
-        ),
-      );
-
       if (duration.inMilliseconds > 0) {
         // [V18.1] GUARD: Only set progress if taskbar button is visible
         if (await windowManager.isVisible()) {
@@ -246,7 +163,7 @@ class WindowsSystemMediaService with WindowListener {
     } catch (e) {
       // [V18.1 SOTA] Suppress -1 errors when minimized/hidden
       if (e is! PlatformException) {
-        debugPrint("SMTC/Taskbar timeline update error: $e");
+        debugPrint("Taskbar timeline update error: $e");
       }
     }
   }
@@ -380,13 +297,6 @@ class WindowsSystemMediaService with WindowListener {
   Future<void> dispose() async {
     _readinessTimer?.cancel();
     windowManager.removeListener(this);
-    try {
-      await _buttonSub?.cancel();
-      _buttonSub = null;
-      await _smtc?.dispose();
-    } catch (e) {
-      debugPrint("SMTC dispose error: $e");
-    }
 
     try {
       if (Platform.isWindows) {

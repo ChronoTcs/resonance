@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:resonance_app/core/utils/uicons.dart';
 import 'reusable_hover_icon_button.dart';
 
 enum PlayPauseSize { small, medium, large }
 
-/// Komponen terpadu untuk tombol Play/Pause dengan integasi Loading Spinner.
-/// Menggunakan ReusableHoverIconButton sebagai basis agar hover & tooltip konsisten.
 class PlayPauseButton extends StatelessWidget {
   final bool isPlaying;
   final bool isLoading;
@@ -34,16 +33,16 @@ class PlayPauseButton extends StatelessWidget {
     
     switch (size) {
       case PlayPauseSize.small:
-        iconSize = 24.0;
-        padding = 8.0;
+        iconSize = 20.0;
+        padding = 6.0;
         break;
       case PlayPauseSize.medium:
-        iconSize = 36.0;
-        padding = 10.0;
+        iconSize = 28.0;
+        padding = 8.0;
         break;
       case PlayPauseSize.large:
-        iconSize = 42.0;
-        padding = 14.0;
+        iconSize = 34.0;
+        padding = 10.0;
         break;
     }
 
@@ -63,9 +62,7 @@ class PlayPauseButton extends StatelessWidget {
 
     return ReusableHoverIconButton(
       tooltip: isPlaying ? 'Pause' : 'Play',
-      icon: isPlaying 
-          ? (size == PlayPauseSize.large ? Icons.pause_rounded : Icons.pause_circle_filled)
-          : (size == PlayPauseSize.large ? Icons.play_arrow_rounded : Icons.play_circle_filled),
+      icon: isPlaying ? UIcons.regular.pause : UIcons.regular.play,
       iconSize: iconSize,
       padding: padding,
       color: color ?? theme.primaryColor,

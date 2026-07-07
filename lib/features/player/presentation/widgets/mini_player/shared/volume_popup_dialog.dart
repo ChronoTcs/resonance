@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:resonance_app/core/utils/uicons.dart';
 import 'package:resonance_app/features/player/application/providers/audio_provider.dart';
 import 'package:resonance_app/features/player/application/providers/video_player_notifier.dart' as v;
 
@@ -80,10 +81,10 @@ class VolumePopupDialog extends ConsumerWidget {
                       children: [
                         Icon(
                           currentVolume == 0
-                              ? Icons.volume_off
+                              ? UIcons.regular.volume_off
                               : currentVolume < (isVideo ? 0.5 : 50)
-                                  ? Icons.volume_down
-                                  : Icons.volume_up,
+                                  ? UIcons.regular.volume_down
+                                  : UIcons.regular.volume,
                           color: theme.colorScheme.onSurfaceVariant,
                           size: 20,
                         ),

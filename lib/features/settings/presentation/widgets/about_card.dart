@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:resonance_app/core/utils/uicons.dart';
 import 'package:resonance_app/features/library/application/services/music_restore_service.dart';
 import '../providers/package_info_provider.dart';
 
@@ -187,7 +188,7 @@ class _AboutCardState extends ConsumerState<AboutCard> {
                   error: (_, _) => const Text('v?.?.?'),
                 ),
                 const SizedBox(width: 8),
-                const Icon(Icons.expand_more, size: 20),
+                Icon(UIcons.regular.angle_small_down, size: 20),
               ],
             ),
             children: [
@@ -224,7 +225,7 @@ class _AboutCardState extends ConsumerState<AboutCard> {
                                 backgroundColor: theme.primaryColor.withValues(alpha: 0.1),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                               ),
-                              icon: const Icon(Icons.settings_backup_restore, size: 14),
+                              icon: Icon(UIcons.regular.rotate_right, size: 16),
                               label: const Text(
                                 'Restore music',
                                 style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold),

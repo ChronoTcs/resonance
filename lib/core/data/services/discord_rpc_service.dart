@@ -1,8 +1,8 @@
-import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:flutter_discord_rpc/flutter_discord_rpc.dart';
+import 'package:dart_discord_presence/dart_discord_presence.dart';
 import '../../../features/library/data/models/media_item.dart';
 import 'rpc_cache_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,6 +16,7 @@ class DiscordRpcService {
   final RpcCacheService _rpcCache;
   DiscordRpcService(this._rpcCache);
 
+  DiscordRPC? _discord;
   bool _isInitialized = false;
   String? _lastTrackId;
   String _currentAlbumArtKey = 'resonance_logo';
@@ -26,11 +27,11 @@ class DiscordRpcService {
   bool _lastPlayingState = false;
 
   Future<void> initialize() async {
-    if (!Platform.isWindows && !Platform.isLinux && !Platform.isMacOS) return;
+    if (!DiscordRPC.isAvailable) return;
     
     try {
-      await FlutterDiscordRPC.initialize('1481352932568862823'); 
-      await FlutterDiscordRPC.instance.connect();
+      _discord = DiscordRPC();
+      await _discord!.initialize('1481352932568862823');
       _isInitialized = true;
       debugPrint('Discord RPC: Initialized successfully with Client ID: 1481352932568862823');
     } catch (e) {
@@ -140,36 +141,32 @@ class DiscordRpcService {
   }
 
   void _sendActivity(MediaItem track, bool isPlaying, int startTimestamp, int? endTimestamp, String largeImageKey) {
-    if (!_isInitialized) return;
+    if (!_isInitialized || _discord == null) return;
     
-    FlutterDiscordRPC.instance.setActivity(
-      activity: RPCActivity(
-        state: track.artist ?? 'Unknown Artist',
-        details: track.title,
-        assets: RPCAssets(
-          largeImage: largeImageKey, 
-          largeText: track.album ?? 'Resonance',
-          smallImage: isPlaying ? 'play_icon' : 'pause_icon',
-          smallText: isPlaying ? 'Playing' : 'Paused',
-        ),
-        timestamps: RPCTimestamps(
-          start: startTimestamp,
-          end: isPlaying ? endTimestamp : null,
-        ),
+    _discord!.setPresence(DiscordPresence(
+      state: track.artist ?? 'Unknown Artist',
+      details: track.title,
+      largeAsset: DiscordAsset(key: largeImageKey, text: track.album ?? 'Resonance'),
+      smallAsset: DiscordAsset(
+        key: isPlaying ? 'play_icon' : 'pause_icon',
+        text: isPlaying ? 'Playing' : 'Paused',
       ),
-    );
+      timestamps: DiscordTimestamps(
+        start: startTimestamp,
+        end: isPlaying ? endTimestamp : null,
+      ),
+    ));
   }
 
-
   void clearPresence() {
-    if (!_isInitialized) return;
-    FlutterDiscordRPC.instance.clearActivity();
+    if (!_isInitialized || _discord == null) return;
+    _discord!.clearPresence();
     _lastTrackId = null;
     _currentAlbumArtKey = 'resonance_logo';
   }
 
   void dispose() {
     clearPresence();
-    FlutterDiscordRPC.instance.dispose();
+    _discord?.dispose();
   }
 }

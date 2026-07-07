@@ -8,7 +8,7 @@ import 'core/theme/theme_provider.dart';
 import 'features/dashboard/presentation/screens/dashboard_screen.dart';
 import 'package:window_manager/window_manager.dart';
 import 'core/theme/fluent_scroll_behavior.dart';
-import 'package:smtc_windows/smtc_windows.dart';
+
 import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:system_theme/system_theme.dart';
@@ -23,14 +23,15 @@ import 'package:audio_service/audio_service.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'features/player/application/audio_handler.dart';
-import 'package:metadata_god/metadata_god.dart';
+import 'core/data/services/po_token_provider_service.dart';
+
 import 'package:resonance_app/features/player/presentation/widgets/mini_player/floating/floating_window.dart';
 import 'package:resonance_app/features/player/presentation/notifiers/mini_player_view_notifier.dart';
 
 Future<void> _cleanSharedPreferences() async {
   try {
     final prefs = await SharedPreferences.getInstance();
-    
+
     // Bypass if already cleaned in this version
     const cleanFlag = 'json_cleanup_v2';
     if (prefs.getBool(cleanFlag) ?? false) return;
@@ -45,10 +46,16 @@ Future<void> _cleanSharedPreferences() async {
 
     if (results['recentChanged'] == true) {
       final List<dynamic> cleanedList = results['recentList'] as List<dynamic>;
-      await prefs.setStringList('recently_played_items', cleanedList.cast<String>());
+      await prefs.setStringList(
+        'recently_played_items',
+        cleanedList.cast<String>(),
+      );
     }
     if (results['playlistsChanged'] == true) {
-      await prefs.setString('user_playlists', results['playlistsStr'] as String);
+      await prefs.setString(
+        'user_playlists',
+        results['playlistsStr'] as String,
+      );
     }
 
     if (Platform.isAndroid) {
@@ -56,7 +63,7 @@ Future<void> _cleanSharedPreferences() async {
       // Membantu mengatasi 'SQLITE_READONLY_DBMOVED' dengan mencari di folder sistem yang benar.
       final docDir = await getApplicationDocumentsDirectory();
       final androidBase = docDir.parent.path; // /data/user/0/<pkg>/
-      
+
       final dbLocations = [
         p.join(androidBase, 'databases', 'libCachedImageData.db'),
         p.join(androidBase, 'files', 'libCachedImageData.db'),
@@ -91,14 +98,15 @@ Future<void> _cleanSharedPreferences() async {
 Map<String, dynamic> _performCleanupIsolate(Map<String, dynamic> data) {
   final List<String>? recentList = data['recentList'] as List<String>?;
   final String? playlistsStr = data['playlistsStr'] as String?;
-  
+
   bool recentChanged = false;
   List<String> newRecentList = [];
   if (recentList != null) {
     newRecentList = recentList.map((itemStr) {
       try {
         final Map<String, dynamic> json = jsonDecode(itemStr);
-        if (json.containsKey('albumArtBase64') && json['albumArtBase64'] != null) {
+        if (json.containsKey('albumArtBase64') &&
+            json['albumArtBase64'] != null) {
           json.remove('albumArtBase64');
           recentChanged = true;
         }
@@ -118,7 +126,8 @@ Map<String, dynamic> _performCleanupIsolate(Map<String, dynamic> data) {
         final List<dynamic> tracks = playlist['tracks'] ?? [];
         for (var track in tracks) {
           if (track is Map<String, dynamic>) {
-            if (track.containsKey('albumArtBase64') && track['albumArtBase64'] != null) {
+            if (track.containsKey('albumArtBase64') &&
+                track['albumArtBase64'] != null) {
               track.remove('albumArtBase64');
               playlistsChanged = true;
             }
@@ -147,19 +156,15 @@ void main() async {
   debugPrint('Resonance: Starting main()...');
   WidgetsFlutterBinding.ensureInitialized();
 
-  await MetadataGod.initialize();
+  await poTokenProviderService.start();
 
-  if (Platform.isWindows) {
-    await SMTCWindows.initialize();
-  }
+
+
+
 
   MediaKit.ensureInitialized();
 
-  final player = Player(
-    configuration: const PlayerConfiguration(
-      pitch: true,
-    ),
-  );
+  final player = Player(configuration: const PlayerConfiguration(pitch: true));
 
   final audioHandler = await AudioService.init(
     builder: () => ResonanceAudioHandler(player),
@@ -170,12 +175,12 @@ void main() async {
       androidStopForegroundOnPause: true,
     ),
   );
-  
+
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
-  
+
   if (Platform.isWindows) {
     await SystemTheme.accentColor.load();
   }
@@ -187,7 +192,7 @@ void main() async {
   if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
     await windowManager.ensureInitialized();
     final prefs = await SharedPreferences.getInstance();
-    
+
     final width = prefs.getDouble('window_width') ?? 1280;
     final height = prefs.getDouble('window_height') ?? 720;
     final x = prefs.getDouble('window_x');
@@ -199,7 +204,7 @@ void main() async {
       minimumSize: const Size(800, 600),
       title: 'Resonance',
     );
-    
+
     await windowManager.waitUntilReadyToShow(windowOptions, () async {
       if (x != null && y != null) {
         await windowManager.setPosition(Offset(x, y));
@@ -232,18 +237,19 @@ class ResonanceApp extends ConsumerStatefulWidget {
   ConsumerState<ResonanceApp> createState() => _ResonanceAppState();
 }
 
-class _ResonanceAppState extends ConsumerState<ResonanceApp> with WindowListener {
+class _ResonanceAppState extends ConsumerState<ResonanceApp>
+    with WindowListener {
   late final AppLifecycleListener _lifecycleListener;
 
   @override
   void initState() {
     super.initState();
     windowManager.addListener(this);
-    
+
     _lifecycleListener = AppLifecycleListener(
       onStateChange: (state) {
-        if (state == AppLifecycleState.hidden || 
-            state == AppLifecycleState.paused || 
+        if (state == AppLifecycleState.hidden ||
+            state == AppLifecycleState.paused ||
             state == AppLifecycleState.detached) {
           ref.read(dataUsageServiceProvider).flush();
         }
@@ -253,6 +259,7 @@ class _ResonanceAppState extends ConsumerState<ResonanceApp> with WindowListener
 
   @override
   void dispose() {
+    poTokenProviderService.stop();
     _lifecycleListener.dispose();
     windowManager.removeListener(this);
     super.dispose();
@@ -305,7 +312,7 @@ class _ResonanceAppState extends ConsumerState<ResonanceApp> with WindowListener
       darkTheme: AppTheme.getDarkTheme(accentColor),
       scrollBehavior: FluentScrollBehavior(),
       builder: (context, child) {
-        return Material(
+        final content = Material(
           color: Colors.black,
           child: Stack(
             fit: StackFit.expand,
@@ -337,15 +344,17 @@ class _ResonanceAppState extends ConsumerState<ResonanceApp> with WindowListener
                     OverlayEntry(
                       builder: (context) => Consumer(
                         builder: (context, ref, _) {
-                          final isPopped = ref.watch(miniPlayerPopProvider).isPopped;
+                          final isPopped = ref
+                              .watch(miniPlayerPopProvider)
+                              .isPopped;
                           return Material(
                             type: MaterialType.transparency,
                             child: Stack(
                               children: [
-                                if (!Platform.isAndroid) 
+                                if (!Platform.isAndroid)
                                   const FloatingSnifferBubble(),
-                                
-                                if (isPopped && Platform.isWindows) 
+
+                                if (isPopped && Platform.isWindows)
                                   const FloatingWindow(),
                               ],
                             ),
@@ -359,6 +368,10 @@ class _ResonanceAppState extends ConsumerState<ResonanceApp> with WindowListener
             ],
           ),
         );
+        if (Platform.isWindows) {
+          return ExcludeSemantics(child: content);
+        }
+        return content;
       },
       home: const GlobalShortcutWrapper(child: MainDashboard()),
     );

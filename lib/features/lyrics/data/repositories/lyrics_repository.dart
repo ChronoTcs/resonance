@@ -17,6 +17,9 @@ class LyricsRepository {
   String? _lastTrackId;
   List<LyricLine>? _lastLyrics;
 
+  // [V20.27 SOTA] In-Flight Mutex Tracker (DDoS Prevention)
+  final Map<String, Future<List<LyricLine>>> _inFlightRequests = {};
+
   LyricsRepository(this._ref);
 
   Future<List<LyricLine>> getLyrics(
@@ -28,12 +31,36 @@ class LyricsRepository {
 
     // 1. Memory Cache Check (Prevent double parsing for the same track)
     if (_lastTrackId == trackId && _lastLyrics != null && !forceSync) {
-      debugPrint(
-        'LyricsRepository: [CACHE] Returning memory cached lyrics for $trackId',
-      );
+      debugPrint('LyricsRepository: [CACHE] Returning memory cached lyrics for $trackId');
       return _lastLyrics!;
     }
+    
+    // [V20.27 SOTA] Race Condition / In-Flight Mutex Check
+    if (!forceSync && _inFlightRequests.containsKey(trackId)) {
+      debugPrint('LyricsRepository: [MUTEX] Joining existing in-flight request for $trackId');
+      return await _inFlightRequests[trackId]!;
+    }
 
+    final future = _fetchAndParseLyrics(track, trackId, lyricsFolderPath, forceSync);
+    _inFlightRequests[trackId] = future;
+    
+    try {
+      final result = await future;
+      // [V20.27 SOTA] Pemasangan Paksa Memori Cache (Amnesia Fix)
+      _lastTrackId = trackId;
+      _lastLyrics = result;
+      return result;
+    } finally {
+      _inFlightRequests.remove(trackId);
+    }
+  }
+
+  Future<List<LyricLine>> _fetchAndParseLyrics(
+    MediaItem track,
+    String trackId,
+    String? lyricsFolderPath,
+    bool forceSync,
+  ) async {
     final String trackPath = track.path;
     final cacheService = _ref.read(mediaCacheServiceProvider);
 
@@ -131,9 +158,15 @@ class LyricsRepository {
         'LyricsRepository: ${cachedContent != null ? "Upgrading plain cache..." : "Fetching from LRCLIB..."}',
       );
       
-      final cleanArtist = _cleanArtist(currentTrack.artist ?? '');
-      final cleanTitle = _cleanTitle(currentTrack.title);
       final durationSecs = currentTrack.duration?.inSeconds ?? 0;
+
+      // Extract metadata from hyphenated title: "Artist - Title"
+      final parsed = _parseHyphenatedTitle(currentTrack.title, currentTrack.artist ?? '');
+      final cleanTitle = parsed.title;
+      final cleanArtist = parsed.artist;
+
+      final defaultTitle = _cleanTitle(currentTrack.title);
+      final defaultArtist = _cleanArtist(currentTrack.artist ?? '');
 
       String? bestSynced;
       String? bestPlain;
@@ -148,26 +181,48 @@ class LyricsRepository {
         }
       }
 
-      // STEP A: Exact Match with Duration
-      if (durationSecs > 0 && cleanArtist.isNotEmpty) {
-        processResult(await _fetchFromLrcLibGet({
-          'track_name': cleanTitle,
-          'artist_name': cleanArtist,
-          'duration': durationSecs.toString(),
-        }, 'exact+dur'));
+      // ── TRY 1: Parsed hyphenated artist & title (Highly accurate for YouTube) ──
+      if (cleanArtist.isNotEmpty) {
+        // Step A: Exact Match with Duration
+        if (durationSecs > 0) {
+          processResult(await _fetchFromLrcLibGet({
+            'track_name': cleanTitle,
+            'artist_name': cleanArtist,
+            'duration': durationSecs.toString(),
+          }, 'exact+dur (parsed)'));
+        }
+        // Step B: Exact Match without Duration
+        if (bestSynced == null) {
+          processResult(await _fetchFromLrcLibGet({
+            'track_name': cleanTitle,
+            'artist_name': cleanArtist,
+          }, 'exact (parsed)'));
+        }
       }
 
-      // STEP B: Exact Match with Artist (If no synced found yet)
-      if (bestSynced == null && cleanArtist.isNotEmpty) {
-        processResult(await _fetchFromLrcLibGet({
-          'track_name': cleanTitle,
-          'artist_name': cleanArtist,
-        }, 'exact'));
+      // ── TRY 2: Default Uploader Metadata (Fallback) ──
+      if (bestSynced == null && defaultArtist.isNotEmpty && defaultArtist != cleanArtist) {
+        if (durationSecs > 0) {
+          processResult(await _fetchFromLrcLibGet({
+            'track_name': defaultTitle,
+            'artist_name': defaultArtist,
+            'duration': durationSecs.toString(),
+          }, 'exact+dur (default)'));
+        }
+        if (bestSynced == null) {
+          processResult(await _fetchFromLrcLibGet({
+            'track_name': defaultTitle,
+            'artist_name': defaultArtist,
+          }, 'exact (default)'));
+        }
       }
 
-      // STEP C: SEARCH API (More flexible)
+      // ── TRY 3: SEARCH API (Flexible) ──
       if (bestSynced == null) {
-        final query = cleanArtist.isNotEmpty ? '$cleanTitle $cleanArtist' : cleanTitle;
+        // Prefer parsed hyphen details first, otherwise default
+        final queryArtist = cleanArtist.isNotEmpty ? cleanArtist : defaultArtist;
+        final queryTitle = cleanArtist.isNotEmpty ? cleanTitle : defaultTitle;
+        final query = queryArtist.isNotEmpty ? '$queryTitle $queryArtist' : queryTitle;
         processResult(await _fetchFromLrcLibSearch({
           'q': query,
         }, 'searchAPI'));
@@ -259,6 +314,36 @@ class LyricsRepository {
       }
     }
     return primary;
+  }
+
+  /// Extracts actual artist and title from a hyphenated track title if present.
+  ({String artist, String title}) _parseHyphenatedTitle(String title, String defaultArtist) {
+    String cleanedTitle = _cleanTitle(title);
+    
+    // Strip common YouTube vertical bar suffix noise: "Title | Lyrics", "Title | Official"
+    if (cleanedTitle.contains('|')) {
+      cleanedTitle = cleanedTitle.split('|')[0].trim();
+    }
+    
+    // Strip uploader/channel prefix if it is prepended to the title (e.g. "Uploader Artist - Title")
+    final cleanDefaultArtist = _cleanArtist(defaultArtist);
+    if (cleanDefaultArtist.isNotEmpty && cleanedTitle.startsWith(cleanDefaultArtist)) {
+      cleanedTitle = cleanedTitle.substring(cleanDefaultArtist.length).trim();
+      // Remove any leading hyphens or spaces left over
+      if (cleanedTitle.startsWith('-')) {
+        cleanedTitle = cleanedTitle.substring(1).trim();
+      }
+    }
+
+    if (cleanedTitle.contains(' - ')) {
+      final parts = cleanedTitle.split(' - ');
+      final potentialArtist = parts[0].trim();
+      final potentialTitle = parts.sublist(1).join(' - ').trim();
+      if (potentialArtist.isNotEmpty && potentialTitle.isNotEmpty) {
+        return (artist: potentialArtist, title: potentialTitle);
+      }
+    }
+    return (artist: cleanDefaultArtist, title: cleanedTitle);
   }
 
   Future<String?> _fetchFromLrcLibGet(

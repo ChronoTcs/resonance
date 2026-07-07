@@ -1,10 +1,13 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:resonance_app/core/utils/uicons.dart';
+import 'package:resonance_app/core/utils/app_icons.dart';
 import 'package:resonance_app/features/download/data/models/download_item.dart';
 import 'package:resonance_app/features/download/application/providers/download_provider.dart';
 import 'package:resonance_app/features/download/application/providers/download_settings_provider.dart';
 import 'package:resonance_app/features/download/presentation/screens/download_settings_screen.dart';
+import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
 
 class DownloadScreen extends ConsumerStatefulWidget {
   const DownloadScreen({super.key});
@@ -106,15 +109,16 @@ class _DownloadScreenState extends ConsumerState<DownloadScreen>
                       ],
                     ),
                   ),
-                  IconButton.outlined(
-                    onPressed: () => Navigator.push(
+                  ReusableHoverIconButton(
+                    icon: UIcons.regular.settings,
+                    tooltip: 'Download Settings',
+                    iconSize: 18,
+                    onTap: () => Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (_) => const DownloadSettingsScreen(),
                       ),
                     ),
-                    icon: const Icon(Icons.settings_outlined),
-                    tooltip: 'Download Settings',
                   ),
                 ],
               ),
@@ -144,7 +148,7 @@ class _DownloadScreenState extends ConsumerState<DownloadScreen>
                               'Paste URL(s) or type a song name…\n(One per line for batch download)',
                           border: const OutlineInputBorder(),
                           suffixIcon: IconButton(
-                            icon: const Icon(Icons.clear),
+                            icon: Icon(AppIcons.close),
                             onPressed: () => _urlController.clear(),
                           ),
                         ),
@@ -169,16 +173,16 @@ class _DownloadScreenState extends ConsumerState<DownloadScreen>
                               SizedBox(
                                 width: double.infinity,
                                 child: SegmentedButton<DownloadType>(
-                                  segments: const [
+                                  segments: [
                                     ButtonSegment(
                                       value: DownloadType.audio,
-                                      label: Text('Audio'),
-                                      icon: Icon(Icons.music_note, size: 16),
+                                      label: const Text('Audio'),
+                                      icon: Icon(AppIcons.music, size: 16),
                                     ),
                                     ButtonSegment(
                                       value: DownloadType.video,
-                                      label: Text('Video'),
-                                      icon: Icon(Icons.movie_outlined, size: 16),
+                                      label: const Text('Video'),
+                                      icon: Icon(AppIcons.video, size: 16),
                                     ),
                                   ],
                                   selected: {_selectedType},
@@ -262,7 +266,7 @@ class _DownloadScreenState extends ConsumerState<DownloadScreen>
                                   child: Row(
                                     children: [
                                       Icon(
-                                        Icons.info_outline,
+                                        UIcons.regular.info,
                                         size: 14,
                                         color: theme.colorScheme.primary.withValues(alpha: 0.8),
                                       ),
@@ -305,7 +309,7 @@ class _DownloadScreenState extends ConsumerState<DownloadScreen>
                         width: double.infinity,
                         child: FilledButton.icon(
                           onPressed: _addToQueue,
-                          icon: const Icon(Icons.add_circle_outline),
+                          icon: Icon(AppIcons.add),
                           label: const Text('Add to Queue'),
                         ),
                       ),
@@ -334,7 +338,7 @@ class _DownloadScreenState extends ConsumerState<DownloadScreen>
                       TextButton.icon(
                         onPressed: () =>
                             ref.read(downloadProvider.notifier).clearCompleted(),
-                        icon: const Icon(Icons.clear_all, size: 18),
+                        icon: Icon(AppIcons.trash, size: 18),
                         label: const Text('Clear done'),
                       ),
                   ],
@@ -351,8 +355,8 @@ class _DownloadScreenState extends ConsumerState<DownloadScreen>
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(
-                      Icons.download_outlined,
-                      size: 72,
+                      AppIcons.download,
+                      size: 48,
                       color: theme.disabledColor,
                     ),
                     const SizedBox(height: 16),
@@ -460,8 +464,8 @@ class _DownloadTileState extends ConsumerState<_DownloadTile> {
                       // Type icon
                       Icon(
                         item.type == DownloadType.audio
-                            ? Icons.music_note
-                            : Icons.movie_outlined,
+                            ? AppIcons.music
+                            : AppIcons.video,
                         size: 18,
                         color: theme.hintColor,
                       ),
@@ -500,7 +504,7 @@ class _DownloadTileState extends ConsumerState<_DownloadTile> {
                       const SizedBox(width: 4),
                       // Expand/Collapse icon
                       Icon(
-                        _isExpanded ? Icons.expand_less : Icons.expand_more,
+                        _isExpanded ? UIcons.regular.angle_small_up : AppIcons.collapseDown,
                         size: 20,
                         color: theme.hintColor,
                       ),
@@ -509,7 +513,7 @@ class _DownloadTileState extends ConsumerState<_DownloadTile> {
                           item.status == DownloadStatus.downloading)
                         IconButton(
                           visualDensity: VisualDensity.compact,
-                          icon: const Icon(Icons.close, size: 16),
+                          icon: Icon(AppIcons.close, size: 16),
                           padding: EdgeInsets.zero,
                           onPressed: () => ref
                               .read(downloadProvider.notifier)

@@ -10,6 +10,7 @@ import 'package:resonance_app/features/player/presentation/widgets/mini_player/f
 import 'package:resonance_app/features/player/presentation/widgets/mini_player/floating/floating_overlay_controls.dart';
 import 'package:resonance_app/features/player/presentation/widgets/mini_player/floating/floating_lyrics_view.dart';
 import 'package:resonance_app/features/lyrics/presentation/widgets/lyrics_translation_toggle.dart';
+import 'package:resonance_app/core/utils/uicons.dart';
 import 'package:resonance_app/features/playlist/application/playlist_provider.dart';
 import 'package:resonance_app/features/playlist/data/models/playlist_model.dart';
 
@@ -162,8 +163,8 @@ class _FloatingWindowState extends ConsumerState<FloatingWindow> {
                         child: Stack(
                           children: [
                             // 1. Icon Drag
-                            const Center(
-                              child: Icon(Icons.drag_indicator, color: Colors.white38, size: 16),
+                            Center(
+                              child: Icon(UIcons.regular.grip_lines, color: Colors.white38, size: 16),
                             ),
                             // 2. Wrap Drag functionality
                             const Positioned.fill(child: DragToMoveArea(child: SizedBox())),
@@ -175,7 +176,7 @@ class _FloatingWindowState extends ConsumerState<FloatingWindow> {
                               bottom: 0,
                               child: Center(
                                 child: ReusableHoverIconButton(
-                                  icon: Icons.add_circle_outline,
+                                  icon: UIcons.regular.add,
                                   onTap: _handleAddToLibrary,
                                   tooltip: 'Add to Library',
                                   iconSize: 16,
@@ -198,7 +199,7 @@ class _FloatingWindowState extends ConsumerState<FloatingWindow> {
                                       padding: 4,
                                     ),
                                   ReusableHoverIconButton(
-                                    icon: Icons.close,
+                                    icon: UIcons.regular.cross_small,
                                     onTap: (viewState == MiniPlayerViewState.lyrics || viewState == MiniPlayerViewState.idleLyrics)
                                         ? () => Future.microtask(() => popNotifier.setViewState(MiniPlayerViewState.normal))
                                         : () => Future.microtask(() => popNotifier.togglePop()),

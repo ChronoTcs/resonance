@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:resonance_app/core/utils/uicons.dart';
+import 'package:resonance_app/core/utils/app_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../widgets/about_card.dart';
 import '../screens/help_screen.dart';
@@ -19,7 +21,7 @@ class SupportUpdateSection extends ConsumerWidget {
         const AboutCard(),
         _buildNavigationItem(
           context,
-          icon: Icons.help_outline,
+          icon: UIcons.regular.question,
           title: 'Help & FAQ',
           subtitle: 'Get help and read guides',
           onTap: () => Navigator.push(
@@ -29,12 +31,12 @@ class SupportUpdateSection extends ConsumerWidget {
         ),
         _buildDropdownItem(
           context,
-          icon: Icons.favorite_border,
+          icon: UIcons.regular.heart,
           title: 'Support Me',
           subtitle: 'Report bugs or buy me a coffee',
           children: [
             ListTile(
-              leading: const Icon(Icons.bug_report, color: Colors.orange),
+              leading: Icon(UIcons.regular.bug, color: Colors.orange),
               title: const Text('Report a Bug'),
               subtitle: const Text('Open an issue on GitHub'),
               onTap: () => launchUrl(
@@ -43,7 +45,7 @@ class SupportUpdateSection extends ConsumerWidget {
               ),
             ),
             ListTile(
-              leading: const Icon(Icons.coffee, color: Colors.brown),
+              leading: Icon(UIcons.regular.coffee, color: Colors.brown),
               title: const Text('Buy me a Coffee'),
               subtitle: const Text('Support development with a donation'),
               onTap: () => _handleDonation(context, ref),
@@ -52,7 +54,7 @@ class SupportUpdateSection extends ConsumerWidget {
         ),
         _buildNavigationItem(
           context,
-          icon: Icons.system_update_alt,
+          icon: AppIcons.download,
           title: 'Check for Updates',
           subtitle: 'Check if a newer version is available',
           onTap: () => _handleUpdateCheck(context, ref),
@@ -92,7 +94,7 @@ class SupportUpdateSection extends ConsumerWidget {
           leading: Icon(icon, color: theme.primaryColor),
           title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
           subtitle: Text(subtitle),
-          trailing: const Icon(Icons.chevron_right, size: 20),
+          trailing: Icon(AppIcons.chevronRight, size: 20),
           onTap: onTap,
         ),
       ),

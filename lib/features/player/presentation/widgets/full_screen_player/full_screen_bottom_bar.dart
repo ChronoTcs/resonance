@@ -4,6 +4,7 @@ import 'package:resonance_app/core/widgets/media_artwork_widget.dart';
 import 'package:resonance_app/core/widgets/play_pause_button.dart';
 import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
 import 'package:resonance_app/core/widgets/reusable_seek_slider.dart';
+import 'package:resonance_app/core/utils/uicons.dart';
 import 'package:resonance_app/features/lyrics/presentation/providers/lyrics_ui_provider.dart';
 import 'package:resonance_app/features/player/application/providers/audio_provider.dart';
 import 'package:resonance_app/features/player/data/models/player_enums.dart';
@@ -104,7 +105,7 @@ class FullScreenBottomBar extends StatelessWidget {
                         const SizedBox(width: 8),
                         const FullScreenVolumeSlider(),
                         ReusableHoverIconButton(
-                          icon: Icons.fullscreen_exit,
+                          icon: UIcons.regular.compress,
                           iconSize: 20,
                           color: Colors.white70,
                           tooltip: 'Exit',
@@ -136,12 +137,12 @@ class FullScreenProgress extends ConsumerWidget {
     return SizedBox(
       height: 32, // SOTA V3.4: Augmented hit-test area
       child: ReusableSeekSlider(
-        value: s.position.inSeconds.toDouble(),
-        max: s.duration.inSeconds.toDouble() > 0
-            ? s.duration.inSeconds.toDouble()
+        value: s.position.inMilliseconds.toDouble(),
+        max: s.duration.inMilliseconds.toDouble() > 0
+            ? s.duration.inMilliseconds.toDouble()
             : 1.0,
         onChanged: (v) =>
-            ref.read(audioProvider.notifier).seek(Duration(seconds: v.toInt())),
+            ref.read(audioProvider.notifier).seek(Duration(milliseconds: v.toInt())),
       ),
     );
   }
@@ -165,14 +166,14 @@ class FullScreenControls extends ConsumerWidget {
       children: [
         ReusableHoverIconButton(
           tooltip: 'Shuffle',
-          icon: Icons.shuffle,
+          icon: UIcons.regular.shuffle,
           iconSize: 20,
           color: s.isShuffleEnabled ? colorScheme.primary : Colors.white70,
           onTap: n.toggleShuffle,
         ),
         ReusableHoverIconButton(
           tooltip: 'Previous',
-          icon: Icons.skip_previous,
+          icon: UIcons.regular.step_backward,
           iconSize: 32,
           color: Colors.white,
           isDisabled: s.currentIndex <= 0 && s.loopMode == LoopMode.off,
@@ -187,7 +188,7 @@ class FullScreenControls extends ConsumerWidget {
         ),
         ReusableHoverIconButton(
           tooltip: 'Next',
-          icon: Icons.skip_next,
+          icon: UIcons.regular.step_forward,
           iconSize: 32,
           color: Colors.white,
           isDisabled:
@@ -200,7 +201,7 @@ class FullScreenControls extends ConsumerWidget {
               : s.loopMode == LoopMode.all
                   ? 'Repeat All'
                   : 'Repeat Off',
-          icon: s.loopMode == LoopMode.one ? Icons.repeat_one : Icons.repeat,
+          icon: s.loopMode == LoopMode.one ? UIcons.regular.arrows_repeat_1 : UIcons.regular.arrows_repeat,
           iconSize: 20,
           color: s.loopMode != LoopMode.off ? colorScheme.primary : Colors.white70,
           onTap: n.cycleLoopMode,
@@ -236,10 +237,10 @@ class _FullScreenVolumeSliderState extends ConsumerState<FullScreenVolumeSlider>
           ReusableHoverIconButton(
             padding: 0,
             icon: v == 0
-                ? Icons.volume_off_outlined
+                ? UIcons.regular.volume_off
                 : v < 50
-                    ? Icons.volume_down_outlined
-                    : Icons.volume_up_outlined,
+                    ? UIcons.regular.volume_down
+                    : UIcons.regular.volume,
             iconSize: 20,
             color: Colors.white70,
             tooltip: 'Mute/Unmute',
@@ -310,14 +311,14 @@ class FullScreenUtilityButtons extends ConsumerWidget {
     return Row(
       children: [
         ReusableHoverIconButton(
-          icon: Icons.mic_external_on_outlined,
+          icon: UIcons.regular.microphone,
           iconSize: 20,
           color: Colors.white70,
           tooltip: 'Lyrics',
           onTap: () => ref.read(lyricsOverlayProvider.notifier).toggle(),
         ),
         ReusableHoverIconButton(
-          icon: Icons.tune,
+          icon: UIcons.regular.settings_sliders,
           iconSize: 20,
           color: Colors.white70,
           tooltip: 'Audio Settings',

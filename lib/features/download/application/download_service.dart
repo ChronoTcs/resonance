@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart' as yt;
-import 'package:metadata_god/metadata_god.dart' as metadata_god;
+import 'package:audio_metadata_reader/audio_metadata_reader.dart' as audio_meta;
 import 'package:mime/mime.dart';
 import 'package:path/path.dart' as p;
 import '../data/models/download_item.dart';
@@ -29,6 +29,7 @@ class DownloadUpdate {
 class DownloadService {
   final Ref _ref;
   final DownloaderBridgeDatasource _bridge = DownloaderBridgeDatasource();
+  final _resolveCompleters = <String, Completer<String?>>{};
   
   final _updateController = StreamController<DownloadUpdate>.broadcast();
   Stream<DownloadUpdate> get updateStream => _updateController.stream;
@@ -167,6 +168,16 @@ class DownloadService {
     final type = evt['type'] as String? ?? '';
     final id = evt['id'] as String? ?? '';
     if (id.isEmpty && type != 'ready') return;
+
+    if (id.startsWith('resolve_') && _resolveCompleters.containsKey(id)) {
+      final completer = _resolveCompleters.remove(id);
+      if (type == 'resolved') {
+        completer?.complete(evt['url'] as String?);
+      } else {
+        completer?.complete(null);
+      }
+      return;
+    }
 
     switch (type) {
       case 'progress':
@@ -510,8 +521,21 @@ class DownloadService {
 
   Future<void> _writeTags(String path, String title, String artist, String album, List<int> artBytes) async {
     try {
-      final tag = metadata_god.Metadata(title: title, artist: artist, album: album, picture: artBytes.isNotEmpty ? metadata_god.Picture(data: Uint8List.fromList(artBytes), mimeType: lookupMimeType(path) ?? 'image/jpeg') : null);
-      await metadata_god.MetadataGod.writeMetadata(file: path, metadata: tag);
+      final file = File(path);
+      audio_meta.updateMetadata(file, (metadata) {
+        metadata.setTitle(title);
+        metadata.setArtist(artist);
+        metadata.setAlbum(album);
+        if (artBytes.isNotEmpty) {
+          metadata.setPictures([
+            audio_meta.Picture(
+              Uint8List.fromList(artBytes),
+              lookupMimeType(path) ?? 'image/jpeg',
+              audio_meta.PictureType.coverFront,
+            )
+          ]);
+        }
+      });
     } catch (_) {}
   }
 
@@ -538,16 +562,59 @@ class DownloadService {
     String title = item.resolvedTitle ?? item.displayTitle;
     if (item.type == DownloadType.audio) {
       try {
-        final tag = await metadata_god.MetadataGod.readMetadata(file: outputPath);
-        title = tag.title?.isNotEmpty == true ? tag.title! : title;
-        artist = tag.artist ?? artist;
-        album = tag.album ?? album;
+        final file = File(outputPath);
+        if (file.existsSync()) {
+          final tag = audio_meta.readMetadata(file, getImage: false);
+          title = tag.title?.isNotEmpty == true ? tag.title! : title;
+          artist = tag.artist ?? artist;
+          album = tag.album ?? album;
+        }
       } catch (_) {}
     }
     _ref.read(libraryProvider.notifier).addMediaItem(MediaItem(id: songId, path: outputPath, title: title, artist: artist, album: album, thumbnailUrl: artPath, type: item.type == DownloadType.audio ? 'audio' : 'video'));
   }
+
+  Future<String?> resolveStreamUrl(String videoId) async {
+    if (Platform.isAndroid) return null;
+    final bridge = _bridge.resolveBridgeForOneShot();
+    if (bridge == null) return null;
+    debugPrint('[DownloadService] resolveStreamUrl: spawning one-shot process for $videoId');
+    try {
+      final result = await Process.run(
+        bridge.exe,
+        [...bridge.args, '--resolve', videoId],
+        runInShell: false,
+      ).timeout(const Duration(seconds: 20));
+      final stdout = result.stdout as String;
+      debugPrint('[DownloadService] resolve stdout: $stdout');
+      if (result.stderr != null && (result.stderr as String).isNotEmpty) {
+        debugPrint('[DownloadService] resolve stderr: ${result.stderr}');
+      }
+      for (final line in stdout.split('\n')) {
+        final trimmed = line.trim();
+        if (trimmed.isEmpty) continue;
+        try {
+          final evt = jsonDecode(trimmed) as Map<String, dynamic>;
+          if (evt['type'] == 'resolved') return evt['url'] as String?;
+          if (evt['type'] == 'error') {
+            debugPrint('[DownloadService] Python resolve error: ${evt['message']}');
+            return null;
+          }
+        } catch (_) {}
+      }
+      return null;
+    } on TimeoutException {
+      debugPrint('[DownloadService] resolveStreamUrl TIMEOUT for $videoId');
+      return null;
+    } catch (e) {
+      debugPrint('[DownloadService] resolveStreamUrl exception: $e');
+      return null;
+    }
+  }
 }
 
 final downloadServiceProvider = Provider<DownloadService>((ref) {
+  // ponytail: keepAlive prevents Riverpod from destroying Python process on rebuild
+  ref.keepAlive();
   return DownloadService(ref);
 });

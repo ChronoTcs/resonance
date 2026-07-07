@@ -135,71 +135,73 @@ class _ReusableHoverIconButtonState extends State<ReusableHoverIconButton> {
     // Bentuk standar Resonance: Rounded Rectangle
     final borderRadius = BorderRadius.circular(8);
 
-    // Pembungkus utama dengan margin opsional
-    Widget result = Padding(
-      padding: widget.margin ?? EdgeInsets.zero,
-      child: Tooltip(
-        message: widget.isDisabled ? "" : widget.tooltip, 
-        preferBelow: false,
-        verticalOffset: 28, // Adjusted for clarity
-        triggerMode: _isWindows ? TooltipTriggerMode.manual : TooltipTriggerMode.longPress,
-        child: MouseRegion(
-          cursor: widget.isDisabled ? SystemMouseCursors.basic : SystemMouseCursors.click,
-          onEnter: (_) {
-            if (_isWindows && !widget.isDisabled) {
-              setState(() => _isHovered = true);
-            }
-          },
-          onExit: (_) {
-            if (_isHovered) {
-              setState(() => _isHovered = false);
-            }
-          },
-          child: GestureDetector(
-            onTap: widget.isDisabled ? null : widget.onTap,
-            child: AnimatedScale(
-              duration: const Duration(milliseconds: 200),
-              scale: _isHovered && !widget.isDisabled ? widget.scaleOnHover : 1.0,
-              curve: Curves.easeOutBack,
-              child: ClipRect( // SOTA V3.6: Clip at the button level for the "reveal" effect
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: EdgeInsets.all(widget.padding),
-                decoration: BoxDecoration(
-                  color: _isHovered && !widget.isDisabled
-                      ? (widget.backgroundColor != null 
-                          ? Color.lerp(widget.backgroundColor, Colors.white, 0.2) // Lighter on hover
-                          : activeColor.withValues(alpha: 0.12))
-                      : (widget.isSelected 
-                          ? (widget.backgroundColor ?? Colors.transparent) 
-                          : (widget.backgroundColor ?? Colors.transparent)),
-                  borderRadius: borderRadius,
-                  shape: BoxShape.rectangle,
-                  border: widget.isSelected && !widget.isDisabled
-                      ? Border.all(color: activeColor.withValues(alpha: 0.5), width: 1) 
-                      : (widget.backgroundColor != null && _isHovered && !widget.isDisabled
-                          ? Border.all(color: Colors.white.withValues(alpha: 0.3), width: 1) 
-                          : null),
-                ),
-                child: !_isWindows && !widget.isDisabled
-                    ? Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: widget.onTap,
-                          borderRadius: borderRadius,
-                          splashColor: (widget.backgroundColor ?? activeColor).withValues(alpha: 0.12),
-                          child: Padding(
-                            padding: const EdgeInsets.all(4.0),
-                            child: content,
-                          ),
-                        ),
-                      )
-                    : content,
-                ),
-              ),
+    Widget buttonContent = GestureDetector(
+      onTap: widget.isDisabled ? null : widget.onTap,
+      child: AnimatedScale(
+        duration: const Duration(milliseconds: 200),
+        scale: _isHovered && !widget.isDisabled ? widget.scaleOnHover : 1.0,
+        curve: Curves.easeOutBack,
+        child: ClipRect( // SOTA V3.6: Clip at the button level for the "reveal" effect
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: EdgeInsets.all(widget.padding),
+            decoration: BoxDecoration(
+              color: _isHovered && !widget.isDisabled
+                  ? (widget.backgroundColor != null 
+                      ? Color.lerp(widget.backgroundColor, Colors.white, 0.2) // Lighter on hover
+                      : activeColor.withValues(alpha: 0.12))
+                  : (widget.isSelected 
+                      ? (widget.backgroundColor ?? Colors.transparent) 
+                      : (widget.backgroundColor ?? Colors.transparent)),
+              borderRadius: borderRadius,
+              shape: BoxShape.rectangle,
+              border: widget.isSelected && !widget.isDisabled
+                  ? Border.all(color: activeColor.withValues(alpha: 0.5), width: 1) 
+                  : (widget.backgroundColor != null && _isHovered && !widget.isDisabled
+                      ? Border.all(color: Colors.white.withValues(alpha: 0.3), width: 1) 
+                      : null),
             ),
+            child: !_isWindows && !widget.isDisabled
+                ? Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: widget.onTap,
+                      borderRadius: borderRadius,
+                      splashColor: (widget.backgroundColor ?? activeColor).withValues(alpha: 0.12),
+                      child: Padding(
+                        padding: const EdgeInsets.all(4.0),
+                        child: content,
+                      ),
+                    ),
+                  )
+                : content,
           ),
         ),
+      ),
+    );
+
+    Widget result = Padding(
+      padding: widget.margin ?? EdgeInsets.zero,
+      child: MouseRegion(
+        cursor: widget.isDisabled ? SystemMouseCursors.basic : SystemMouseCursors.click,
+        onEnter: (_) {
+          if (!widget.isDisabled) {
+            setState(() => _isHovered = true);
+          }
+        },
+        onExit: (_) {
+          setState(() => _isHovered = false);
+        },
+        child: _isHovered && !widget.isDisabled
+            ? Tooltip(
+                message: widget.tooltip,
+                preferBelow: false,
+                verticalOffset: 28, // Adjusted for clarity
+                triggerMode: _isWindows ? TooltipTriggerMode.manual : TooltipTriggerMode.longPress,
+                ignorePointer: true,
+                child: buttonContent,
+              )
+            : buttonContent,
       ),
     );
 

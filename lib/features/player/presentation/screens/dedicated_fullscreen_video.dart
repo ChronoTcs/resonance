@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:media_kit_video/media_kit_video.dart' hide VideoState;
+import 'package:resonance_app/core/utils/uicons.dart';
 import '../../application/providers/video_player_notifier.dart';
 import 'package:resonance_app/core/utils/formatters.dart';
 import 'package:resonance_app/core/widgets/reusable_seek_slider.dart';
@@ -108,7 +109,7 @@ class _DedicatedFullscreenVideoState extends ConsumerState<DedicatedFullscreenVi
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.computer, size: 64, color: Colors.white70),
+              Icon(UIcons.regular.computer, size: 64, color: Colors.white70),
               const SizedBox(height: 16),
               const Text(
                 'Fullscreen Video is only supported on Windows.',
@@ -198,7 +199,7 @@ class _DedicatedFullscreenVideoState extends ConsumerState<DedicatedFullscreenVi
                               ),
                             ),
                             ReusableHoverIconButton(
-                              icon: Icons.close,
+                              icon: UIcons.regular.cross_small,
                               color: Colors.white,
                               iconSize: 24,
                               tooltip: 'Exit Fullscreen',
@@ -238,12 +239,12 @@ class _DedicatedFullscreenVideoState extends ConsumerState<DedicatedFullscreenVi
                             Padding(
                               padding: const EdgeInsets.symmetric(horizontal: 24.0),
                               child: ReusableSeekSlider(
-                                value: videoState.position.inSeconds.toDouble(),
-                                max: videoState.duration.inSeconds.toDouble() > 0 
-                                    ? videoState.duration.inSeconds.toDouble() 
+                                value: videoState.position.inMilliseconds.toDouble(),
+                                max: videoState.duration.inMilliseconds.toDouble() > 0 
+                                    ? videoState.duration.inMilliseconds.toDouble() 
                                     : 1.0,
                                 onChanged: (val) {
-                                  videoNotifier.seek(Duration(seconds: val.toInt()));
+                                  videoNotifier.seek(Duration(milliseconds: val.toInt()));
                                   ref.read(playerUIProvider.notifier).onInteraction(videoState.isPlaying);
                                 },
                               ),
@@ -260,7 +261,7 @@ class _DedicatedFullscreenVideoState extends ConsumerState<DedicatedFullscreenVi
                                   const Spacer(),
                                   // Media Controls
                                   ReusableHoverIconButton(
-                                    icon: Icons.replay_10,
+                                    icon: UIcons.regular.rotate_left,
                                     iconSize: 28,
                                     tooltip: 'Skip back 10s',
                                     color: Colors.white,
@@ -272,8 +273,8 @@ class _DedicatedFullscreenVideoState extends ConsumerState<DedicatedFullscreenVi
                                   const SizedBox(width: 24),
                                   ReusableHoverIconButton(
                                     icon: videoState.isPlaying 
-                                        ? Icons.pause_circle_filled 
-                                        : Icons.play_circle_filled,
+                                        ? UIcons.solid.pause_circle 
+                                        : UIcons.solid.play_circle,
                                     iconSize: 56,
                                     tooltip: videoState.isPlaying ? 'Pause' : 'Play',
                                     color: theme.primaryColor,
@@ -284,7 +285,7 @@ class _DedicatedFullscreenVideoState extends ConsumerState<DedicatedFullscreenVi
                                   ),
                                   const SizedBox(width: 24),
                                   ReusableHoverIconButton(
-                                    icon: Icons.forward_10,
+                                    icon: UIcons.regular.rotate_right,
                                     iconSize: 28,
                                     tooltip: 'Skip forward 10s',
                                     color: Colors.white,
@@ -297,10 +298,10 @@ class _DedicatedFullscreenVideoState extends ConsumerState<DedicatedFullscreenVi
                                   // Volume / Other actions
                                   ReusableHoverIconButton(
                                     icon: videoState.volume == 0
-                                        ? Icons.volume_off
+                                        ? UIcons.regular.volume_off
                                         : videoState.volume < 0.5
-                                            ? Icons.volume_down
-                                            : Icons.volume_up,
+                                            ? UIcons.regular.volume_down
+                                            : UIcons.regular.volume,
                                     iconSize: 24,
                                     tooltip: 'Volume',
                                     color: Colors.white70,

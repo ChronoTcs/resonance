@@ -5,7 +5,7 @@ import '../../application/lyrics_provider.dart';
 import '../../../player/application/providers/audio_provider.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:resonance_app/core/widgets/media_artwork_widget.dart';
-import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
+import 'package:resonance_app/core/widgets/collapse_button.dart';
 import '../providers/lyrics_ui_provider.dart';
 import '../../application/lyrics_translation_provider.dart';
 import '../widgets/lyrics_retry_button.dart';
@@ -202,9 +202,10 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 16.0),
                       child: Row(
                         children: [
-                          IconButton(
-                            icon: const Icon(Icons.keyboard_arrow_down, size: 30),
-                            onPressed: () => Navigator.pop(context),
+                          CollapseButton(
+                            iconSize: 30,
+                            tooltip: 'Minimize',
+                            onTap: () => Navigator.pop(context),
                           ),
                           const Spacer(),
                           const Text(
@@ -249,8 +250,7 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
               top: MediaQuery.of(context).padding.top + 8,
               left: 16,
               child: SafeArea(
-                child: ReusableHoverIconButton(
-                  icon: Icons.keyboard_arrow_down,
+                child: CollapseButton(
                   iconSize: 32,
                   tooltip: 'Tutup Lirik',
                   color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.8),

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:resonance_app/core/utils/uicons.dart';
 import 'package:resonance_app/features/player/application/providers/audio_provider.dart';
+import 'package:resonance_app/core/widgets/play_pause_button.dart';
 import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
 import 'package:resonance_app/core/widgets/reusable_seek_slider.dart';
 
@@ -25,11 +27,11 @@ class FloatingBottomBar extends ConsumerWidget {
         children: [
           // 1. Interactive Progress Bar (ReusableSeekSlider SOTA V13.14)
           ReusableSeekSlider(
-            value: audioState.position.inSeconds.toDouble(),
-            max: audioState.duration.inSeconds > 0 
-              ? audioState.duration.inSeconds.toDouble() 
+            value: audioState.position.inMilliseconds.toDouble(),
+            max: audioState.duration.inMilliseconds > 0 
+              ? audioState.duration.inMilliseconds.toDouble() 
               : 0.0,
-            onChanged: (v) => audioNotifier.seek(Duration(seconds: v.toInt())),
+            onChanged: (v) => audioNotifier.seek(Duration(milliseconds: v.toInt())),
             trackHeight: 2,
             height: 4,
             thumbRadius: 0, // Sempit untuk miniplayer, thumb muncul saat hover/drag (Slider default)
@@ -75,7 +77,7 @@ class FloatingBottomBar extends ConsumerWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     ReusableHoverIconButton(
-                      icon: Icons.skip_previous,
+                      icon: UIcons.regular.step_backward,
                       onTap: audioNotifier.skipToPrevious,
                       tooltip: 'Previous',
                       iconSize: 18,
@@ -83,18 +85,15 @@ class FloatingBottomBar extends ConsumerWidget {
                       isDisabled: audioState.currentIndex <= 0,
                     ),
                     const SizedBox(width: 4),
-                    ReusableHoverIconButton(
+                    PlayPauseButton(
+                      isPlaying: audioState.isPlaying,
+                      isLoading: audioState.isLoading,
                       onTap: audioNotifier.togglePlayPause,
-                      tooltip: audioState.isPlaying ? 'Pause' : 'Play',
-                      backgroundColor: Theme.of(context).primaryColor,
-                      iconColor: Theme.of(context).colorScheme.onPrimary,
-                      padding: 6,
-                      iconSize: 20,
-                      icon: audioState.isPlaying ? Icons.pause : Icons.play_arrow,
+                      size: PlayPauseSize.small,
                     ),
                     const SizedBox(width: 4),
                     ReusableHoverIconButton(
-                      icon: Icons.skip_next,
+                      icon: UIcons.regular.step_forward,
                       onTap: audioNotifier.skipToNext,
                       tooltip: 'Next',
                       iconSize: 18,

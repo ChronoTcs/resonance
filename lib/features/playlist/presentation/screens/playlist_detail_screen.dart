@@ -1,12 +1,15 @@
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:resonance_app/core/utils/uicons.dart';
 import 'package:resonance_app/features/player/application/providers/audio_provider.dart';
 import 'package:resonance_app/features/playlist/application/playlist_provider.dart';
 import 'package:resonance_app/features/library/application/library_provider.dart';
 import 'package:resonance_app/core/widgets/media_actions_bottom_sheet.dart';
 import 'package:resonance_app/core/widgets/media_artwork_widget.dart';
 import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
+import 'package:resonance_app/core/widgets/app_back_button.dart';
+import 'package:resonance_app/core/widgets/online_track_badge.dart';
 // import 'package:resonance_app/core/widgets/hover_widgets.dart'; // Unused
 
 class PlaylistDetailScreen extends ConsumerWidget {
@@ -45,16 +48,14 @@ class PlaylistDetailScreen extends ConsumerWidget {
                 elevation: 0,
                 backgroundColor: theme.colorScheme.surface.withValues(alpha: 0.7),
                 leading: Center(
-                  child: ReusableHoverIconButton(
-                    icon: Icons.arrow_back,
-                    tooltip: 'Back',
-                    onTap: () => ref.read(selectedPlaylistIdProvider.notifier).setSelectedId(null),
+                  child: AppBackButton(
                     color: theme.colorScheme.onSurface,
+                    onTap: () => ref.read(selectedPlaylistIdProvider.notifier).setSelectedId(null),
                   ),
                 ),
                 actions: [
                   ReusableHoverIconButton(
-                    icon: Icons.sync_problem_rounded,
+                    icon: UIcons.regular.refresh,
                     tooltip: 'Repair Playlist',
                     onTap: () async {
                       final libraryItems = ref.read(libraryProvider).allMedia;
@@ -75,7 +76,7 @@ class PlaylistDetailScreen extends ConsumerWidget {
                     },
                   ),
                   ReusableHoverIconButton(
-                    icon: Icons.add_circle_outline,
+                    icon: UIcons.regular.add,
                     tooltip: 'Add Music',
                     onTap: () {
                       showModalBottomSheet(
@@ -116,7 +117,7 @@ class PlaylistDetailScreen extends ConsumerWidget {
                                 width: double.infinity,
                                 height: double.infinity,
                                 borderRadius: 0,
-                                placeholderIcon: Icons.queue_music_rounded,
+                                placeholderIcon: UIcons.regular.list_music,
                               ),
                             )
                           : Container(
@@ -131,7 +132,7 @@ class PlaylistDetailScreen extends ConsumerWidget {
                                 ),
                               ),
                               child: Icon(
-                                Icons.queue_music_rounded,
+                                UIcons.regular.list_music,
                                 size: 100,
                                 color: Colors.white.withValues(alpha: 0.3),
                               ),
@@ -156,7 +157,7 @@ class PlaylistDetailScreen extends ConsumerWidget {
                       ),
                       if (tracks.isNotEmpty)
                         ReusableHoverIconButton(
-                          icon: Icons.play_arrow_rounded,
+                          icon: UIcons.regular.play,
                           label: 'Play All',
                           tooltip: 'Play all tracks',
                           backgroundColor: theme.colorScheme.primary,
@@ -197,12 +198,22 @@ class PlaylistDetailScreen extends ConsumerWidget {
                         width: 48,
                         height: 48,
                         borderRadius: 6,
-                        placeholderIcon: isOnline ? Icons.public : Icons.music_note,
+                        placeholderIcon: isOnline ? UIcons.regular.globe : UIcons.regular.music,
                       ),
-                      title: Text(
-                        track.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      title: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              track.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (isOnline) ...[
+                            const SizedBox(width: 6),
+                            const OnlineTrackBadge(),
+                          ],
+                        ],
                       ),
                       subtitle: Text(
                         track.artist ?? 'Unknown Artist',
@@ -219,7 +230,7 @@ class PlaylistDetailScreen extends ConsumerWidget {
                         );
                       },
                       trailing: ReusableHoverIconButton(
-                        icon: Icons.remove_circle_outline,
+                        icon: UIcons.regular.minus,
                         tooltip: 'Remove from playlist',
                         onTap: () {
                           ref
@@ -301,7 +312,7 @@ class _MusicPickerSheetState extends ConsumerState<_MusicPickerSheet> {
               child: TextField(
                 decoration: InputDecoration(
                   hintText: 'Search my music...',
-                  prefixIcon: const Icon(Icons.search),
+                  prefixIcon: Icon(UIcons.regular.search),
                   filled: true,
                   fillColor: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
                   border: OutlineInputBorder(

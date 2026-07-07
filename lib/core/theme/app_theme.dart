@@ -3,36 +3,54 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:system_theme/system_theme.dart';
 
 class AppTheme {
-  // Monochrome & Cream Palette
-  static const Color creamBackground = Color(0xFFF4EFE6);
-  static const Color creamSurface = Color(0xFFE8E2D2);
+  // Palette 7 (Modern Glass - Light Mode Default) & Palette 8 (Deep Opulence - Dark Mode Default)
+  static const Color creamBackground = Color(0xFFF7F3E3); // Gilded Ivory
+  static const Color creamSurface = Color(0xFFEFEFEF); // Warm Pearl Glass base
+  static const Color textDark = Color(0xFF2E2A27); // Obsidian Brown
 
-  static const Color darkBackground = Color(0xFF191919);
-  static const Color darkSurface = Color(0xFF242424);
+  static const Color darkBackground = Color(0xFF232D35); // Dark Slate Gold Glass
+  static const Color darkSurface = Color(0xFF2D3A45); // Slate Grey Glass
+  static const Color textLight = Color(0xFFF7F3E3); // Gilded Ivory
 
-  static const Color textDark = Color(0xFF1C1C1C);
-  static const Color textLight = Color(0xFFF4EFE6);
-
-  static const Color accentGrey = Color(0xFF6B6B6B);
-  static const Color accentSoft = Color(0xFFB5B5B5);
+  static const Color accentGrey = Color(0xFF404041); // Obsidian Grey (Secondary Light text)
+  static const Color accentSoft = Color(0xFF707070); // Gilded Grey (Secondary Dark text)
 
   static Color? _resolveAccent(String? mode, Brightness brightness) {
-    if (mode == null) return null;
+    if (mode == null) {
+      // Default fallback: Auroral Glow for Light Mode, Copper-Amber / Gilded Gold for Dark Mode
+      return brightness == Brightness.light
+          ? const Color(0xFFE9AD71)
+          : const Color(0xFFD5A24E);
+    }
     if (mode == 'windows') {
       return SystemTheme.accentColor.accent;
     }
-    if (mode == 'cream') {
-      // Soft Cream (Old Lace/Krem)
-      // In light mode (cream background), we need a dark contrast (dark brownish cream)
-      // In dark mode, we use the soft light cream
-      return brightness == Brightness.light
-          ? const Color(0xFF5D574B) // Dark Warm Grey/Brown
-          : const Color(0xFFFDF5E6); // Soft Cream
+    
+    // Adaptive Palette Colors (balancing brightness vs contrast)
+    final bool isLight = brightness == Brightness.light;
+    switch (mode) {
+      case 'palette1': // Muted Sand
+        return isLight ? const Color(0xFFA89689) : const Color(0xFFDBCDC2);
+      case 'palette2': // Cream Alabaster
+        return isLight ? const Color(0xFFDDD4C5) : const Color(0xFFFCFAF5);
+      case 'palette3': // Sage & Slate Mint
+        return isLight ? const Color(0xFFA3B5AE) : const Color(0xFFE4ECE8);
+      case 'palette4': // Glacier Steel
+        return isLight ? const Color(0xFFA5B6BD) : const Color(0xFFE2EBEE);
+      case 'palette5': // Nordic Blue
+        return isLight ? const Color(0xFF8A9EA9) : const Color(0xFFCBD8DF);
+      case 'palette6': // Deep Dusk Blue
+        return isLight ? const Color(0xFF738995) : const Color(0xFFB7C9D1);
+      case 'palette7': // Auroral Glow
+        return isLight ? const Color(0xFFE9AD71) : const Color(0xFFFFCEAA);
+      case 'palette8': // Copper-Amber
+        return isLight ? const Color(0xFFBB6B4C) : const Color(0xFFAE8C50);
+      default:
+        if (mode.startsWith('0x')) {
+          return Color(int.parse(mode));
+        }
+        return null;
     }
-    if (mode.startsWith('0x')) {
-      return Color(int.parse(mode));
-    }
-    return null;
   }
 
   static ThemeData getLightTheme(String? accentMode) {

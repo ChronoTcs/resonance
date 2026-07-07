@@ -12,6 +12,7 @@ import 'package:resonance_app/core/providers/navigation_provider.dart';
 import 'package:resonance_app/features/explore/presentation/screens/explore_screen.dart';
 import 'package:resonance_app/features/player/presentation/screens/now_playing_screen.dart';
 import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
+import 'package:resonance_app/core/utils/uicons.dart';
 import 'package:resonance_app/core/application/services/permission_service.dart';
 import 'dart:io';
 import 'package:resonance_app/features/tray/application/tray_service.dart';
@@ -30,7 +31,7 @@ class _MainDashboardState extends ConsumerState<MainDashboard> {
   @override
   void initState() {
     super.initState();
-    
+
     // SOTA V11.0: Android Permission Resilience
     // Pindah ke sini agar memiliki context di bawah MaterialApp (MaterialLocalizations tersedia)
     if (Platform.isAndroid) {
@@ -84,13 +85,13 @@ class _MainDashboardState extends ConsumerState<MainDashboard> {
     final bool showLyrics = ref.watch(lyricsOverlayProvider);
     final bool showNowPlaying = ref.watch(nowPlayingOverlayProvider);
 
-
     // SOTA V6.0: Indexed Stability Logic
     // Menerjemahkan index logis (0-5) ke index fisik BottomNavigationBar (0-4)
     int getPhysicalIndex(int logicalIndex) {
       if (!isDesktop) {
         if (logicalIndex == 3) return 2; // Playlists -> Library
-        if (logicalIndex > 3) return logicalIndex - 1; // Download (4->3), Settings (5->4)
+        if (logicalIndex > 3)
+          return logicalIndex - 1; // Download (4->3), Settings (5->4)
       }
       return logicalIndex;
     }
@@ -98,7 +99,8 @@ class _MainDashboardState extends ConsumerState<MainDashboard> {
     // Menerjemahkan tap fisik (0-4) kembali ke index logis (0-5)
     int getLogicalIndex(int physicalIndex) {
       if (!isDesktop) {
-        if (physicalIndex >= 3) return physicalIndex + 1; // 3->4 (Download), 4->5 (Settings)
+        if (physicalIndex >= 3)
+          return physicalIndex + 1; // 3->4 (Download), 4->5 (Settings)
       }
       return physicalIndex;
     }
@@ -116,22 +118,20 @@ class _MainDashboardState extends ConsumerState<MainDashboard> {
                 if (isDesktop) ...[
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
-                    width: _isExtended ? 200 : 72,
+                    width: _isExtended ? 200 : 50,
                     color:
-                        Theme.of(
-                          context,
-                        ).navigationRailTheme.backgroundColor ??
+                        Theme.of(context).navigationRailTheme.backgroundColor ??
                         Theme.of(context).colorScheme.surface,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // Hamburger Menu
                         Container(
-                          height: 72,
+                          height: 50,
                           alignment: Alignment.centerLeft,
-                          padding: const EdgeInsets.only(left: 16),
+                          padding: const EdgeInsets.only(left: 4),
                           child: ReusableHoverIconButton(
-                            icon: Icons.menu,
+                            icon: UIcons.regular.waveform_path,
                             tooltip: _isExtended
                                 ? 'Close Navigation'
                                 : 'Open Navigation',
@@ -140,6 +140,8 @@ class _MainDashboardState extends ConsumerState<MainDashboard> {
                                 _isExtended = !_isExtended;
                               });
                             },
+                            iconSize: 20,
+                            padding: 10,
                           ),
                         ),
                         // Navigation Items
@@ -151,18 +153,20 @@ class _MainDashboardState extends ConsumerState<MainDashboard> {
                                 duration: const Duration(milliseconds: 300),
                                 curve: Curves.easeOutBack,
                                 tween: Tween<double>(
-                                  begin: logicalIndex * 56.0,
-                                  end: logicalIndex * 56.0,
+                                  begin: logicalIndex * 46.0,
+                                  end: logicalIndex * 46.0,
                                 ),
                                 builder: (context, value, child) {
                                   return Positioned(
                                     top: value,
                                     left: 0,
                                     child: Container(
-                                      width: 4,
-                                      height: 56,
-                                      padding: const EdgeInsets.symmetric(vertical: 16),
-                                      margin: const EdgeInsets.only(left: 8),
+                                      width: 3,
+                                      height: 46,
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 12,
+                                      ),
+                                      margin: const EdgeInsets.only(left: 4),
                                       child: child,
                                     ),
                                   );
@@ -178,12 +182,42 @@ class _MainDashboardState extends ConsumerState<MainDashboard> {
                               ListView(
                                 physics: const NeverScrollableScrollPhysics(),
                                 children: [
-                                  _buildNavItem(0, 'Home', Icons.home_outlined, Icons.home),
-                                  _buildNavItem(1, 'Explore', Icons.explore_outlined, Icons.explore),
-                                  _buildNavItem(2, 'Library', Icons.library_music_outlined, Icons.library_music),
-                                  _buildNavItem(3, 'Playlists', Icons.queue_music_outlined, Icons.queue_music),
-                                  _buildNavItem(4, 'Download', Icons.download_outlined, Icons.download_rounded),
-                                  _buildNavItem(5, 'Settings', Icons.settings_outlined, Icons.settings),
+                                  _buildNavItem(
+                                    0,
+                                    'Home',
+                                    Icons.home_outlined,
+                                    Icons.home,
+                                  ),
+                                  _buildNavItem(
+                                    1,
+                                    'Explore',
+                                    Icons.explore_outlined,
+                                    Icons.explore,
+                                  ),
+                                  _buildNavItem(
+                                    2,
+                                    'Library',
+                                    Icons.library_music_outlined,
+                                    Icons.library_music,
+                                  ),
+                                  _buildNavItem(
+                                    3,
+                                    'Playlists',
+                                    Icons.queue_music_outlined,
+                                    Icons.queue_music,
+                                  ),
+                                  _buildNavItem(
+                                    4,
+                                    'Download',
+                                    Icons.download_outlined,
+                                    Icons.download_rounded,
+                                  ),
+                                  _buildNavItem(
+                                    5,
+                                    'Settings',
+                                    Icons.settings_outlined,
+                                    Icons.settings,
+                                  ),
                                 ],
                               ),
                             ],
@@ -211,7 +245,7 @@ class _MainDashboardState extends ConsumerState<MainDashboard> {
                             ),
                           ),
                         ),
-                        
+
                         // 2. Mid Layer: Now Playing (Slide transition)
                         AnimatedSwitcher(
                           duration: const Duration(milliseconds: 400),
@@ -224,21 +258,27 @@ class _MainDashboardState extends ConsumerState<MainDashboard> {
                               child: child,
                             );
                           },
-                          child: showNowPlaying 
-                            ? const NowPlayingScreen(key: ValueKey('now_playing'))
-                            : const SizedBox.shrink(key: ValueKey('now_playing_empty')),
+                          child: showNowPlaying
+                              ? const NowPlayingScreen(
+                                  key: ValueKey('now_playing'),
+                                )
+                              : const SizedBox.shrink(
+                                  key: ValueKey('now_playing_empty'),
+                                ),
                         ),
 
                         // 3. Top Layer: Lyrics Overlay
                         AnimatedSwitcher(
                           duration: const Duration(milliseconds: 300),
-                          child: showLyrics 
-                            ? Container(
-                                key: const ValueKey('lyrics_overlay'),
-                                color: Colors.black.withValues(alpha: 0.6),
-                                child: const LyricsScreen(isEmbedded: true),
-                              )
-                            : const SizedBox.shrink(key: ValueKey('lyrics_empty')),
+                          child: showLyrics
+                              ? Container(
+                                  key: const ValueKey('lyrics_overlay'),
+                                  color: Colors.black.withValues(alpha: 0.6),
+                                  child: const LyricsScreen(isEmbedded: true),
+                                )
+                              : const SizedBox.shrink(
+                                  key: ValueKey('lyrics_empty'),
+                                ),
                         ),
                       ],
                     ),
@@ -257,9 +297,13 @@ class _MainDashboardState extends ConsumerState<MainDashboard> {
               currentIndex: physicalIndex,
               type: BottomNavigationBarType.fixed,
               selectedItemColor: Theme.of(context).primaryColor,
-              unselectedItemColor: Theme.of(context).iconTheme.color?.withValues(alpha: 0.5),
+              unselectedItemColor: Theme.of(
+                context,
+              ).iconTheme.color?.withValues(alpha: 0.5),
               onTap: (int index) {
-                ref.read(mainNavigationProvider.notifier).setIndex(getLogicalIndex(index));
+                ref
+                    .read(mainNavigationProvider.notifier)
+                    .setIndex(getLogicalIndex(index));
               },
               items: const [
                 BottomNavigationBarItem(
@@ -315,10 +359,10 @@ class _MainDashboardState extends ConsumerState<MainDashboard> {
       },
       color: color,
       hoverColor: theme.primaryColor,
-      iconSize: 24,
-      padding: 12,
+      iconSize: 20,
+      padding: 10,
       scaleOnHover: 1.0, // SOTA V3.4: Minimalist sidebar (No pop animation)
-      margin: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+      margin: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 2.0),
       label: title, // Always pass label for smooth reveal transition
       showLabel: _isExtended, // SOTA V3.7: Fade label based on sidebar state
       labelStyle: TextStyle(

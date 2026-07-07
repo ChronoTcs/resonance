@@ -1,12 +1,18 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:resonance_app/core/utils/uicons.dart';
+import 'package:resonance_app/core/utils/app_icons.dart';
 import 'package:resonance_app/features/home/presentation/providers/recently_played_provider.dart';
 import 'package:resonance_app/features/library/data/models/media_item.dart';
 import 'package:resonance_app/features/library/application/library_provider.dart';
 import 'package:resonance_app/features/player/application/services/queue_orchestrator.dart';
 import 'package:resonance_app/core/widgets/media_actions_bottom_sheet.dart';
 import 'package:resonance_app/core/widgets/media_artwork_widget.dart';
+import 'package:resonance_app/features/playlist/application/playlist_provider.dart';
+import 'package:resonance_app/features/playlist/data/models/playlist_model.dart';
+import 'package:resonance_app/features/player/application/providers/audio_provider.dart';
+import 'package:resonance_app/core/widgets/top_navigation_header.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -38,10 +44,14 @@ class HomeScreen extends ConsumerWidget {
         .toList();
 
     return Scaffold(
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+      body: Column(
         children: [
-          // ── Recently Played ──────────────────────────────────────
+          const TopNavigationHeader(),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+              children: [
+                // ── Recently Played ──────────────────────────────────────
           Text(
             'Recently Played',
             style: theme.textTheme.headlineSmall?.copyWith(
@@ -59,7 +69,7 @@ class HomeScreen extends ConsumerWidget {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(
-                          Icons.history,
+                          UIcons.regular.time_past,
                           size: 48,
                           color: theme.disabledColor,
                         ),
@@ -99,7 +109,7 @@ class HomeScreen extends ConsumerWidget {
           const SizedBox(height: 16),
           if (displayedQuickPicks.isEmpty)
             _EmptySection(
-              icon: Icons.shuffle,
+              icon: AppIcons.shuffle,
               label: 'Add music to see Quick Picks',
             )
           else
@@ -109,7 +119,7 @@ class HomeScreen extends ConsumerWidget {
                 scrollDirection: Axis.horizontal,
                 itemCount: displayedQuickPicks.length,
                 itemBuilder: (ctx, i) =>
-                    _TrackCard(track: displayedQuickPicks[i]),
+                    _HoverTrackCard(track: displayedQuickPicks[i]),
               ),
             ),
           const SizedBox(height: 32),
@@ -129,7 +139,7 @@ class HomeScreen extends ConsumerWidget {
           const SizedBox(height: 16),
           if (recommendations.isEmpty)
             _EmptySection(
-              icon: Icons.people_outline,
+              icon: UIcons.regular.users,
               label: 'Add music to see recommendations',
             )
           else
@@ -167,7 +177,7 @@ class HomeScreen extends ConsumerWidget {
           const SizedBox(height: 16),
           if (audioTracks.isEmpty)
             _EmptySection(
-              icon: Icons.library_music_outlined,
+              icon: AppIcons.music,
               label: 'Your library is empty',
             )
           else
@@ -183,6 +193,9 @@ class HomeScreen extends ConsumerWidget {
                 textAlign: TextAlign.center,
               ),
             ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -312,6 +325,153 @@ class _TrackListTile extends ConsumerWidget {
           builder: (_) => MediaActionsBottomSheet(item: track),
         );
       },
+    );
+  }
+}
+
+class _HoverTrackCard extends ConsumerStatefulWidget {
+  const _HoverTrackCard({required this.track});
+  final MediaItem track;
+
+  @override
+  ConsumerState<_HoverTrackCard> createState() => _HoverTrackCardState();
+}
+
+class _HoverTrackCardState extends ConsumerState<_HoverTrackCard> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final playlistState = ref.watch(playlistProvider).value;
+    
+    bool isLoved = false;
+    String? likedPlaylistId;
+    if (playlistState != null) {
+      final likedPl = playlistState.local.cast<Playlist?>().firstWhere(
+            (p) => p?.name == 'Liked Songs',
+            orElse: () => null,
+          );
+      if (likedPl != null) {
+        likedPlaylistId = likedPl.id;
+        final trackId = widget.track.id ?? widget.track.path;
+        isLoved = likedPl.tracks.any((t) => (t.id ?? t.path) == trackId);
+      }
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 12),
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _isHovered = true),
+        onExit: (_) => setState(() => _isHovered = false),
+        child: InkWell(
+          onTap: () {
+            final library = ref.read(libraryProvider);
+            final audioTracks = library.allMedia.where((m) => m.type == 'audio').toList();
+            ref.read(queueOrchestratorProvider).playWithLocalRadioFallback(widget.track, audioTracks);
+          },
+          onLongPress: () {
+            showModalBottomSheet(
+              context: context,
+              builder: (_) => MediaActionsBottomSheet(item: widget.track),
+            );
+          },
+          borderRadius: BorderRadius.circular(10),
+          child: SizedBox(
+            width: 140,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Stack(
+                  children: [
+                    MediaArtworkWidget(
+                      item: widget.track,
+                      width: 140,
+                      height: 140,
+                      borderRadius: 10,
+                    ),
+                    if (_isHovered)
+                      Positioned.fill(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.5),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Center(
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                IconButton(
+                                  icon: Icon(AppIcons.add, color: Colors.white),
+                                  iconSize: 22,
+                                  onPressed: () {
+                                    ref.read(audioProvider.notifier).addTrackToQueue(widget.track);
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Added "${widget.track.title}" to play queue', style: const TextStyle(color: Colors.white)),
+                                        duration: const Duration(seconds: 1),
+                                        behavior: SnackBarBehavior.floating,
+                                        backgroundColor: theme.primaryColor,
+                                      ),
+                                    );
+                                  },
+                                ),
+                                const SizedBox(width: 8),
+                                IconButton(
+                                  icon: Icon(
+                                    isLoved ? UIcons.solid.heart : UIcons.regular.heart,
+                                    color: isLoved ? Colors.red : Colors.white,
+                                  ),
+                                  iconSize: 22,
+                                  onPressed: () async {
+                                    final notifier = ref.read(playlistProvider.notifier);
+                                    if (likedPlaylistId == null) {
+                                      await notifier.createPlaylist('Liked Songs');
+                                      await Future.delayed(const Duration(milliseconds: 200));
+                                      final updatedState = ref.read(playlistProvider).value;
+                                      final newLikedPl = updatedState?.local.firstWhere((p) => p.name == 'Liked Songs');
+                                      if (newLikedPl != null) {
+                                        likedPlaylistId = newLikedPl.id;
+                                      }
+                                    }
+                                    if (likedPlaylistId != null) {
+                                      if (isLoved) {
+                                        await notifier.removeTrackFromPlaylist(likedPlaylistId!, widget.track.id ?? widget.track.path);
+                                      } else {
+                                        await notifier.addTrackToPlaylist(likedPlaylistId!, widget.track);
+                                      }
+                                    }
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  widget.track.title,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  widget.track.artist ?? 'Unknown Artist',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.hintColor,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

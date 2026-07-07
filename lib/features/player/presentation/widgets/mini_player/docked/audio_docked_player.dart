@@ -103,10 +103,10 @@ class AudioDockedPlayer extends ConsumerWidget {
                   final pos = ref.watch(audioProvider.select((s) => s.position));
                   final dur = ref.watch(audioProvider.select((s) => s.duration));
                   return ReusableSeekSlider(
-                    value: pos.inSeconds.toDouble(),
-                    max: dur.inSeconds.toDouble() > 0 ? dur.inSeconds.toDouble() : 1.0,
+                    value: pos.inMilliseconds.toDouble(),
+                    max: dur.inMilliseconds.toDouble() > 0 ? dur.inMilliseconds.toDouble() : 1.0,
                     onChanged: (val) {
-                      ref.read(audioProvider.notifier).seek(Duration(seconds: val.toInt()));
+                      ref.read(audioProvider.notifier).seek(Duration(milliseconds: val.toInt()));
                     },
                   );
                 },

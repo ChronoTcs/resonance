@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/material.dart';
+import 'package:resonance_app/core/utils/uicons.dart';
 
 class PermissionService {
   /// Shows a clean rationale dialog before requesting a permission.
@@ -53,7 +54,7 @@ class PermissionService {
         if (!context.mounted) return;
         final proceed = await showRationaleDialog(
           context: context,
-          icon: Icons.notifications_active,
+          icon: UIcons.regular.bell,
           title: 'Notifications',
           message: 'Resonance needs notification permission to show the music player controls in your notification bar.',
         );
@@ -71,7 +72,7 @@ class PermissionService {
         if (!context.mounted) return;
         final proceed = await showRationaleDialog(
           context: context,
-          icon: Icons.library_music,
+          icon: UIcons.regular.headphones,
           title: 'Audio Access',
           message: 'Resonance needs access to your audio files to play music from your device storage.',
         );
@@ -87,7 +88,7 @@ class PermissionService {
         if (!context.mounted) return;
         final proceed = await showRationaleDialog(
           context: context,
-          icon: Icons.folder,
+          icon: UIcons.regular.folder,
           title: 'Full Storage Access',
           message: 'On Android 11+, Resonance needs "All Files Access" to scan your music library and manage downloads efficiently.',
         );
@@ -103,7 +104,7 @@ class PermissionService {
         if (!context.mounted) return;
         final proceed = await showRationaleDialog(
           context: context,
-          icon: Icons.storage,
+          icon: UIcons.regular.hdd,
           title: 'Storage Access',
           message: 'Resonance needs access to your storage to play and download music.',
         );
@@ -128,7 +129,7 @@ class PermissionService {
     // Show rationale because this leads to a dangerous system setting page
     final proceed = await showRationaleDialog(
       context: context,
-      icon: Icons.security,
+      icon: UIcons.regular.shield,
       title: 'Install Unknown Apps',
       message: 'To install the update, Resonance needs your permission to "Install Unknown Apps". You will be redirected to the system settings to enable this for Resonance.',
     );

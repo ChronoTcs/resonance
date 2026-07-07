@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:webview_windows/webview_windows.dart';
+import 'package:resonance_app/core/utils/uicons.dart';
 import '../../application/providers/video_player_notifier.dart';
 import '../../application/providers/webview_provider.dart'; // GLOBAL PROVIDER
 import '../../../library/data/models/media_item.dart';
@@ -93,7 +94,7 @@ class _WebVideoSnifferScreenState extends ConsumerState<WebVideoSnifferScreen> {
 
             return ListTile(
               leading: Icon(
-                isVideo ? Icons.play_circle_fill : Icons.login,
+                isVideo ? UIcons.solid.play_circle : UIcons.regular.enter,
                 color: isVideo ? Colors.green : Colors.blue,
               ),
               title: Text(
@@ -107,7 +108,7 @@ class _WebVideoSnifferScreenState extends ConsumerState<WebVideoSnifferScreen> {
                 maxLines: 1, 
                 overflow: TextOverflow.ellipsis
               ),
-              trailing: isVideo ? const Icon(Icons.play_arrow) : const Icon(Icons.arrow_forward),
+              trailing: isVideo ? Icon(UIcons.regular.play) : Icon(UIcons.regular.arrow_small_right),
               onTap: () async {
                 if (isVideo) {
                   final ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
@@ -225,7 +226,7 @@ class _WebVideoSnifferScreenState extends ConsumerState<WebVideoSnifferScreen> {
     return Scaffold(
       appBar: AppBar(
         leading: ReusableHoverIconButton(
-          icon: Icons.close,
+          icon: UIcons.regular.cross_small,
           tooltip: 'Minimize Sniffer',
           onTap: () {
             ref.read(webviewProvider.notifier).setMinimized(true);
@@ -253,7 +254,7 @@ class _WebVideoSnifferScreenState extends ConsumerState<WebVideoSnifferScreen> {
         ),
         actions: [
           ReusableHoverIconButton(
-            icon: Icons.arrow_back,
+            icon: UIcons.regular.arrow_small_left,
             iconSize: 24,
             tooltip: 'Browser Back',
             onTap: () async {
@@ -261,7 +262,7 @@ class _WebVideoSnifferScreenState extends ConsumerState<WebVideoSnifferScreen> {
             },
           ),
           ReusableHoverIconButton(
-            icon: Icons.arrow_forward,
+            icon: UIcons.regular.arrow_small_right,
             iconSize: 24,
             tooltip: 'Browser Forward',
             onTap: () async {
@@ -269,13 +270,13 @@ class _WebVideoSnifferScreenState extends ConsumerState<WebVideoSnifferScreen> {
             },
           ),
           ReusableHoverIconButton(
-            icon: Icons.refresh,
+            icon: UIcons.regular.refresh,
             tooltip: 'Reload',
             onTap: () => controller?.reload(),
           ),
           // Total Clean Exit
           ReusableHoverIconButton(
-            icon: Icons.exit_to_app,
+            icon: UIcons.regular.sign_out_alt,
             color: Colors.redAccent,
             tooltip: 'Kill Sniffer Session',
             onTap: () {
@@ -313,7 +314,7 @@ class _WebVideoSnifferScreenState extends ConsumerState<WebVideoSnifferScreen> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _onSniffRequested,
         label: const Text('Sniff Video'),
-        icon: const Icon(Icons.search),
+        icon: Icon(UIcons.regular.search),
       ),
     );
   }
@@ -397,7 +398,7 @@ class _InterceptionCardState extends ConsumerState<_InterceptionCard> {
             children: [
               Row(
                 children: [
-                  Icon(Icons.security, color: colorScheme.primary, size: 20),
+                  Icon(UIcons.regular.security, color: colorScheme.primary, size: 20),
                   const SizedBox(width: 8),
                   const Expanded(
                     child: Text(

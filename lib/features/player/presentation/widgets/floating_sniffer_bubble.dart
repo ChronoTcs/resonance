@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:webview_windows/webview_windows.dart';
+import 'package:resonance_app/core/utils/uicons.dart';
 import '../../application/providers/webview_provider.dart';
 import '../screens/web_video_sniffer_screen.dart';
 import '../../../../main.dart';
 import '../../../../core/routing/route_provider.dart';
 import '../../application/providers/video_player_notifier.dart' as v;
 import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
-// import 'package:resonance_app/core/widgets/hover_widgets.dart'; // Unused
 
 class FloatingSnifferBubble extends ConsumerStatefulWidget {
   const FloatingSnifferBubble({super.key});
@@ -79,7 +79,7 @@ class _FloatingSnifferBubbleState extends ConsumerState<FloatingSnifferBubble> {
                     alignment: Alignment.center,
                     children: [
                       Icon(
-                        Icons.language,
+                        UIcons.regular.globe,
                         color: isLoading ? Colors.blue : Colors.white,
                         size: 24,
                       ),
@@ -98,7 +98,7 @@ class _FloatingSnifferBubbleState extends ConsumerState<FloatingSnifferBubble> {
                   // "Restore" Button
                   ReusableHoverIconButton(
                     tooltip: 'Restore Sniffer',
-                    icon: Icons.open_in_full,
+                    icon: UIcons.regular.expand,
                     iconSize: 16,
                     color: Colors.greenAccent,
                     label: "Restore",
@@ -121,7 +121,7 @@ class _FloatingSnifferBubbleState extends ConsumerState<FloatingSnifferBubble> {
                   // "Kill" Button
                   ReusableHoverIconButton(
                     tooltip: 'Close Sniffer',
-                    icon: Icons.close,
+                    icon: UIcons.regular.cross_small,
                     iconSize: 20,
                     color: Colors.redAccent,
                     onTap: () {

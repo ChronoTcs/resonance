@@ -59,7 +59,6 @@ class LyricsTranslationState {
 
 class LyricsTranslationNotifier extends Notifier<LyricsTranslationState> {
   Timer? _debounceTimer;
-  bool _isWaitingForBaseLyrics = false;
 
   @override
   LyricsTranslationState build() {
@@ -83,16 +82,18 @@ class LyricsTranslationNotifier extends Notifier<LyricsTranslationState> {
       final prevId = prev?.id ?? prev?.path;
 
       if (effectiveId != prevId) {
-        // Cancel any pending request for the previous track immediately
         _debounceTimer?.cancel();
-        _isWaitingForBaseLyrics = false; // Reset waiting flag for NEW track
-        
-        state = state.copyWith(
-          translatedLyrics: null, 
+        // Use direct constructor — copyWith uses ?? so passing null doesn't clear fields.
+        // We must genuinely null translatedLyrics/romanizedLyrics to avoid stale data.
+        state = LyricsTranslationState(
+          isSystemEnabled: state.isSystemEnabled,
+          mode: LyricsTranslationMode.original,
+          targetLanguage: state.targetLanguage,
+          translatedLyrics: null,
           romanizedLyrics: null,
-          lastTrackId: null, // Clear identity to prevent staleness
+          lastTrackId: effectiveId, // Claim B's ID immediately so staleness guard passes correctly
+          isLoading: false,
           error: null,
-          isLoading: false, 
         );
         
         // SOTA V3.3: Attempt early cache discovery immediately
@@ -107,17 +108,8 @@ class LyricsTranslationNotifier extends Notifier<LyricsTranslationState> {
     // Also listen to lyricsProvider changes (when base lyrics are loaded)
     ref.listen(lyricsProvider, (prev, next) {
       if (!next.isLoading && next.lyrics.isNotEmpty) {
-        if (_isWaitingForBaseLyrics) {
-          // Double check if state is still null (ensure early load didn't already finish)
-          if (state.translatedLyrics == null || state.romanizedLyrics == null) {
-            _isWaitingForBaseLyrics = false;
-            debugPrint('LyricsTranslation: Base lyrics READY. Evaluating fetch...');
-            _triggerLoadingForCurrentMode();
-          } else {
-            _isWaitingForBaseLyrics = false;
-            debugPrint('LyricsTranslation: Base lyrics READY but cache already loaded. Skipping.');
-          }
-        }
+        debugPrint('LyricsTranslation: Base lyrics loaded. Evaluating translation fetch...');
+        _triggerLoadingForCurrentMode();
       }
     });
 
@@ -150,10 +142,13 @@ class LyricsTranslationNotifier extends Notifier<LyricsTranslationState> {
   /// PROACTIVE: Checks if either translation or romanization is missing
   /// even if not currently in that mode, to ensure background self-healing.
   void _triggerLoadingForCurrentMode() {
-    if (!state.isSystemEnabled) {
-       _isWaitingForBaseLyrics = false;
-       return;
-    }
+    if (!state.isSystemEnabled) return;
+
+    // In original mode there is nothing to fetch. Returning here prevents a
+    // background isLoading=true that would silently block the user's first
+    // explicit "translate" click via the isLoading guard in _fetchAndCacheUnified.
+    // Translations are fetched on-demand when the user cycles to a non-original mode.
+    if (state.mode == LyricsTranslationMode.original) return;
 
     // 1. Cancel any existing timer
     _debounceTimer?.cancel();
@@ -172,7 +167,6 @@ class LyricsTranslationNotifier extends Notifier<LyricsTranslationState> {
     // 3. Check if base lyrics are ready. If not, wait for them.
     final lyricsState = ref.read(lyricsProvider);
     if (lyricsState.isLoading || lyricsState.lyrics.isEmpty) {
-        _isWaitingForBaseLyrics = true;
         return; // Silent wait
     }
 
@@ -226,11 +220,6 @@ class LyricsTranslationNotifier extends Notifier<LyricsTranslationState> {
         romanizedLyrics: earlyROM,
         lastTrackId: trackId,
       );
-      
-      // If we got everything, stop waiting for base lyrics
-      if (earlyTRN != null && earlyROM != null) {
-        _isWaitingForBaseLyrics = false;
-      }
     }
   }
 

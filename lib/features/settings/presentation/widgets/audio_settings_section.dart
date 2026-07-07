@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:resonance_app/core/utils/uicons.dart';
 import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
 import '../../../../core/data/services/storage_service.dart';
 import '../../../player/application/providers/audio_provider.dart';
@@ -28,8 +29,8 @@ class AudioSettingsSection extends ConsumerWidget {
           value: audioState.volume,
           min: 0,
           max: 100,
-          iconLeft: Icons.volume_mute,
-          iconRight: Icons.volume_up,
+          iconLeft: UIcons.regular.volume_mute,
+          iconRight: UIcons.regular.volume,
           onChanged: (val) => audioNotifier.setVolume(val),
         ),
         
@@ -82,8 +83,8 @@ class AudioSettingsSection extends ConsumerWidget {
             padding: 12,
             child: Row(
               mainAxisSize: MainAxisSize.min,
-              children: const [
-                Icon(Icons.restore),
+              children: [
+                Icon(UIcons.regular.rotate_right),
                 SizedBox(width: 8),
                 Text('Restore Audio Defaults'),
               ],

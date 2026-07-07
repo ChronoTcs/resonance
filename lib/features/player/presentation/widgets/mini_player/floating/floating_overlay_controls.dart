@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance_app/features/player/application/providers/audio_provider.dart';
+import 'package:resonance_app/core/utils/uicons.dart';
 import 'package:resonance_app/features/player/presentation/notifiers/mini_player_view_notifier.dart';
 import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
 import 'package:resonance_app/features/player/data/models/player_enums.dart';
@@ -47,21 +48,21 @@ class _FloatingOverlayControlsState extends ConsumerState<FloatingOverlayControl
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       ReusableHoverIconButton(
-                        icon: Icons.shuffle,
+                        icon: UIcons.regular.shuffle,
                         onTap: audioNotifier.toggleShuffle,
                         tooltip: 'Shuffle',
                         color: audioState.isShuffleEnabled ? Theme.of(context).primaryColor : Colors.white,
                       ),
                       const SizedBox(width: 24),
                       ReusableHoverIconButton(
-                        icon: Icons.lyrics_outlined,
+                        icon: UIcons.regular.microphone,
                         onTap: () => popNotifier.setViewState(MiniPlayerViewState.lyrics),
                         tooltip: 'Open Lyrics',
                         color: Colors.white,
                       ),
                       const SizedBox(width: 24),
                       ReusableHoverIconButton(
-                        icon: audioState.loopMode == LoopMode.one ? Icons.repeat_one : Icons.repeat,
+                        icon: audioState.loopMode == LoopMode.one ? UIcons.regular.arrows_repeat_1 : UIcons.regular.arrows_repeat,
                         onTap: audioNotifier.cycleLoopMode,
                         tooltip: 'Repeat Mode',
                         color: audioState.loopMode != LoopMode.off ? Theme.of(context).primaryColor : Colors.white,
@@ -158,7 +159,7 @@ class _FloatingOverlayControlsState extends ConsumerState<FloatingOverlayControl
                           ),
                         ),
                         const SizedBox(width: 6),
-                        const Icon(Icons.tune, color: Colors.white38, size: 14),
+                        Icon(UIcons.regular.settings_sliders, color: Colors.white38, size: 16),
                       ],
                     ),
                   ),
@@ -184,8 +185,8 @@ class _FloatingOverlayControlsState extends ConsumerState<FloatingOverlayControl
   }
 
   IconData _getVolumeIcon(double volume) {
-    if (volume == 0) return Icons.volume_off;
-    if (volume < 50) return Icons.volume_down;
-    return Icons.volume_up;
+    if (volume == 0) return UIcons.regular.volume_off;
+    if (volume < 50) return UIcons.regular.volume_down;
+    return UIcons.regular.volume;
   }
 }

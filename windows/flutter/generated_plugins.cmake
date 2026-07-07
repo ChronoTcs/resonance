@@ -3,7 +3,7 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
-  flutter_js
+  audio_service_win
   media_kit_libs_windows_video
   media_kit_video
   permission_handler_windows
@@ -17,9 +17,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST
-  flutter_discord_rpc
-  metadata_god
-  smtc_windows
+  jni
 )
 
 set(PLUGIN_BUNDLED_LIBRARIES)

@@ -2,7 +2,7 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
-import 'package:metadata_god/metadata_god.dart';
+import 'package:audio_metadata_reader/audio_metadata_reader.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/media_item.dart';
 
@@ -183,15 +183,6 @@ String _generateLocId(String path) {
 }
 
 Future<List<MediaItem>> _parseBatch(Map<String, dynamic> args) async {
-  // SOTA V11.2: Isolate Awakening
-  // Fungsi ini berjalan di background Isolate (via compute), sehingga tidak mewarisi
-  // inisialisasi dari main thread. Kita WAJIB menginisialisasi ulang FFI agar tidak crash.
-  try {
-    await MetadataGod.initialize();
-  } catch (e) {
-    debugPrint('LibraryRepository Isolate: Failed to initialize MetadataGod: $e');
-  }
-
   final List<String> paths = args['paths'] as List<String>;
   final String imagesDirPath = args['imagesDirPath'] as String;
   final List<MediaItem> results = [];
@@ -211,11 +202,14 @@ Future<List<MediaItem>> _parseBatch(Map<String, dynamic> args) async {
     }
 
     try {
-      final tag = await MetadataGod.readMetadata(file: path);
-      title = (tag.title != null && tag.title!.isNotEmpty) 
-          ? tag.title! 
-          : title;
-      artist = tag.artist;
+      final file = File(path);
+      if (file.existsSync()) {
+        final tag = readMetadata(file, getImage: false);
+        title = (tag.title != null && tag.title!.isNotEmpty) 
+            ? tag.title! 
+            : title;
+        artist = tag.artist;
+      }
     } catch (e) {
       debugPrint('LibraryRepository Isolate: Metadata extraction error for $path: $e');
     }

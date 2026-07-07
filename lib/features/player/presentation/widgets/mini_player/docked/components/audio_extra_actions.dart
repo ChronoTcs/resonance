@@ -11,6 +11,8 @@ import 'package:resonance_app/features/player/presentation/widgets/mini_player/s
 import 'package:resonance_app/features/player/presentation/widgets/mini_player/shared/audio_settings_sheet.dart';
 import 'package:resonance_app/features/player/utils/media_action_utils.dart';
 
+import 'package:resonance_app/core/utils/uicons.dart';
+
 class AudioExtraActions extends ConsumerWidget {
   final MediaItem track;
   final bool isDesktop;
@@ -27,7 +29,7 @@ class AudioExtraActions extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     if (!isDesktop) {
       return ReusableHoverIconButton(
-        icon: Icons.playlist_add,
+        icon: UIcons.regular.add,
         iconSize: 20,
         tooltip: 'Media actions',
         onTap: () => MediaActionUtils.showMediaActions(
@@ -45,7 +47,7 @@ class AudioExtraActions extends ConsumerWidget {
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
           ReusableHoverIconButton(
-            icon: Icons.playlist_add,
+            icon: UIcons.regular.add,
             iconSize: 20,
             tooltip: 'Media actions',
             onTap: () => MediaActionUtils.showMediaActions(
@@ -80,10 +82,10 @@ class AudioExtraActions extends ConsumerWidget {
               return ReusableHoverIconButton(
                 tooltip: 'Volume',
                 icon: v == 0
-                    ? Icons.volume_off
+                    ? UIcons.regular.volume_off
                     : v < 50
-                        ? Icons.volume_down
-                        : Icons.volume_up,
+                        ? UIcons.regular.volume_down
+                        : UIcons.regular.volume,
                 onTap: () {
                   final RenderBox renderBox = buttonContext.findRenderObject() as RenderBox;
                   final offset = renderBox.localToGlobal(Offset.zero);
@@ -100,7 +102,7 @@ class AudioExtraActions extends ConsumerWidget {
             },
           ),
           ReusableHoverIconButton(
-            icon: Icons.settings,
+            icon: UIcons.regular.settings,
             tooltip: 'Settings',
             onTap: () => AudioSettingsSheet.show(context),
           ),
@@ -109,7 +111,7 @@ class AudioExtraActions extends ConsumerWidget {
               builder: (context, ref, _) {
                 final isPopped = ref.watch(miniPlayerPopProvider.select((s) => s.isPopped));
                 return ReusableHoverIconButton(
-                  icon: isPopped ? Icons.picture_in_picture_alt : Icons.picture_in_picture,
+                  icon: isPopped ? UIcons.regular.window_restore : UIcons.regular.window_alt,
                   tooltip: isPopped ? 'Close Miniplayer' : 'Open Miniplayer',
                   onTap: () => ref.read(miniPlayerPopProvider.notifier).togglePop(),
                   iconSize: 20,
@@ -117,7 +119,7 @@ class AudioExtraActions extends ConsumerWidget {
               },
             ),
           ReusableHoverIconButton(
-            icon: Icons.fullscreen,
+            icon: UIcons.regular.expand,
             tooltip: 'Full Screen',
             onTap: () {
               // Menambahkan validasi overlay PiP: jika PiP (Window) terbuka, kembalikan ke normal dulu sebelum full screen (mencegah tumpang tindih visual)

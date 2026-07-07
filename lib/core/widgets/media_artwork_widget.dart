@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:resonance_app/core/utils/app_icons.dart';
 import '../../features/library/data/models/media_item.dart';
 import '../data/services/media_cache_service.dart';
 
@@ -10,7 +11,7 @@ class MediaArtworkWidget extends ConsumerStatefulWidget {
   final double width;
   final double height;
   final double borderRadius;
-  final IconData placeholderIcon;
+  final IconData? placeholderIcon;
   final BoxFit fit;
   final Color? color;
   final BlendMode? colorBlendMode;
@@ -21,7 +22,7 @@ class MediaArtworkWidget extends ConsumerStatefulWidget {
     this.width = 48,
     this.height = 48,
     this.borderRadius = 6,
-    this.placeholderIcon = Icons.music_note,
+    this.placeholderIcon,
     this.fit = BoxFit.cover,
     this.color,
     this.colorBlendMode,
@@ -84,7 +85,7 @@ class _MediaArtworkWidgetState extends ConsumerState<MediaArtworkWidget> {
       color: theme.colorScheme.surfaceContainerHighest,
       child: Center(
         child: Icon(
-          widget.placeholderIcon,
+          widget.placeholderIcon ?? AppIcons.music,
           color: theme.colorScheme.onSurfaceVariant,
           size: widget.width == double.infinity ? 48 : widget.width * 0.5,
         ),

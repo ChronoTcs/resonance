@@ -2,10 +2,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:resonance_app/core/utils/uicons.dart';
 import '../../../library/application/library_provider.dart';
 import '../../../../core/application/services/permission_service.dart';
 import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
-// import 'package:resonance_app/core/widgets/hover_widgets.dart'; // Unused
 
 class LibraryPathsSection extends ConsumerWidget {
   const LibraryPathsSection({super.key});
@@ -25,7 +25,7 @@ class LibraryPathsSection extends ConsumerWidget {
         const SizedBox(height: 16),
         _buildPathTile(
           context,
-          icon: Icons.library_music,
+          icon: UIcons.regular.headphones,
           title: 'Music Library',
           path: libraryState.musicFolderPath,
           onEdit: () async {
@@ -38,7 +38,7 @@ class LibraryPathsSection extends ConsumerWidget {
         const SizedBox(height: 12),
         _buildPathTile(
           context,
-          icon: Icons.video_library,
+          icon: UIcons.regular.video_camera,
           title: 'Video Library',
           path: libraryState.videoFolderPath,
           onEdit: () async {
@@ -51,7 +51,7 @@ class LibraryPathsSection extends ConsumerWidget {
         const SizedBox(height: 12),
         _buildPathTile(
           context,
-          icon: Icons.lyrics,
+          icon: UIcons.regular.microphone,
           title: 'Lyrics Library',
           path: libraryState.lyricsFolderPath,
           onEdit: () async {
@@ -64,11 +64,11 @@ class LibraryPathsSection extends ConsumerWidget {
         const SizedBox(height: 12),
         _buildPathTile(
           context,
-          icon: Icons.cached,
+          icon: UIcons.regular.refresh,
           title: 'Cache Directory',
           path: libraryState.cacheFolderPath ?? 
                 (Platform.isWindows ? 'Default (%USERPROFILE%\\resonance_cache)' : 'Default (Internal App Storage)'),
-          iconWidget: const Icon(Icons.edit),
+          trailingIcon: UIcons.regular.pencil,
           onEdit: () async {
             if (await PermissionService.requestStoragePermission()) {
               String? selected = await FilePicker.platform.getDirectoryPath();
@@ -86,17 +86,17 @@ class LibraryPathsSection extends ConsumerWidget {
     required String title,
     String? path,
     required VoidCallback onEdit,
-    Widget? iconWidget,
+    IconData? trailingIcon,
   }) {
     return ListTile(
-      leading: Icon(icon),
+      leading: Icon(icon, size: 18),
       title: Text(title),
       subtitle: Text(path ?? 'Not configured'),
       trailing: ReusableHoverIconButton(
-        icon: iconWidget is Icon ? iconWidget.icon : Icons.chevron_right,
+        icon: trailingIcon ?? UIcons.regular.angle_small_right,
         tooltip: 'Edit $title',
         onTap: onEdit,
-        iconSize: 20,
+        iconSize: 18,
       ),
       tileColor: Theme.of(context).colorScheme.surface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),

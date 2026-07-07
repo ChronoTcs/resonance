@@ -8,6 +8,9 @@ import 'package:resonance_app/features/home/presentation/providers/recently_play
 import 'package:resonance_app/core/widgets/media_actions_bottom_sheet.dart';
 import 'package:resonance_app/core/widgets/media_artwork_widget.dart';
 import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
+import 'package:resonance_app/core/widgets/overflow_menu_button.dart';
+import 'package:resonance_app/core/utils/uicons.dart';
+import 'package:resonance_app/core/utils/app_icons.dart';
 import '../../application/services/youtube_auth_service.dart';
 
 import 'youtube_login_screen.dart';
@@ -56,10 +59,11 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
               controller: _searchController,
               decoration: InputDecoration(
                 hintText: 'Search songs online...',
-                prefixIcon: const Icon(Icons.search),
+                prefixIcon: Icon(AppIcons.search, size: 18),
                 suffixIcon: ReusableHoverIconButton(
-                  icon: Icons.clear,
+                  icon: AppIcons.close,
                   tooltip: 'Clear search',
+                  iconSize: 18,
                   onTap: () {
                     _searchController.clear();
                     ref.read(searchQueryProvider.notifier).setQuery('');
@@ -91,7 +95,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                   children: [
                     Expanded(
                       child: Text(
-                        'Recently Played',
+                         'Recently Played',
                         style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -101,7 +105,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                       onPressed: () {
                         ref.read(recentlyPlayedProvider.notifier).clearHistory();
                       },
-                      icon: const Icon(Icons.delete_sweep_outlined, size: 20),
+                      icon: Icon(AppIcons.trash, size: 18),
                       label: const Text('Clear'),
                       style: TextButton.styleFrom(
                         foregroundColor: theme.colorScheme.error,
@@ -159,9 +163,9 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                               fit: BoxFit.cover,
                               placeholder: (context, url) => Container(
                                 color: Colors.blueAccent.withValues(alpha: 0.1),
-                                child: const Icon(Icons.music_note),
+                                child: Icon(AppIcons.music),
                               ),
-                              errorWidget: (context, url, error) => const Icon(Icons.error),
+                              errorWidget: (context, url, error) => Icon(UIcons.regular.exclamation),
                             ),
                           ),
                           title: Text(
@@ -187,8 +191,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               const SizedBox(width: 8),
-                              ReusableHoverIconButton(
-                                icon: Icons.more_vert,
+                              OverflowMenuButton(
                                 tooltip: 'Actions',
                                 onTap: () {
                                   showModalBottomSheet(
@@ -226,9 +229,10 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
     final isLoggedIn = authService.isLoggedIn;
 
     return ReusableHoverIconButton(
-      icon: isLoggedIn ? Icons.account_circle : Icons.login,
+      icon: isLoggedIn ? UIcons.regular.user : UIcons.regular.enter,
       tooltip: isLoggedIn ? 'YouTube Account Active' : 'Login to YouTube',
       color: isLoggedIn ? Colors.redAccent : null,
+      iconSize: 18,
       onTap: () async {
         if (isLoggedIn) {
           final confirm = await showDialog<bool>(
@@ -297,7 +301,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                 width: 52,
                 height: 52,
                 borderRadius: 8,
-                placeholderIcon: Icons.music_note,
+                placeholderIcon: AppIcons.music,
               ),
               title: Text(
                 item.title,
@@ -319,8 +323,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                   builder: (_) => MediaActionsBottomSheet(item: item),
                 );
               },
-              trailing: ReusableHoverIconButton(
-                icon: Icons.more_vert,
+              trailing: OverflowMenuButton(
                 tooltip: 'Actions',
                 onTap: () {
                   showModalBottomSheet(

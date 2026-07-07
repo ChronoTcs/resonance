@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:resonance_app/core/utils/uicons.dart';
+import 'package:resonance_app/core/utils/app_icons.dart';
 import 'package:resonance_app/features/player/application/providers/audio_provider.dart';
 import 'package:resonance_app/features/playlist/data/models/playlist_model.dart';
 import 'package:resonance_app/features/playlist/application/playlist_provider.dart';
@@ -34,20 +36,20 @@ class PlaylistScreen extends ConsumerWidget {
               Tab(
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
-                  children: const [
-                    Icon(Icons.folder_outlined, size: 18),
-                    SizedBox(width: 8),
-                    Text('Local'),
+                  children: [
+                    Icon(AppIcons.folder, size: 18),
+                    const SizedBox(width: 8),
+                    const Text('Local'),
                   ],
                 ),
               ),
               Tab(
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
-                  children: const [
-                    Icon(Icons.public_rounded, size: 18),
-                    SizedBox(width: 8),
-                    Text('YouTube Music'),
+                  children: [
+                    Icon(UIcons.regular.world, size: 18),
+                    const SizedBox(width: 8),
+                    const Text('YouTube Music'),
                   ],
                 ),
               ),
@@ -89,7 +91,7 @@ class PlaylistScreen extends ConsumerWidget {
                 ),
                 FilledButton.tonalIcon(
                   onPressed: () => _showCreateDialog(context, ref),
-                  icon: const Icon(Icons.add, size: 18),
+                  icon: Icon(AppIcons.add, size: 18),
                   label: const Text('New'),
                 ),
               ],
@@ -130,7 +132,7 @@ class PlaylistScreen extends ConsumerWidget {
                 else
                   IconButton(
                     onPressed: () => ref.read(playlistProvider.notifier).refreshOnlinePlaylists(),
-                    icon: const Icon(Icons.refresh, size: 20),
+                    icon: Icon(AppIcons.refresh, size: 20),
                     tooltip: 'Refresh Online',
                   ),
               ],
@@ -176,7 +178,7 @@ class PlaylistScreen extends ConsumerWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              isOnline ? Icons.cloud_off_rounded : Icons.queue_music_rounded,
+              isOnline ? UIcons.regular.cloud_disabled : AppIcons.playlist,
               size: 64,
               color: theme.disabledColor,
             ),
@@ -195,7 +197,7 @@ class PlaylistScreen extends ConsumerWidget {
               const SizedBox(height: 24),
               FilledButton.icon(
                 onPressed: () => _showCreateDialog(context, ref),
-                icon: const Icon(Icons.add),
+                icon: Icon(AppIcons.add),
                 label: const Text('Create Local Playlist'),
               ),
             ]
@@ -293,15 +295,15 @@ class _PlaylistTile extends ConsumerWidget {
                           width: 56,
                           height: 56,
                           fit: BoxFit.cover,
-                          placeholder: (c, u) => Container(color: theme.colorScheme.surfaceContainerHighest, child: const Icon(Icons.music_note, size: 20)),
-                          errorWidget: (c, u, e) => Container(color: theme.colorScheme.surfaceContainerHighest, child: const Icon(Icons.music_note, size: 20)),
+                          placeholder: (c, u) => Container(color: theme.colorScheme.surfaceContainerHighest, child: Icon(AppIcons.music, size: 20)),
+                          errorWidget: (c, u, e) => Container(color: theme.colorScheme.surfaceContainerHighest, child: Icon(AppIcons.music, size: 20)),
                         )
                       : Container(
                           width: 56,
                           height: 56,
                           color: theme.colorScheme.surfaceContainerHighest,
                           child: Icon(
-                            Icons.queue_music,
+                            AppIcons.playlist,
                             color: theme.colorScheme.onSurfaceVariant,
                           ),
                         ),
@@ -338,40 +340,40 @@ class _PlaylistTile extends ConsumerWidget {
               onSelected: (action) =>
                   _handleAction(context, ref, action, playlist),
               itemBuilder: (_) => [
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: _PlaylistAction.play,
                   child: ListTile(
-                    leading: Icon(Icons.play_arrow_rounded),
-                    title: Text('Play all'),
+                    leading: Icon(UIcons.regular.play),
+                    title: const Text('Play all'),
                     contentPadding: EdgeInsets.zero,
                     visualDensity: VisualDensity.compact,
                   ),
                 ),
                 if (isOnline)
-                  const PopupMenuItem(
+                  PopupMenuItem(
                     value: _PlaylistAction.convertToLocal,
                     child: ListTile(
-                      leading: Icon(Icons.download_rounded),
-                      title: Text('Convert to Local'),
+                      leading: Icon(AppIcons.download),
+                      title: const Text('Convert to Local'),
                       contentPadding: EdgeInsets.zero,
                       visualDensity: VisualDensity.compact,
                     ),
                   ),
                 if (!isOnline) ...[
-                  const PopupMenuItem(
+                  PopupMenuItem(
                     value: _PlaylistAction.rename,
                     child: ListTile(
-                      leading: Icon(Icons.edit_outlined),
-                      title: Text('Rename'),
+                      leading: Icon(UIcons.regular.edit),
+                      title: const Text('Rename'),
                       contentPadding: EdgeInsets.zero,
                       visualDensity: VisualDensity.compact,
                     ),
                   ),
-                  const PopupMenuItem(
+                  PopupMenuItem(
                     value: _PlaylistAction.delete,
                     child: ListTile(
-                      leading: Icon(Icons.delete_outline, color: Colors.red),
-                      title: Text(
+                      leading: Icon(AppIcons.trash, color: Colors.red),
+                      title: const Text(
                         'Delete',
                         style: TextStyle(color: Colors.red),
                       ),

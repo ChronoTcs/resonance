@@ -2,6 +2,8 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:resonance_app/core/utils/uicons.dart';
+import 'package:resonance_app/core/widgets/app_back_button.dart';
 import 'package:resonance_app/features/download/application/providers/download_settings_provider.dart';
 
 class DownloadSettingsScreen extends ConsumerWidget {
@@ -27,9 +29,8 @@ class DownloadSettingsScreen extends ConsumerWidget {
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   child: Row(
                     children: [
-                      IconButton(
-                        icon: const Icon(Icons.arrow_back),
-                        onPressed: () => Navigator.pop(context),
+                      AppBackButton(
+                        onTap: () => Navigator.pop(context),
                       ),
                       const SizedBox(width: 8),
                       Text(
@@ -46,14 +47,14 @@ class DownloadSettingsScreen extends ConsumerWidget {
               // ── Output Paths ──────────────────────────────────────
               _SectionHeader(
                 label: 'Output Paths',
-                icon: Icons.folder_outlined,
+                icon: UIcons.regular.folder,
               ),
               const SizedBox(height: 8),
 
               _PathTile(
                 label: 'Music Folder',
                 subtitle: settings.musicOutputPath,
-                icon: Icons.music_note,
+                icon: UIcons.regular.music,
                 onPick: () async {
                   final dir = await FilePicker.platform.getDirectoryPath();
                   if (dir != null) {
@@ -68,7 +69,7 @@ class DownloadSettingsScreen extends ConsumerWidget {
               _PathTile(
                 label: 'Lyrics Folder',
                 subtitle: settings.lyricsOutputPath,
-                icon: Icons.lyrics_outlined,
+                icon: UIcons.regular.microphone,
                 onPick: () async {
                   final dir = await FilePicker.platform.getDirectoryPath();
                   if (dir != null) {
@@ -83,7 +84,7 @@ class DownloadSettingsScreen extends ConsumerWidget {
                 _PathTile(
                   label: 'Video Folder',
                   subtitle: settings.videoOutputPath,
-                  icon: Icons.movie_outlined,
+                  icon: UIcons.regular.video_camera,
                   onPick: () async {
                     final dir = await FilePicker.platform.getDirectoryPath();
                     if (dir != null) {
@@ -98,7 +99,7 @@ class DownloadSettingsScreen extends ConsumerWidget {
               const SizedBox(height: 24),
 
               // ── Quality ───────────────────────────────────────────
-              _SectionHeader(label: 'Audio Quality', icon: Icons.high_quality),
+              _SectionHeader(label: 'Audio Quality', icon: UIcons.regular.music),
               const SizedBox(height: 8),
 
               Card(
@@ -140,7 +141,7 @@ class DownloadSettingsScreen extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: ListTile(
-                  leading: const Icon(Icons.source_outlined),
+                  leading: Icon(UIcons.regular.globe),
                   title: const Text('Default Source'),
                   trailing: DropdownButton<String>(
                     value: settings.defaultSource,
@@ -172,7 +173,7 @@ class DownloadSettingsScreen extends ConsumerWidget {
               // ── Download Manager Settings ──────────────────────────
               _SectionHeader(
                 label: 'Download Manager',
-                icon: Icons.tune_outlined,
+                icon: UIcons.regular.settings_sliders,
               ),
               const SizedBox(height: 8),
 
@@ -276,7 +277,7 @@ class _PathTile extends StatelessWidget {
       margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: ListTile(
-        leading: Icon(icon),
+        leading: Icon(icon, size: 18),
         title: Text(label),
         subtitle: Text(
           subtitle.isEmpty ? 'Not set' : subtitle,
@@ -320,7 +321,7 @@ class _NumericTile extends StatelessWidget {
               children: [
                 IconButton(
                   visualDensity: VisualDensity.compact,
-                  icon: const Icon(Icons.remove_circle_outline),
+                  icon: Icon(UIcons.regular.minus),
                   onPressed: value > min ? () => onChanged(value - 1) : null,
                 ),
                 SizedBox(
@@ -335,7 +336,7 @@ class _NumericTile extends StatelessWidget {
                 ),
                 IconButton(
                   visualDensity: VisualDensity.compact,
-                  icon: const Icon(Icons.add_circle_outline),
+                  icon: Icon(UIcons.regular.add),
                   onPressed: value < max ? () => onChanged(value + 1) : null,
                 ),
               ],

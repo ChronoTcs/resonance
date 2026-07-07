@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:resonance_app/core/utils/uicons.dart';
+import 'package:resonance_app/core/utils/app_icons.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart' as yt;
 import '../../features/library/data/models/media_item.dart';
 import '../../features/playlist/application/playlist_provider.dart';
@@ -58,15 +60,15 @@ class MediaActionsBottomSheet extends ConsumerWidget {
                         width: 48,
                         height: 48,
                         fit: BoxFit.cover,
-                        placeholder: (c, u) => Container(color: theme.colorScheme.surfaceContainerHighest, child: const Icon(Icons.music_note)),
-                        errorWidget: (c, u, e) => Container(color: theme.colorScheme.surfaceContainerHighest, child: const Icon(Icons.music_note)),
+                        placeholder: (c, u) => Container(color: theme.colorScheme.surfaceContainerHighest, child: Icon(AppIcons.music)),
+                        errorWidget: (c, u, e) => Container(color: theme.colorScheme.surfaceContainerHighest, child: Icon(AppIcons.music)),
                       )
                     : Container(
                         width: 48,
                         height: 48,
                         color: theme.colorScheme.surfaceContainerHighest,
                         child: Icon(
-                          isOnline ? Icons.public : Icons.music_note,
+                          isOnline ? UIcons.regular.world : AppIcons.music,
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
                       ),
@@ -79,7 +81,7 @@ class MediaActionsBottomSheet extends ConsumerWidget {
           // Action: Add to Playlist
           if (playlistId == null)
             ListTile(
-              leading: const Icon(Icons.playlist_add_rounded),
+              leading: Icon(AppIcons.add),
               title: const Text('Add to playlist'),
               onTap: () {
                 Navigator.pop(context);
@@ -88,7 +90,7 @@ class MediaActionsBottomSheet extends ConsumerWidget {
             )
           else
             ListTile(
-              leading: const Icon(Icons.playlist_remove_rounded, color: Colors.red),
+              leading: Icon(AppIcons.close, color: Colors.red),
               title: const Text('Remove from this playlist', style: TextStyle(color: Colors.red)),
               onTap: () {
                 ref.read(playlistProvider.notifier).removeTrackFromPlaylist(playlistId!, item.id ?? item.path);
@@ -99,7 +101,7 @@ class MediaActionsBottomSheet extends ConsumerWidget {
           // Action: Download (Online only)
           if (isOnline)
             ListTile(
-              leading: const Icon(Icons.download_rounded),
+              leading: Icon(AppIcons.download),
               title: const Text('Download to library'),
               onTap: () {
                 // 1. Add to download queue
@@ -122,7 +124,7 @@ class MediaActionsBottomSheet extends ConsumerWidget {
 
           // Action: View Details
           ListTile(
-            leading: const Icon(Icons.info_outline_rounded),
+            leading: Icon(UIcons.regular.info),
             title: const Text('Song details'),
             onTap: () {
               Navigator.pop(context);
@@ -133,7 +135,7 @@ class MediaActionsBottomSheet extends ConsumerWidget {
           // Action: Delete (passed from local library, etc)
           if (onDelete != null)
             ListTile(
-              leading: const Icon(Icons.delete_forever_rounded, color: Colors.red),
+              leading: Icon(AppIcons.trash, color: Colors.red),
               title: const Text('Delete from device', style: TextStyle(color: Colors.red)),
               onTap: () {
                 Navigator.pop(context);
@@ -162,12 +164,12 @@ class MediaActionsBottomSheet extends ConsumerWidget {
                   title: const Text('Select Playlist'),
                   automaticallyImplyLeading: false,
                   actions: [
-                    IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close))
+                    IconButton(onPressed: () => Navigator.pop(context), icon: Icon(AppIcons.close))
                   ],
                 ),
                 // Action: Create New Playlist
                 ListTile(
-                  leading: Icon(Icons.add_rounded, color: theme.colorScheme.primary),
+                  leading: Icon(AppIcons.add, color: theme.colorScheme.primary),
                   title: Text('Create New Playlist', style: TextStyle(color: theme.colorScheme.primary, fontWeight: FontWeight.bold)),
                   onTap: () {
                     Navigator.pop(context);
@@ -188,7 +190,7 @@ class MediaActionsBottomSheet extends ConsumerWidget {
                       itemBuilder: (ctx, i) {
                         final pl = state.local[i];
                         return ListTile(
-                          leading: const Icon(Icons.queue_music_rounded),
+                          leading: Icon(AppIcons.playlist),
                           title: Text(pl.name),
                           onTap: () {
                             final messenger = ScaffoldMessenger.of(ctx);

@@ -33,7 +33,7 @@ class SettingsItemTile extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(icon, size: 20, color: theme.primaryColor),
+                Icon(icon, size: 18, color: theme.primaryColor),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -63,7 +63,7 @@ class SettingsItemTile extends StatelessWidget {
     }
 
     return ListTile(
-      leading: Icon(icon),
+      leading: Icon(icon, size: 18),
       title: Text(title),
       subtitle: Text(subtitle),
       trailing: Container(
@@ -113,7 +113,7 @@ class SettingsDropdownTile extends StatelessWidget {
             tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             collapsedBackgroundColor: Colors.transparent,
             backgroundColor: Colors.transparent,
-            leading: Icon(icon, color: theme.primaryColor),
+            leading: Icon(icon, size: 18, color: theme.primaryColor),
             title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
             subtitle: Text(subtitle),
             children: children,

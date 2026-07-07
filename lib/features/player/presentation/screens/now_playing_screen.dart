@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:resonance_app/core/utils/uicons.dart';
 import 'package:resonance_app/features/player/application/providers/audio_provider.dart';
 import 'package:resonance_app/features/lyrics/presentation/providers/lyrics_ui_provider.dart';
 import 'package:resonance_app/core/widgets/media_artwork_widget.dart';
@@ -10,6 +11,8 @@ import 'package:resonance_app/features/player/application/providers/video_player
 import '../widgets/player_cards.dart';
 import '../widgets/equalizer_sheet.dart';
 import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
+import 'package:resonance_app/core/widgets/collapse_button.dart';
+import 'package:resonance_app/core/widgets/overflow_menu_button.dart';
 // import 'package:resonance_app/core/widgets/hover_widgets.dart'; // Unused
 
 class NowPlayingScreen extends ConsumerWidget {
@@ -77,9 +80,9 @@ class NowPlayingScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 10),
               ListTile(
-                leading: Icon(Icons.equalizer, color: Theme.of(context).colorScheme.onSurface),
+                leading: Icon(UIcons.regular.settings_sliders, color: Theme.of(context).colorScheme.onSurface),
                 title: const Text('Equalizer Settings'),
-                trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                trailing: Icon(UIcons.regular.angle_small_right, size: 20),
                 onTap: () {
                   Navigator.pop(context);
                   showModalBottomSheet(
@@ -183,8 +186,7 @@ class NowPlayingScreen extends ConsumerWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Row(
                   children: [
-                    ReusableHoverIconButton(
-                      icon: Icons.keyboard_arrow_down,
+                    CollapseButton(
                       tooltip: 'Tutup',
                       iconSize: 32,
                       color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
@@ -202,13 +204,12 @@ class NowPlayingScreen extends ConsumerWidget {
                     ),
                     const Spacer(),
                     ReusableHoverIconButton(
-                      icon: Icons.playlist_add,
+                      icon: UIcons.regular.add,
                       tooltip: 'Media Actions',
                       color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
                       onTap: () => _showMediaActions(context, track),
                     ),
-                    ReusableHoverIconButton(
-                      icon: Icons.more_vert,
+                    OverflowMenuButton(
                       tooltip: 'Audio Settings',
                       color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
                       onTap: () => _showAudioSettings(context),

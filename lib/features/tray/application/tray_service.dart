@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
+import 'package:resonance_app/core/data/services/po_token_provider_service.dart';
 import 'package:resonance_app/features/player/application/providers/audio_provider.dart';
 import 'package:resonance_app/features/library/data/models/media_item.dart';
 
@@ -143,7 +144,7 @@ class TrayService with TrayListener {
     // [V19.0 SOTA] Fix 'Sticky Menu' Bug.
     // Menambahkan bringAppToFront: true agar Windows dapat menutup menu 
     // secara otomatis saat klik di luar area menu (Focus Trick).
-    trayManager.popUpContextMenu(bringAppToFront: true);
+    trayManager.popUpContextMenu();
   }
 
   @override
@@ -179,6 +180,7 @@ class TrayService with TrayListener {
   }
 
   Future<void> _handleExit() async {
+    poTokenProviderService.stop();
     await destroy(); // [GUARD] Bersihkan tray
     exit(0);
   }

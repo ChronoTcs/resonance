@@ -328,6 +328,17 @@ class AudioNotifier extends Notifier<AudioState> {
     }
   }
 
+  void addTrackToQueue(MediaItem item) {
+    if (state.queue.isEmpty) {
+      playPlaylist([item]);
+    } else {
+      final updatedQueue = [...state.queue, item];
+      _queue.setQueue(updatedQueue, initialIndex: state.currentIndex);
+      state = state.copyWith(queue: updatedQueue);
+      _updateNextTrack();
+    }
+  }
+
   void preloadTracks(List<MediaItem> items) {
     final ids = items
         .where((e) => e.isStreaming)

@@ -90,14 +90,15 @@ class _ReusableSeekSliderState extends State<ReusableSeekSlider> {
                 SliderTheme(
                   data: SliderTheme.of(context).copyWith(
                     trackHeight: widget.trackHeight,
-                    thumbShape: RoundSliderThumbShape(enabledThumbRadius: widget.thumbRadius),
+                    trackShape: const RetroSliderTrackShape(),
+                    thumbShape: RetroSliderThumbShape(fillColor: theme.scaffoldBackgroundColor),
                     overlayShape: const RoundSliderOverlayShape(overlayRadius: horizontalPadding),
                     activeTrackColor: activeColor,
                     inactiveTrackColor: inactiveColor,
                     thumbColor: activeColor,
                   ),
                   child: Slider(
-                    value: widget.value.clamp(0.0, widget.max),
+                    value: (_isDragging ? _dragValue : widget.value).clamp(0.0, widget.max),
                     max: widget.max > 0 ? widget.max : 1.0,
                     onChanged: (val) {
                       setState(() => _dragValue = val);
@@ -159,7 +160,7 @@ class _ReusableSeekSliderState extends State<ReusableSeekSlider> {
                 ],
               ),
               child: Text(
-                _formatDuration(Duration(seconds: (_isDragging ? _dragValue : (_hoverValue ?? 0)).toInt())),
+                _formatDuration(Duration(milliseconds: (_isDragging ? _dragValue : (_hoverValue ?? 0)).toInt())),
                 style: GoogleFonts.inter(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
@@ -211,4 +212,140 @@ class _TooltipPointerPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class RetroSliderTrackShape extends SliderTrackShape with BaseSliderTrackShape {
+  const RetroSliderTrackShape();
+
+  @override
+  Rect getPreferredRect({
+    required RenderBox parentBox,
+    Offset offset = Offset.zero,
+    required SliderThemeData sliderTheme,
+    bool isEnabled = false,
+    bool isDiscrete = false,
+  }) {
+    final double trackHeight = sliderTheme.trackHeight ?? 4.0;
+    final double trackLeft = offset.dx + 14.0;
+    final double trackTop = offset.dy + (parentBox.size.height - trackHeight) / 2;
+    final double trackWidth = parentBox.size.width - 28.0;
+    return Rect.fromLTWH(trackLeft, trackTop, trackWidth, trackHeight);
+  }
+
+  @override
+  void paint(
+    PaintingContext context,
+    Offset offset, {
+    required RenderBox parentBox,
+    required SliderThemeData sliderTheme,
+    required Animation<double> enableAnimation,
+    required TextDirection textDirection,
+    required Offset thumbCenter,
+    Offset? secondaryOffset,
+    bool isEnabled = false,
+    bool isDiscrete = false,
+    double additionalActiveTrackHeight = 0.0,
+  }) {
+    if (sliderTheme.trackHeight == null || sliderTheme.trackHeight! <= 0) {
+      return;
+    }
+
+    final Rect trackRect = getPreferredRect(
+      parentBox: parentBox,
+      offset: offset,
+      sliderTheme: sliderTheme,
+      isEnabled: isEnabled,
+      isDiscrete: isDiscrete,
+    );
+
+    // Active track (thick)
+    final double activeTrackHeight = 6.0;
+    final activePaint = Paint()..color = sliderTheme.activeTrackColor ?? Colors.blue;
+    final activeRect = RRect.fromRectAndRadius(
+      Rect.fromLTRB(
+        trackRect.left,
+        thumbCenter.dy - (activeTrackHeight / 2),
+        thumbCenter.dx,
+        thumbCenter.dy + (activeTrackHeight / 2),
+      ),
+      const Radius.circular(3.0),
+    );
+    context.canvas.drawRRect(activeRect, activePaint);
+
+    // Inactive track (thin with outline)
+    final double inactiveTrackHeight = 3.0;
+    final inactivePaint = Paint()..color = sliderTheme.inactiveTrackColor ?? Colors.grey;
+    final borderPaint = Paint()
+      ..color = sliderTheme.activeTrackColor ?? Colors.blue
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+
+    final inactiveRect = RRect.fromRectAndRadius(
+      Rect.fromLTRB(
+        thumbCenter.dx,
+        thumbCenter.dy - (inactiveTrackHeight / 2),
+        trackRect.right,
+        thumbCenter.dy + (inactiveTrackHeight / 2),
+      ),
+      const Radius.circular(1.5),
+    );
+    context.canvas.drawRRect(inactiveRect, inactivePaint);
+    context.canvas.drawRRect(inactiveRect, borderPaint);
+  }
+}
+
+class RetroSliderThumbShape extends SliderComponentShape {
+  final double width;
+  final double height;
+  final double radius;
+  final Color fillColor;
+
+  const RetroSliderThumbShape({
+    this.width = 12.0,
+    this.height = 20.0,
+    this.radius = 4.0,
+    required this.fillColor,
+  });
+
+  @override
+  Size getPreferredSize(bool isEnabled, bool isDiscrete) {
+    return Size(width, height);
+  }
+
+  @override
+  void paint(
+    PaintingContext context,
+    Offset center, {
+    required Animation<double> activationAnimation,
+    required Animation<double> enableAnimation,
+    required bool isDiscrete,
+    required TextPainter labelPainter,
+    required RenderBox parentBox,
+    required SliderThemeData sliderTheme,
+    required TextDirection textDirection,
+    required double value,
+    required double textScaleFactor,
+    required Size sizeWithOverflow,
+  }) {
+    final Canvas canvas = context.canvas;
+
+    final fillPaint = Paint()..color = fillColor;
+    final borderPaint = Paint()
+      ..color = sliderTheme.activeTrackColor ?? Colors.blue
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+
+    // Use a pixel-snapped centered drawing approach to avoid pixel jittering during fast progress updates
+    final double left = (center.dx - width / 2).roundToDouble();
+    final double top = (center.dy - height / 2).roundToDouble();
+    final Rect rect = Rect.fromLTWH(left, top, width, height);
+
+    final RRect rrect = RRect.fromRectAndRadius(
+      rect,
+      Radius.circular(radius),
+    );
+
+    canvas.drawRRect(rrect, fillPaint);
+    canvas.drawRRect(rrect, borderPaint);
+  }
 }

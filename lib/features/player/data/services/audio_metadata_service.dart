@@ -30,7 +30,7 @@ class AudioMetadataService {
   /// Synchronizes metadata to all applicable external surfaces.
   Future<void> onTrackChanged(MediaItem track, {required bool isPlaying}) async {
     await Future.wait([
-      _syncAndroidMediaSession(track),
+      _syncAudioServiceMediaItem(track),
       _syncWindowsSmtc(track, isPlaying: isPlaying),
       _syncDiscordPresence(track, position: Duration.zero, duration: track.duration ?? Duration.zero, isPlaying: isPlaying),
     ]);
@@ -82,9 +82,9 @@ class AudioMetadataService {
 
   // ── Platform-Specific Implementations ─────────────────────────────────────
 
-  /// Android: Update MediaSession for lock screen and notification controls.
-  Future<void> _syncAndroidMediaSession(MediaItem track) async {
-    if (!Platform.isAndroid) return;
+  /// Sync MediaSession/SMTC notification metadata via audio_service.
+  Future<void> _syncAudioServiceMediaItem(MediaItem track) async {
+    if (!Platform.isAndroid && !Platform.isWindows) return;
     try {
       final audioHandler = _ref.read(audioHandlerProvider);
       audioHandler.mediaItem.add(
@@ -102,11 +102,11 @@ class AudioMetadataService {
         ),
       );
     } catch (e) {
-      debugPrint('[AudioMetadataService] Android MediaSession sync failed: $e');
+      debugPrint('[AudioMetadataService] MediaItem sync failed: $e');
     }
   }
 
-  /// Windows: Update SMTC with track metadata.
+  /// Windows: Update Taskbar with track metadata.
   Future<void> _syncWindowsSmtc(MediaItem track, {required bool isPlaying}) async {
     if (!Platform.isWindows) return;
     try {
@@ -140,6 +140,14 @@ class AudioMetadataService {
           isPlaying,
           overrideThumbnailUrl: artworkUrl,
         );
+        final audioHandler = _ref.read(audioHandlerProvider);
+        if (audioHandler.mediaItem.value != null) {
+          audioHandler.mediaItem.add(
+            audioHandler.mediaItem.value!.copyWith(
+              artUri: Uri.parse(artworkUrl),
+            ),
+          );
+        }
       }
     } catch (e) {
       debugPrint('[AudioMetadataService] Discord RPC sync failed: $e');

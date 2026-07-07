@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:resonance_app/core/utils/uicons.dart';
 import '../../../lyrics/application/lyrics_translation_provider.dart';
 import 'settings_widgets.dart';
 
@@ -40,7 +41,7 @@ class TranslationSection extends ConsumerWidget {
         const SizedBox(height: 16),
         
         ListTile(
-          leading: const Icon(Icons.translate),
+          leading: Icon(UIcons.regular.language),
           title: const Text('Show Translation Button'),
           subtitle: const Text('Show a button to translate lyrics in the player'),
           trailing: Switch(
@@ -55,7 +56,7 @@ class TranslationSection extends ConsumerWidget {
         const SizedBox(height: 12),
         
         SettingsItemTile(
-          icon: Icons.language,
+          icon: UIcons.regular.language,
           title: 'Target Language',
           subtitle: 'Select language to translate to',
           trailing: DropdownButton<String>(

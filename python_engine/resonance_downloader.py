@@ -23,6 +23,7 @@ import threading
 
 _active_events = {}
 _events_lock = threading.Lock()
+_stdout_lock = threading.Lock()
 
 try:
     import yt_dlp
@@ -41,7 +42,15 @@ except ImportError:
 def emit(obj: dict):
     """Write a JSON event to stdout and flush immediately."""
     try:
-        print(json.dumps(obj, ensure_ascii=True), flush=True)
+        line = (json.dumps(obj, ensure_ascii=True) + '\n').encode('utf-8')
+        with _stdout_lock:
+            sys.stdout.write(line)
+            sys.stdout.flush()
+    except TypeError:
+        # stdout is still text mode (before main() swaps it)
+        with _stdout_lock:
+            sys.stdout.write(json.dumps(obj, ensure_ascii=True) + '\n')
+            sys.stdout.flush()
     except Exception:
         pass
 
@@ -223,6 +232,11 @@ def handle_download(cmd: dict):
         "noplaylist": True, "quiet": True, "no_warnings": True, "nocheckcertificate": True,
         "progress_hooks": [build_progress_hook(download_id)],
         "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "extractor_args": {
+            "youtubepot-bgutilhttp": {
+                "base_url": "http://127.0.0.1:4416"
+            }
+        }
     }
 
     if not is_direct_url:
@@ -336,25 +350,95 @@ def handle_download(cmd: dict):
                 del _active_events[download_id]
 
 
+def handle_resolve_stream(cmd: dict):
+    req_id = cmd.get("id", "unknown")
+    video_id = cmd.get("videoId", "")
+    sys.stderr.write(f"[resolve] START req_id={req_id} videoId={video_id}\n")
+    sys.stderr.flush()
+    try:
+        url = f"https://www.youtube.com/watch?v={video_id}"
+        ydl_opts = {
+            "quiet": True,
+            "no_warnings": True,
+            "nocheckcertificate": True,
+            "format": "bestaudio/best",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "youtube_include_dash_manifest": False,
+            "youtube_include_hls_playlist": False,
+            "extractor_args": {
+                "youtubepot-bgutilhttp": {
+                    "base_url": "http://127.0.0.1:4416"
+                }
+            }
+        }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            stream_url = info.get("url")
+            sys.stderr.write(f"[resolve] DONE req_id={req_id} url_len={len(stream_url or '')}\n")
+            sys.stderr.flush()
+            emit({"id": req_id, "type": "resolved", "url": stream_url})
+    except Exception as e:
+        sys.stderr.write(f"[resolve] ERROR req_id={req_id}: {e}\n")
+        sys.stderr.flush()
+        emit({"id": req_id, "type": "error", "message": str(e)})
+
+
 def main():
-    emit({"type": "ready"})
-    for raw_line in sys.stdin:
-        line = raw_line.strip()
-        if not line: continue
-        try:
-            cmd = json.loads(line)
-            if cmd.get("action") == "download":
-                threading.Thread(target=handle_download, args=(cmd,), daemon=True).start()
-            elif cmd.get("action") == "cancel":
-                cid = cmd.get("id")
-                with _events_lock:
-                    if cid in _active_events:
-                        _active_events[cid].set()
-            elif cmd.get("action") == "ping": emit({"type": "pong"})
-            elif cmd.get("action") == "quit": break
-        except: continue
+    # Force stdin/stdout to unbuffered binary on Windows to fix pipe blocking
+    sys.stdout = open(sys.stdout.fileno(), 'wb', buffering=0)
+    stdin_raw = open(sys.stdin.fileno(), 'rb', buffering=0)
+
+    # Emit ready as bytes directly
+    sys.stdout.write(b'{"type": "ready"}\n')
+    sys.stdout.flush()
+
+    sys.stderr.write('[main] Entering stdin loop\n')
+    sys.stderr.flush()
+
+    buf = b''
+    while True:
+        chunk = stdin_raw.read(1)
+        if not chunk:
+            break
+        buf += chunk
+        if b'\n' in buf:
+            line_bytes, buf = buf.split(b'\n', 1)
+            line = line_bytes.strip().decode('utf-8', errors='replace')
+            if not line:
+                continue
+            sys.stderr.write(f'[main] Got line: {repr(line)}\n')
+            sys.stderr.flush()
+            try:
+                cmd = json.loads(line)
+                if cmd.get('action') == 'download':
+                    threading.Thread(target=handle_download, args=(cmd,), daemon=True).start()
+                elif cmd.get('action') == 'resolve_stream':
+                    threading.Thread(target=handle_resolve_stream, args=(cmd,), daemon=True).start()
+                elif cmd.get('action') == 'cancel':
+                    cid = cmd.get('id')
+                    with _events_lock:
+                        if cid in _active_events:
+                            _active_events[cid].set()
+                elif cmd.get('action') == 'ping':
+                    emit({'type': 'pong'})
+                elif cmd.get('action') == 'quit':
+                    break
+            except Exception as ex:
+                sys.stderr.write(f'[main] JSON parse error: {ex} line={repr(line)}\n')
+                sys.stderr.flush()
+                continue
 
 if __name__ == "__main__":
     import multiprocessing
     multiprocessing.freeze_support()
+
+    # One-shot mode: python resonance_downloader.py --resolve <videoId>
+    # No stdin pipe needed — ideal for Windows process spawning
+    if len(sys.argv) == 3 and sys.argv[1] == '--resolve':
+        video_id = sys.argv[2]
+        # Use text stdout for one-shot (Process.run captures it cleanly)
+        sys.stdout = sys.__stdout__
+        handle_resolve_stream({"id": "oneshot", "videoId": video_id})
+        sys.exit(0)
+
     main()

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:resonance_app/core/utils/uicons.dart';
 import 'package:resonance_app/features/player/application/providers/audio_provider.dart';
 import 'package:resonance_app/features/player/presentation/widgets/equalizer_sheet.dart';
 
@@ -125,12 +126,12 @@ class AudioSettingsSheet extends ConsumerWidget {
           const SizedBox(height: 10),
           ListTile(
             leading: Icon(
-              Icons.equalizer,
+              UIcons.regular.settings_sliders,
               color: Theme.of(context).colorScheme.onSurface,
             ),
             title: const Text('Equalizer Settings'),
             trailing: Icon(
-              Icons.arrow_forward_ios,
+              UIcons.regular.angle_small_right,
               size: 16,
               color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
             ),

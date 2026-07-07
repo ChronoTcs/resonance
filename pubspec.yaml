@@ -31,6 +31,7 @@ dependencies:
   flutter:
     sdk: flutter
   webview_windows: ^0.4.0
+  webview_flutter: ^4.10.0
   cupertino_icons: ^1.0.8
   just_audio: ^0.10.5
   audio_session: ^0.2.2
@@ -43,12 +44,11 @@ dependencies:
   media_kit_video: ^2.0.1
   media_kit_libs_video: ^1.0.7
   audio_service: any
-  smtc_windows: ^1.1.0
+  audio_service_win: ^0.0.3
   path: ^1.9.1
   windows_taskbar: ^1.1.2
-  flutter_discord_rpc: ^1.1.0
+  dart_discord_presence: ^1.2.0
   permission_handler: ^12.0.1
-  metadata_god: ^1.1.0
   mime: ^2.0.0
   scrollable_positioned_list: ^0.3.8
   window_manager: ^0.5.1
@@ -62,9 +62,9 @@ dependencies:
   open_filex: ^4.7.0
   crypto: ^3.0.7
   tray_manager: ^0.5.2
-  flutter_js: ^0.8.7
   sqlite3: ^3.3.0
   sqlite3_flutter_libs: ^0.6.0+eol
+  audio_metadata_reader: ^1.6.0
 
 dev_dependencies:
   flutter_test:
@@ -101,32 +101,11 @@ flutter:
   assets:
     - assets/icons/
     - assets/scripts/
-  #   - images/a_dot_ham.jpeg
 
-  # An image asset can refer to one or more resolution-specific "variants", see
-  # https://flutter.dev/to/resolution-aware-images
-
-  # For details regarding adding assets from package dependencies, see
-  # https://flutter.dev/to/asset-from-package
-
-  # To add custom fonts to your application, add a fonts section here,
-  # in this "flutter" section. Each entry in this list should have a
-  # "family" key with the font family name, and a "fonts" key with a
-  # list giving the asset and other descriptors for the font. For
-  # example:
-  # fonts:
-  #   - family: Schyler
-  #     fonts:
-  #       - asset: fonts/Schyler-Regular.ttf
-  #       - asset: fonts/Schyler-Italic.ttf
-  #         style: italic
-  #   - family: Trajan Pro
-  #     fonts:
-  #       - asset: fonts/TrajanPro.ttf
-  #       - asset: fonts/TrajanPro_Bold.ttf
-  #         weight: 700
-  #
-  # For details regarding fonts from package dependencies,
-  # see https://flutter.dev/to/font-from-package
-dependency_overrides:
-  flutter_rust_bridge: 2.11.1
+  fonts:
+    - family: uicons-regular-rounded
+      fonts:
+        - asset: assets/fonts/uicons-regular-rounded.ttf
+    - family: uicons-solid-rounded
+      fonts:
+        - asset: assets/fonts/uicons-solid-rounded.ttf

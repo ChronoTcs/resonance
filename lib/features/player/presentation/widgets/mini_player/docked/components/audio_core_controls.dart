@@ -4,6 +4,7 @@ import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
 import 'package:resonance_app/core/widgets/play_pause_button.dart';
 import 'package:resonance_app/features/player/application/providers/audio_provider.dart';
 
+import 'package:resonance_app/core/utils/uicons.dart';
 import 'package:resonance_app/features/player/data/models/player_enums.dart';
 
 class AudioCoreControls extends ConsumerWidget {
@@ -25,17 +26,17 @@ class AudioCoreControls extends ConsumerWidget {
             children: [
               ReusableHoverIconButton(
                 tooltip: 'Shuffle',
-                icon: Icons.shuffle,
+                icon: UIcons.regular.shuffle,
                 color: audioState.isShuffleEnabled
                     ? Theme.of(context).primaryColor
                     : Theme.of(context).iconTheme.color?.withValues(alpha: 0.5),
-                iconSize: 20,
+                iconSize: 18,
                 onTap: () => audioNotifier.toggleShuffle(),
               ),
               ReusableHoverIconButton(
                 tooltip: 'Previous',
-                icon: Icons.skip_previous,
-                iconSize: 24,
+                icon: UIcons.regular.step_backward,
+                iconSize: 18,
                 isDisabled: audioState.currentIndex <= 0 &&
                     audioState.loopMode == LoopMode.off,
                 onTap: () => audioNotifier.skipToPrevious(),
@@ -48,8 +49,8 @@ class AudioCoreControls extends ConsumerWidget {
               ),
               ReusableHoverIconButton(
                 tooltip: 'Next',
-                icon: Icons.skip_next,
-                iconSize: 24,
+                icon: UIcons.regular.step_forward,
+                iconSize: 18,
                 isDisabled: audioState.currentIndex >= audioState.queue.length - 1 &&
                     audioState.loopMode == LoopMode.off,
                 onTap: () => audioNotifier.skipToNext(),
@@ -61,12 +62,12 @@ class AudioCoreControls extends ConsumerWidget {
                         ? 'Repeat One'
                         : 'Repeat All',
                 icon: audioState.loopMode == LoopMode.one
-                    ? Icons.repeat_one
-                    : Icons.repeat,
+                    ? UIcons.regular.arrows_repeat_1
+                    : UIcons.regular.arrows_repeat,
                 color: audioState.loopMode == LoopMode.off
                     ? Theme.of(context).iconTheme.color?.withValues(alpha: 0.5)
                     : Theme.of(context).primaryColor,
-                iconSize: 20,
+                iconSize: 18,
                 isSelected: false,
                 onTap: () => audioNotifier.cycleLoopMode(),
               ),
@@ -82,13 +83,13 @@ class AudioCoreControls extends ConsumerWidget {
           PlayPauseButton(
             isPlaying: audioState.isPlaying,
             isLoading: audioState.isLoading,
-            size: PlayPauseSize.medium,
+            size: PlayPauseSize.small,
             onTap: () => audioNotifier.togglePlayPause(),
           ),
           ReusableHoverIconButton(
             tooltip: 'Next',
-            icon: Icons.skip_next,
-            iconSize: 24,
+            icon: UIcons.regular.step_forward,
+            iconSize: 18,
             isDisabled: audioState.currentIndex >= audioState.queue.length - 1 &&
                 audioState.loopMode == LoopMode.off,
             onTap: () => audioNotifier.skipToNext(),

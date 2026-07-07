@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:resonance_app/core/utils/uicons.dart';
 import 'package:resonance_app/features/player/presentation/screens/dedicated_video_player.dart';
 import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
 import 'package:resonance_app/features/player/application/providers/video_player_notifier.dart' as v;
@@ -38,8 +39,8 @@ class VideoDockedPlayer extends ConsumerWidget {
                   ),
                 ),
               )
-            : const Center(
-                child: Icon(Icons.video_library, color: Colors.white24, size: 20),
+            : Center(
+                child: Icon(UIcons.regular.play_alt, color: Colors.white24, size: 20),
               ),
       ),
     );
@@ -135,9 +136,9 @@ class VideoDockedPlayer extends ConsumerWidget {
                               ],
                             ),
                           ),
-                          ReusableHoverIconButton(
+                           ReusableHoverIconButton(
                             tooltip: 'Jump Back 10s',
-                            icon: Icons.replay_10,
+                            icon: UIcons.regular.rotate_left,
                             iconSize: 24,
                             onTap: () => videoNotifier.jump(const Duration(seconds: -10)),
                           ),
@@ -150,7 +151,7 @@ class VideoDockedPlayer extends ConsumerWidget {
                           ),
                           ReusableHoverIconButton(
                             tooltip: 'Jump Forward 10s',
-                            icon: Icons.forward_10,
+                            icon: UIcons.regular.rotate_right,
                             iconSize: 24,
                             onTap: () => videoNotifier.jump(const Duration(seconds: 10)),
                           ),
@@ -159,10 +160,10 @@ class VideoDockedPlayer extends ConsumerWidget {
                               return ReusableHoverIconButton(
                                 tooltip: 'Volume',
                                 icon: videoState.volume == 0
-                                    ? Icons.volume_off
+                                    ? UIcons.regular.volume_off
                                     : videoState.volume < 0.5
-                                        ? Icons.volume_down
-                                        : Icons.volume_up,
+                                        ? UIcons.regular.volume_down
+                                        : UIcons.regular.volume,
                                 iconSize: 20,
                                 onTap: () {
                                   final RenderBox renderBox = buttonContext.findRenderObject() as RenderBox;
@@ -180,7 +181,7 @@ class VideoDockedPlayer extends ConsumerWidget {
                             },
                           ),
                           ReusableHoverIconButton(
-                            icon: Icons.playlist_add,
+                            icon: UIcons.regular.add,
                             iconSize: 20,
                             tooltip: 'Media actions',
                             onTap: () => MediaActionUtils.showMediaActions(
@@ -190,7 +191,7 @@ class VideoDockedPlayer extends ConsumerWidget {
                             ),
                           ),
                           ReusableHoverIconButton(
-                            icon: Icons.close,
+                            icon: UIcons.regular.cross_small,
                             tooltip: 'Close video',
                             iconSize: 20,
                             onTap: () => videoNotifier.closeVideo(),
@@ -209,12 +210,12 @@ class VideoDockedPlayer extends ConsumerWidget {
               right: 0,
               height: 32,
               child: ReusableSeekSlider(
-                value: videoState.position.inSeconds.toDouble(),
-                max: videoState.duration.inSeconds.toDouble() > 0
-                    ? videoState.duration.inSeconds.toDouble()
+                value: videoState.position.inMilliseconds.toDouble(),
+                max: videoState.duration.inMilliseconds.toDouble() > 0
+                    ? videoState.duration.inMilliseconds.toDouble()
                     : 1.0,
                 onChanged: (val) {
-                  videoNotifier.seek(Duration(seconds: val.toInt()));
+                  videoNotifier.seek(Duration(milliseconds: val.toInt()));
                 },
               ),
             ),

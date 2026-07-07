@@ -21,29 +21,48 @@ class DownloaderBridgeDatasource {
   bool get isReady => _isReady;
 
   final _pendingCommands = <String>[];
+  Future<void>? _initFuture;
 
   Future<void> initialize() async {
     if (Platform.isAndroid) return;
+    if (_process != null) return;
+    return _initFuture ??= _performInitialization();
+  }
 
+  Future<void> _performInitialization() async {
     final bridge = _resolveBridge();
+    debugPrint('[DownloaderBridge] Starting process: ${bridge.exe} ${bridge.args.join(' ')}');
     try {
       _process = await Process.start(
         bridge.exe,
         bridge.args,
-        runInShell: bridge.exe == 'python',
+        runInShell: Platform.isWindows,
       );
 
       _stdoutSub = _process!.stdout
           .transform(utf8.decoder)
           .transform(const LineSplitter())
-          .listen(_handleRawLine);
+          .listen((line) {
+            debugPrint('[DownloaderBridge Process STDOUT] $line');
+            _handleRawLine(line);
+          });
 
       _stderrSub = _process!.stderr.transform(utf8.decoder).listen((line) {
+        debugPrint('[DownloaderBridge Process STDERR] $line');
         if (line.contains('MISSING_DEP')) {
           _errorController.add('Python dependency missing: $line');
         }
       });
+
+      _process!.exitCode.then((code) {
+        debugPrint('[DownloaderBridge] Process exited with code: $code');
+        _isReady = false;
+        _process = null;
+        _initFuture = null;
+      });
     } catch (e) {
+      debugPrint('[DownloaderBridge] Process start exception: $e');
+      _initFuture = null;
       final isPython = bridge.exe == 'python';
       _errorController.add(
         'Could not start download bridge (${bridge.exe}): $e\n\n'
@@ -81,9 +100,11 @@ class DownloaderBridgeDatasource {
     }
   }
 
-  void _sendRaw(String line) {
+  Future<void> _sendRaw(String line) async {
     try {
+      debugPrint('[DownloaderBridge Process STDIN] Writing: $line');
       _process?.stdin.writeln(line);
+      await _process?.stdin.flush();
     } catch (e) {
       debugPrint('DownloaderBridgeDatasource: Error writing to stdin: $e');
     }
@@ -96,6 +117,33 @@ class DownloaderBridgeDatasource {
     _process?.kill();
     _process = null;
     _isReady = false;
+  }
+
+  /// Returns exe+args for one-shot process invocation (no stdin pipe needed).
+  /// Prefers raw Python script in dev mode so latest code is always used.
+  ({String exe, List<String> args})? resolveBridgeForOneShot() {
+    if (Platform.isAndroid) return null;
+
+    // Dev mode: prefer Python script directly — skips old compiled .exe
+    final projectRoot =
+        _walkUpToProjectRoot(File(Platform.resolvedExecutable).parent) ??
+        _walkUpToProjectRoot(Directory.current);
+
+    if (projectRoot != null) {
+      final devPy = p.join(projectRoot.path, 'python_engine', 'resonance_downloader.py');
+      if (File(devPy).existsSync()) {
+        final condaPy = 'C:\\Users\\Batara\\miniconda3\\envs\\ml_ds_stable\\python.exe';
+        if (File(condaPy).existsSync()) {
+          return (exe: condaPy, args: ['-u', devPy]);
+        }
+        return (exe: 'python', args: ['-u', devPy]);
+      }
+    }
+
+    // Production: compiled .exe next to Resonance.exe (supports --resolve when rebuilt)
+    final bridge = _resolveBridge();
+    if (bridge.args.isEmpty) return (exe: bridge.exe, args: []);
+    return (exe: bridge.exe, args: bridge.args);
   }
 
   // ── Bridge executable resolution (Moved from DownloadNotifier) ───────────────
@@ -131,7 +179,11 @@ class DownloaderBridgeDatasource {
       // 2) Raw Python script — PREFERRED for active development
       final devPy = p.join(downloaderRoot, 'python_engine', 'resonance_downloader.py');
       if (File(devPy).existsSync()) {
-        return (exe: 'python', args: [devPy]);
+        final condaPy = 'C:\\Users\\Batara\\miniconda3\\envs\\ml_ds_stable\\python.exe';
+        if (File(condaPy).existsSync()) {
+          return (exe: condaPy, args: ['-u', devPy]);
+        }
+        return (exe: 'python', args: ['-u', devPy]);
       }
 
       // 3) PyInstaller .exe already built — Fallback

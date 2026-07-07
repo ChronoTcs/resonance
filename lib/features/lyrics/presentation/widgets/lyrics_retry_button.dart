@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:resonance_app/core/utils/uicons.dart';
 import '../../application/lyrics_translation_provider.dart';
 import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
 // import '../../../../core/widgets/hover_widgets.dart'; // Unused
@@ -53,7 +54,7 @@ class _LyricsRetryButtonState extends ConsumerState<LyricsRetryButton> with Sing
       child: RotationTransition(
         turns: _controller,
         child: Icon(
-          Icons.sync_rounded,
+          UIcons.regular.refresh,
           size: 18,
           color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
         ),

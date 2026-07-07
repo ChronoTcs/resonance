@@ -12,6 +12,7 @@ final youtubeInnerTubeClientProvider = Provider<YoutubeInnerTubeClient>((ref) {
 
 enum YoutubeClientProfile {
   webRemix,      // YouTube Music Web
+  web,           // YouTube Main Desktop (New V20.25 SOTA)
   androidMusic,  // YouTube Music Android
   android,       // YouTube Main Android
 }
@@ -29,20 +30,31 @@ class YoutubeInnerTubeClient {
     Map<String, dynamic> payload, {
     YoutubeClientProfile profile = YoutubeClientProfile.webRemix,
     bool useAuth = false,
+    String? poToken,
     int? signatureTimestamp,
   }) async {
     const apiKey = _apiKey;
     
-    // [V20.16 SOTA Patch] Dynamic API Routing
-    // webRemix optimized for music.youtube.com, while androidMusic uses googleapis endpoint.
-    final String targetBaseUrl = (profile == YoutubeClientProfile.webRemix)
-        ? 'https://music.youtube.com/youtubei/v1'
-        : 'https://youtubei.googleapis.com/youtubei/v1';
+    // [V20.16 SOTA Patch & V20.25 Fix] Dynamic API Routing (Trap #3 Compliance)
+    String targetBaseUrl = 'https://youtubei.googleapis.com/youtubei/v1';
+    if (profile == YoutubeClientProfile.webRemix) {
+      targetBaseUrl = 'https://music.youtube.com/youtubei/v1';
+    } else if (profile == YoutubeClientProfile.web) {
+      targetBaseUrl = 'https://www.youtube.com/youtubei/v1';
+    }
 
     final url = '$targetBaseUrl/$endpoint?key=$apiKey';
 
     // [V20.15 SOTA] Explicit Typing Guard
     payload['context'] = _buildContext(profile, useAuth);
+
+    // [V20.17 SOTA & V20.25] PoToken Isolation Guard
+    // Send poToken for WEB_REMIX or WEB. Prevents Platform Mismatch (400) on Android.
+    if (poToken != null && (profile == YoutubeClientProfile.webRemix || profile == YoutubeClientProfile.web)) {
+      payload['serviceIntegrityDimensions'] = <String, dynamic>{
+        'poToken': poToken,
+      };
+    }
 
     // [V20.12 SOTA] Safe STS Injection
     if (signatureTimestamp != null) {
@@ -69,34 +81,58 @@ class YoutubeInnerTubeClient {
   Map<String, String> _buildHeaders(YoutubeClientProfile profile, bool useAuth) {
     final Map<String, String> headers = {
       'Content-Type': 'application/json',
+      'X-Goog-Api-Format-Version': '2',
     };
 
     if (useAuth) {
       headers.addAll(_authService.getAuthenticatedHeaders());
     }
 
+    // [V20.19 SOTA] Inject Numeric Protocol Headers to avoid Error 400
+    int clientNameInt = 67; // Default Web Remix
+    String clientVersion = "1.20260121.03.00";
+
     switch (profile) {
       case YoutubeClientProfile.webRemix:
-        headers['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
+        clientNameInt = 67;
+        clientVersion = "1.20260121.03.00";
+        headers['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36';
         headers['Origin'] = 'https://music.youtube.com';
         headers['Referer'] = 'https://music.youtube.com/';
+      case YoutubeClientProfile.web:
+        clientNameInt = 1;
+        clientVersion = "2.20240402.09.00";
+        headers['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36';
+        headers['Origin'] = 'https://www.youtube.com';
+        headers['Referer'] = 'https://www.youtube.com/';
         break;
       case YoutubeClientProfile.androidMusic:
-        headers['User-Agent'] = 'com.google.android.apps.youtube.music/6.43.52 (Linux; U; Android 12; en_US) gzip';
+        clientNameInt = 21;
+        clientVersion = "7.24.52";
+        headers['User-Agent'] = 'com.google.android.apps.youtube.music/7.24.52 (Linux; U; Android 12; en_US) gzip';
         break;
       case YoutubeClientProfile.android:
-        headers['User-Agent'] = 'com.google.android.youtube/19.08.35 (Linux; U; Android 12; en_US) gzip';
+        clientNameInt = 3;
+        clientVersion = "21.03.36";
+        headers['User-Agent'] = 'com.google.android.youtube/21.03.36 (Linux; U; Android 12; en_US) gzip';
         break;
+    }
+
+    headers['X-YouTube-Client-Name'] = clientNameInt.toString();
+    headers['X-YouTube-Client-Version'] = clientVersion;
+    
+    // [V20.25 SOTA] Trap #2 Fix: Persistent Visitor ID Guard MUST respect useAuth
+    if (useAuth && _authService.visitorData != null) {
+      headers['X-Goog-Visitor-Id'] = _authService.visitorData!;
     }
 
     return headers;
   }
 
   // [V20.16 SOTA Patch] Identity Stripping Guard
-  // Only injects visitorData if useAuth is true to prevent Identity Mismatch.
   Map<String, dynamic> _buildContext(YoutubeClientProfile profile, bool useAuth) {
     String clientName = "WEB_REMIX";
-    String clientVersion = "1.20240313.01.00";
+    String clientVersion = "1.20260121.03.00";
     String? osName;
     String? osVersion;
     String? androidSdkVersion;
@@ -104,18 +140,22 @@ class YoutubeInnerTubeClient {
     switch (profile) {
       case YoutubeClientProfile.androidMusic:
         clientName = "ANDROID_MUSIC";
-        clientVersion = "6.43.52";
+        clientVersion = "7.24.52";
         osName = "Android";
         osVersion = "12";
         androidSdkVersion = "31";
         break;
       case YoutubeClientProfile.webRemix:
         clientName = "WEB_REMIX";
-        clientVersion = "1.20240313.01.00";
+        clientVersion = "1.20260121.03.00";
+        break;
+      case YoutubeClientProfile.web:
+        clientName = "WEB";
+        clientVersion = "2.20240402.09.00";
         break;
       case YoutubeClientProfile.android:
         clientName = "ANDROID";
-        clientVersion = "19.08.35";
+        clientVersion = "21.03.36";
         osName = "Android";
         osVersion = "12";
         androidSdkVersion = "31";
@@ -130,12 +170,24 @@ class YoutubeInnerTubeClient {
         "hl": "en",
         "gl": "US",
         "utcOffsetMinutes": 0,
-        if (osName != null) "osName": osName,
-        if (osVersion != null) "osVersion": osVersion,
-        if (androidSdkVersion != null) "androidSdkVersion": androidSdkVersion,
-        if (profile != YoutubeClientProfile.webRemix) "platform": "MOBILE",
+        "osName": ?osName,
+        "osVersion": ?osVersion,
+        "androidSdkVersion": ?androidSdkVersion,
+        if (profile != YoutubeClientProfile.webRemix && profile != YoutubeClientProfile.web) "platform": "MOBILE",
       }
     };
+  }
+
+  String getUserAgent(YoutubeClientProfile profile) {
+    switch (profile) {
+      case YoutubeClientProfile.webRemix:
+      case YoutubeClientProfile.web:
+        return 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36';
+      case YoutubeClientProfile.androidMusic:
+        return 'com.google.android.apps.youtube.music/7.24.52 (Linux; U; Android 12; en_US) gzip';
+      case YoutubeClientProfile.android:
+        return 'com.google.android.youtube/21.03.36 (Linux; U; Android 12; en_US) gzip';
+    }
   }
 
   String? getText(dynamic node) {

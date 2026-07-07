@@ -11,6 +11,7 @@ import 'package:resonance_app/core/widgets/media_artwork_widget.dart';
 import 'package:resonance_app/features/player/data/models/player_enums.dart';
 import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
 import 'package:resonance_app/core/widgets/play_pause_button.dart';
+import 'package:resonance_app/core/utils/uicons.dart';
 import 'package:resonance_app/features/lyrics/presentation/widgets/lyrics_translation_toggle.dart';
 
 class MetadataCard extends StatelessWidget {
@@ -216,9 +217,9 @@ class _MiniLyricsCardState extends ConsumerState<MiniLyricsCard> {
                     ],
                   ),
                   ReusableHoverIconButton(
-                    icon: Icons.open_in_full,
+                    icon: UIcons.regular.expand,
                     tooltip: 'Tampilkan Lirik Penuh',
-                    iconSize: 14,
+                    iconSize: 16,
                     onTap: () =>
                         ref.read(lyricsOverlayProvider.notifier).toggle(),
                   ),
@@ -458,7 +459,7 @@ class _NavigationControlCardState extends ConsumerState<NavigationControlCard> {
                     children: [
                       ReusableHoverIconButton(
                         tooltip: 'Shuffle',
-                        icon: Icons.shuffle,
+                        icon: UIcons.regular.shuffle,
                         // SOTA V3.2: Disabled selection background box
                         isSelected: false,
                         color: audioState.isShuffleEnabled
@@ -468,7 +469,7 @@ class _NavigationControlCardState extends ConsumerState<NavigationControlCard> {
                       ),
                       ReusableHoverIconButton(
                         tooltip: 'Previous',
-                        icon: Icons.skip_previous,
+                        icon: UIcons.regular.step_backward,
                         iconSize: 32,
                         isDisabled: audioState.currentIndex <= 0,
                         onTap: audioNotifier.skipToPrevious,
@@ -483,7 +484,7 @@ class _NavigationControlCardState extends ConsumerState<NavigationControlCard> {
                       ),
                       ReusableHoverIconButton(
                         tooltip: 'Next',
-                        icon: Icons.skip_next,
+                        icon: UIcons.regular.step_forward,
                         iconSize: 32,
                         isDisabled:
                             audioState.currentIndex >=
@@ -499,8 +500,8 @@ class _NavigationControlCardState extends ConsumerState<NavigationControlCard> {
                             ? 'Repeat All'
                             : 'Repeat Off',
                         icon: audioState.loopMode == LoopMode.one
-                            ? Icons.repeat_one
-                            : Icons.repeat,
+                            ? UIcons.regular.arrows_repeat_1
+                            : UIcons.regular.arrows_repeat,
                         // SOTA V3.2: Disabled selection background box
                         isSelected: false,
                         color: audioState.loopMode != LoopMode.off
@@ -518,10 +519,10 @@ class _NavigationControlCardState extends ConsumerState<NavigationControlCard> {
                         ReusableHoverIconButton(
                           tooltip: 'Volume',
                           icon: audioState.volume == 0
-                              ? Icons.volume_off
+                              ? UIcons.regular.volume_off
                               : audioState.volume < 50
-                              ? Icons.volume_down
-                              : Icons.volume_up,
+                              ? UIcons.regular.volume_down
+                              : UIcons.regular.volume,
                           iconSize: 20,
                           color: colorScheme.onSurface.withValues(alpha: 0.7),
                           onTap: () {

@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -5,16 +6,17 @@ import 'package:youtube_explode_dart/youtube_explode_dart.dart' as yt;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../core/data/services/media_cache_service.dart';
 import '../../../../core/data/services/storage_service.dart';
-import '../../application/services/youtube_js_engine.dart';
 import '../services/youtube_innertube_client.dart';
+import '../services/youtube_po_token_service.dart';
+import '../../application/services/youtube_auth_service.dart';
+import '../../../download/application/download_service.dart';
 
 final youtubeStreamRepositoryProvider = Provider<YoutubeStreamRepository>((ref) {
   final client = ref.watch(youtubeInnerTubeClientProvider);
   final cacheService = ref.watch(mediaCacheServiceProvider);
-  final jsEngine = ref.watch(youtubeJsEngineProvider);
   final prefs = ref.watch(sharedPreferencesProvider);
   
-  final repo = YoutubeStreamRepository(client, cacheService, jsEngine, prefs);
+  final repo = YoutubeStreamRepository(ref, client, cacheService, prefs);
   ref.onDispose(() => repo.dispose());
   return repo;
 });
@@ -22,13 +24,13 @@ final youtubeStreamRepositoryProvider = Provider<YoutubeStreamRepository>((ref) 
 enum YoutubeEngine { explodeDart, innerTube }
 
 class YoutubeStreamRepository {
+  final Ref _ref;
   final YoutubeInnerTubeClient _client;
   final MediaCacheService _cacheService;
-  final YoutubeJsEngine _jsEngine;
   final SharedPreferences _prefs;
   final yt.YoutubeExplode _explode = yt.YoutubeExplode();
 
-  YoutubeStreamRepository(this._client, this._cacheService, this._jsEngine, this._prefs);
+  YoutubeStreamRepository(this._ref, this._client, this._cacheService, this._prefs);
 
   /// Resolves the final playable audio URL with Cache-First strategy
   Future<String?> getStreamUrl(String videoId) async {
@@ -43,12 +45,75 @@ class YoutubeStreamRepository {
       debugPrint('YoutubeStreamRepository: Cache check error: $e');
     }
 
-    final engine = _getEngineSetting();
-    if (engine == YoutubeEngine.innerTube) {
-      return _getInnerTubeAudioStream(videoId);
+    if (Platform.isWindows) {
+      debugPrint('YoutubeStreamRepository: Resolving stream via Windows Python IPC...');
+      final resolvedUrl = await _ref.read(downloadServiceProvider).resolveStreamUrl(videoId);
+      if (resolvedUrl != null) {
+        debugPrint('YoutubeStreamRepository: Stream resolved successfully via Windows IPC.');
+        // ponytail: yt-dlp uses ANDROID_VR client — URL is UA-locked, must match
+        const userAgent = 'com.google.android.apps.youtube.vr.oculus/1.56.21 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip';
+        return await _cacheService.getAudioPath(videoId, resolvedUrl, userAgent: userAgent);
+      }
+      debugPrint('YoutubeStreamRepository: Windows IPC resolution failed. Escalating to Explode Fail-Safe.');
+    } else {
+      // [V20.26 SOTA] Synchronous Binary PoToken retrieval (Cold-Start)
+      // Instantly generate token based on fresh visitorData. No WebView wait!
+      final visitorData = _ref.read(youtubeAuthServiceProvider).visitorData;
+      String? poToken;
+      if (visitorData != null && visitorData.isNotEmpty) {
+        poToken = await _ref.read(youtubePoTokenServiceProvider).generatePoToken(visitorData);
+      }
+
+      final engine = _getEngineSetting();
+      if (engine == YoutubeEngine.innerTube) {
+        // [V20.18 SOTA] The Indestructible Pipeline
+        final result = await _getInnerTubeAudioWithProfile(videoId, poToken: poToken);
+        if (result != null && result.streamUrl != null) {
+          // [V20.20 SOTA] UA Consistency Handshake
+          final userAgent = _client.getUserAgent(result.profile);
+          debugPrint('YoutubeStreamRepository: Using UA from ${result.profile.name} for download...');
+          // [V20.23 SOTA] PRE-FLIGHT PROBER
+          // Memeriksa nyawa URL sebelum percaya buta
+          debugPrint('YoutubeStreamRepository: Probing stream health...');
+          final isAlive = await _isStreamAlive(result.streamUrl!, userAgent);
+          
+          if (isAlive) {
+            try {
+              return await _cacheService.getAudioPath(videoId, result.streamUrl!, userAgent: userAgent);
+            } catch (e) {
+              debugPrint('YoutubeStreamRepository: Cacher failed. URL might be throttled or forbidden: $e');
+              debugPrint('YoutubeStreamRepository: Escalating to Fail-Safe...');
+            }
+          } else {
+            debugPrint('YoutubeStreamRepository: [PROBER] Detected dead stream (403) from ${result.profile.name}. Rejecting InnerTube...');
+          }
+        }
+        debugPrint('YoutubeStreamRepository: InnerTube Pipeline rejected or failed. Escalating to Explode Fail-Safe for $videoId...');
+      }
     }
     
-    return _searchExplodeStream(videoId);
+    // Final Fallback (Explode Dart)
+    final explodeUrl = await _searchExplodeStream(videoId);
+    if (explodeUrl != null) {
+      // [V20.25 SOTA] Pastikan Cacher menggunakan User-Agent iOS agar terhindar dari pemblokiran Cross-Platform
+      // Karena explode menggunakan ytClients [androidVr, ios].
+      final explodeUa = 'com.google.ios.youtube/19.29.1 (iPhone14,3; U; CPU iOS 15_6_1 like Mac OS X)';
+      return await _cacheService.getAudioPath(videoId, explodeUrl, userAgent: explodeUa);
+    }
+    return null;
+  }
+
+  // [V20.25 SOTA] URL Validator (Anti False-Positive & Trap 403)
+  Future<bool> _isStreamAlive(String url, String userAgent) async {
+    try {
+      // Gunakan HEAD tanpa batasan Range() agar Prober merasakan penolakan 403 yang sesungguhnya!
+      final request = http.Request('HEAD', Uri.parse(url));
+      request.headers['User-Agent'] = userAgent;
+      final response = await http.Client().send(request).timeout(const Duration(seconds: 4));
+      return response.statusCode == 200 || response.statusCode == 206;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<String?> _searchExplodeStream(String videoId) async {
@@ -69,49 +134,74 @@ class YoutubeStreamRepository {
       return audioInfo.url.toString();
     } catch (e) {
       debugPrint('YoutubeStreamRepository: [ERROR] Explode extraction failed: $e');
-      return _getInnerTubeAudioStream(videoId); // Last resort
+      // [V20.26 SOTA] Forward Cold-Start poToken to last resort IF engine wasn't InnerTube before
+      final visitorData = _ref.read(youtubeAuthServiceProvider).visitorData;
+      String? poToken;
+      if (visitorData != null && visitorData.isNotEmpty) {
+        poToken = await _ref.read(youtubePoTokenServiceProvider).generatePoToken(visitorData);
+      }
+      final res = await _getInnerTubeAudioWithProfile(videoId, poToken: poToken);
+      return res?.streamUrl;
     }
   }
 
-  Future<String?> _getInnerTubeAudioStream(String videoId) async {
-    // [V20.7 SOTA Patch] Adaptive Discovery Workflow
-    // Step 1: Attempt 1 (WEB_REMIX) - Try to discover assets via API
-    final firstResult = await _fetchFromInnerTube(videoId, YoutubeClientProfile.webRemix, useAuth: true, sts: null);
+  Future<({String? streamUrl, YoutubeClientProfile profile})?> _getInnerTubeAudioWithProfile(String videoId, {String? poToken}) async {
+    // Step 1: Attempt 1 (WEB_REMIX)
+    final firstResult = await _fetchFromInnerTube(
+      videoId, 
+      YoutubeClientProfile.webRemix, 
+      useAuth: true, 
+      sts: null,
+      poToken: poToken,
+    );
     
     if (firstResult != null && firstResult.streamUrl != null) {
-      return firstResult.streamUrl;
+      return (streamUrl: firstResult.streamUrl, profile: YoutubeClientProfile.webRemix);
     }
 
-    // [V20.13 SOTA Patch] Embed Discovery Bypass Fallback
-    String? discoveredJs = firstResult?.baseJsUrl;
-    if (discoveredJs == null) {
-      debugPrint('YoutubeStreamRepository: API discovery failed. Falling back to Embed Page scraping...');
-      discoveredJs = await _discoverJsUrl(videoId);
+    // [V20.25 SOTA] Opsi Emas: Profil WEB Main!
+    // Klien ini menggunakan Domain Utama www.youtube.com & DIZINKAN memanfaatkan poToken untuk seluruh stream (bahkan non-musik)!
+    debugPrint('YoutubeStreamRepository: Rotating to WEB (Main App SOTA)...');
+    final webResult = await _fetchFromInnerTube(
+      videoId,
+      YoutubeClientProfile.web,
+      useAuth: true,
+      sts: null,
+      poToken: poToken,
+    );
+
+    if (webResult != null && webResult.streamUrl != null) {
+      return (streamUrl: webResult.streamUrl, profile: YoutubeClientProfile.web);
     }
 
-    if (discoveredJs == null) {
-      debugPrint('YoutubeStreamRepository: [CRITICAL] All discovery methods failed.');
-      return null;
-    }
-
-    // Step 2: Initialize STS from Discovered URL
-    debugPrint('YoutubeStreamRepository: Discovered fresh base.js: $discoveredJs. Retrieving STS...');
-    final freshSts = await _jsEngine.getSignatureTimestamp(discoveredJs);
-
-    // Step 3: Attempt 2 (ANDROID_MUSIC) - Resolution using Dynamic STS
-    debugPrint('YoutubeStreamRepository: WEB_REMIX stream failed. Rotating to ANDROID_MUSIC (Dynamic STS)...');
-    final secondResult = await _fetchFromInnerTube(
+    // Step 3: Attempt 3 (ANDROID_MUSIC)
+    debugPrint('YoutubeStreamRepository: Rotating to ANDROID_MUSIC...');
+    final musicResult = await _fetchFromInnerTube(
       videoId, 
       YoutubeClientProfile.androidMusic, 
       useAuth: false, 
-      sts: freshSts,
+      sts: null,
+      poToken: null,
     );
 
-    if (secondResult != null && secondResult.streamUrl != null) {
-      return secondResult.streamUrl;
+    if (musicResult != null && musicResult.streamUrl != null) {
+      return (streamUrl: musicResult.streamUrl, profile: YoutubeClientProfile.androidMusic);
     }
 
-    debugPrint('YoutubeStreamRepository: [CRITICAL] All InnerTube clients failed for $videoId');
+    // Step 4: Attempt 4 (ANDROID)
+    debugPrint('YoutubeStreamRepository: Rotating to ANDROID (Main App)...');
+    final mainAppResult = await _fetchFromInnerTube(
+      videoId, 
+      YoutubeClientProfile.android, 
+      useAuth: false, 
+      sts: null,
+      poToken: null,
+    );
+
+    if (mainAppResult != null && mainAppResult.streamUrl != null) {
+      return (streamUrl: mainAppResult.streamUrl, profile: YoutubeClientProfile.android);
+    }
+
     return null;
   }
 
@@ -120,6 +210,7 @@ class YoutubeStreamRepository {
     YoutubeClientProfile profile, {
     required bool useAuth, 
     int? sts,
+    String? poToken,
   }) async {
     try {
       final data = await _client.post('player', <String, dynamic>{
@@ -132,6 +223,7 @@ class YoutubeStreamRepository {
       profile: profile, 
       useAuth: useAuth,
       signatureTimestamp: sts,
+      poToken: poToken,
       );
 
       final String? jsPath = data['assets']?['js'];
@@ -152,15 +244,42 @@ class YoutubeStreamRepository {
         orElse: () => formats.firstWhere((f) => f['mimeType']?.contains('audio') ?? false, orElse: () => formats.first),
       );
 
-      String? streamUrl = audioFormat['url'] as String? ?? audioFormat['signatureCipher'] as String? ?? audioFormat['cipher'] as String?;
+      // [V20.19 SOTA] Signature Cipher Mastery
+      String? streamUrl;
+      if (audioFormat.containsKey('url')) {
+        streamUrl = audioFormat['url'] as String;
+      } else if (audioFormat.containsKey('signatureCipher')) {
+        final cipher = audioFormat['signatureCipher'] as String;
+        final cipherMap = Uri.splitQueryString(cipher);
+        final baseUrl = cipherMap['url'];
+        final s = cipherMap['s'];
+        final sp = cipherMap['sp'] ?? 'sig'; // Default to 'sig' if sp is missing
+
+        if (Platform.isAndroid) {
+          debugPrint('YoutubeStreamRepository: Deciphering signatureCipher via Android zemer-cipher...');
+          final decipheredUrl = await _ref.read(youtubePoTokenServiceProvider).decipherSignature(cipher, videoId);
+          if (decipheredUrl != null) {
+            streamUrl = decipheredUrl;
+          }
+        } else {
+          if (baseUrl != null && s != null) {
+            // Deciphering fallback path (not reachable in typical Android/Windows scenarios)
+            final baseUri = Uri.parse(baseUrl);
+            final updatedParams = Map<String, String>.from(baseUri.queryParameters);
+            updatedParams[sp] = s;
+            streamUrl = baseUri.replace(queryParameters: updatedParams).toString();
+          }
+        }
+      }
+
       if (streamUrl == null) return (streamUrl: null, baseJsUrl: baseJsUrl);
       
-      // [GUARDRAIL 2] Apply QuickJS n-transform decipher via YoutubeJsEngine
-      final String? n = audioFormat['n'] as String? ?? _extractNFromUrl(streamUrl);
-      if (n != null && baseJsUrl != null) {
-        debugPrint('YoutubeStreamRepository: Applying n-transform deciphering for ${profile.name}.');
-        final decipheredN = await _jsEngine.decipherN(n, baseJsUrl);
-        streamUrl = _replaceNInUrl(streamUrl, n, decipheredN);
+      if (Platform.isAndroid) {
+        debugPrint('YoutubeStreamRepository: Transforming n-parameter via Android zemer-cipher...');
+        final transformedUrl = await _ref.read(youtubePoTokenServiceProvider).decipherN(streamUrl);
+        if (transformedUrl != null) {
+          streamUrl = transformedUrl;
+        }
       }
 
       return (streamUrl: streamUrl, baseJsUrl: baseJsUrl);
@@ -175,57 +294,7 @@ class YoutubeStreamRepository {
     return val == 'explode' ? YoutubeEngine.explodeDart : YoutubeEngine.innerTube;
   }
 
-  String? _extractNFromUrl(String url) {
-    try {
-      final uri = Uri.parse(url);
-      return uri.queryParameters['n'];
-    } catch (_) {
-      return null;
-    }
-  }
-
-  String _replaceNInUrl(String url, String oldN, String newN) {
-    return url.replaceFirst('n=$oldN', 'n=$newN');
-  }
-
   void dispose() {
     _explode.close();
-  }
-
-  /// [V20.14 SOTA Patch] The Homepage Anchor
-  /// Scrapes the main YouTube Homepage to find the active player JS.
-  /// Reverted from Embed/Iframe API to ensure 100% reliability for Official Tracks.
-  Future<String?> _discoverJsUrl(String videoId) async {
-    try {
-      final response = await http.get(
-        Uri.parse('https://www.youtube.com/'),
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
-          // [V20.12 SOTA Patch] GDPR/EU Consent Bypass Guard
-          'Cookie': 'CONSENT=YES+cb; SOCS=CAI+BHVuaXQ+',
-          'Accept': '*/*',
-        },
-      );
-      
-      if (response.statusCode != 200) return null;
-
-      // [V20.14 SOTA Patch] Indestructible Regex (JS Discovery Guard)
-      // Highly permissive pattern to handle dynamic player folder structures.
-      final regex = RegExp(r'''(/|\\/)?s(/|\\/)player(/|\\/)[a-zA-Z0-9_-]+(/|\\/)[^\s"'\>]+base\.js''');
-      final match = regex.firstMatch(response.body);
-      
-      if (match != null) {
-        // [V20.11 SOTA Patch] URL Sanitization
-        final path = match.group(0)!
-            .replaceAll(r'\/', '/')
-            .replaceAll(r'\', '/');
-        return 'https://www.youtube.com$path';
-      }
-
-      return null;
-    } catch (e) {
-      debugPrint('YoutubeStreamRepository: Homepage discovery ERROR: $e');
-      return null;
-    }
   }
 }

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:resonance_app/core/utils/uicons.dart';
 import '../../application/maintenance_provider.dart';
-import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
-// import '../../../../core/widgets/hover_widgets.dart'; // Unused
+import 'package:resonance_app/core/widgets/danger_icon_button.dart';
 
 class CacheManagementSection extends ConsumerWidget {
   const CacheManagementSection({super.key});
@@ -31,7 +31,7 @@ class CacheManagementSection extends ConsumerWidget {
           child: Theme(
             data: theme.copyWith(dividerColor: Colors.transparent),
             child: ExpansionTile(
-              leading: const Icon(Icons.storage),
+              leading: Icon(UIcons.regular.hdd),
               title: const Text('Local Cache Management'),
               subtitle: Text('Total Size: ${maintenance.cacheSize}'),
               childrenPadding: const EdgeInsets.only(bottom: 8),
@@ -58,9 +58,9 @@ class CacheManagementSection extends ConsumerWidget {
                 
                 // Stream (Nested Expansion)
                 ExpansionTile(
-                  leading: const Padding(
-                    padding: EdgeInsets.only(left: 16),
-                    child: Icon(Icons.stream, size: 20),
+                  leading: Padding(
+                    padding: const EdgeInsets.only(left: 16),
+                    child: Icon(UIcons.regular.waveform, size: 20),
                   ),
                   title: const Text('Stream Cache', style: TextStyle(fontSize: 14)),
                   subtitle: Text(
@@ -97,7 +97,7 @@ class CacheManagementSection extends ConsumerWidget {
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   child: TextButton.icon(
                     onPressed: () => _showClearDialog(context, 'all', 'ALL CACHE DATA', notifier, isDoubleGuard: true),
-                    icon: const Icon(Icons.delete_forever, color: Colors.redAccent),
+                    icon: Icon(UIcons.regular.trash, color: Colors.redAccent),
                     label: const Text('Clear All Cache', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
                   ),
                 ),
@@ -120,10 +120,8 @@ class CacheManagementSection extends ConsumerWidget {
       contentPadding: EdgeInsets.only(left: isNested ? 48 : 32, right: 16),
       title: Text(title, style: const TextStyle(fontSize: 14)),
       subtitle: Text(size, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-      trailing: ReusableHoverIconButton(
-        icon: Icons.delete_outline,
+      trailing: DangerIconButton(
         iconSize: 20,
-        color: Colors.redAccent,
         onTap: onClear,
         tooltip: 'Clear $title',
       ),

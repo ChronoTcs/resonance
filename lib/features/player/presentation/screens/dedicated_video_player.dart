@@ -4,12 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart' hide VideoState;
+import 'package:resonance_app/core/utils/uicons.dart';
 import '../../application/providers/video_player_notifier.dart';
 import 'package:resonance_app/core/utils/formatters.dart';
 import 'package:resonance_app/core/widgets/reusable_seek_slider.dart';
 import '../notifiers/player_ui_controller.dart';
 import 'dedicated_fullscreen_video.dart';
 import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
+import 'package:resonance_app/core/widgets/app_back_button.dart';
 
 class DedicatedVideoPlayer extends ConsumerStatefulWidget {
   const DedicatedVideoPlayer({super.key});
@@ -40,18 +42,17 @@ class _DedicatedVideoPlayerState extends ConsumerState<DedicatedVideoPlayer> {
       return Scaffold(
         appBar: AppBar(
           title: const Text('Video Player'),
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () => Navigator.pop(context),
+          leading: AppBackButton(
+            onTap: () => Navigator.pop(context),
           ),
         ),
-        body: const Center(
+        body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.computer, size: 64, color: Colors.grey),
-              SizedBox(height: 16),
-              Text(
+              Icon(UIcons.regular.computer, size: 64, color: Colors.grey),
+              const SizedBox(height: 16),
+              const Text(
                 'Video Player is only supported on Windows.',
                 style: TextStyle(fontSize: 16, color: Colors.grey),
               ),
@@ -116,11 +117,8 @@ class _DedicatedVideoPlayerState extends ConsumerState<DedicatedVideoPlayer> {
                         ),
                         child: Row(
                           children: [
-                            ReusableHoverIconButton(
-                              icon: Icons.arrow_back,
+                            AppBackButton(
                               color: Colors.white,
-                              iconSize: 20,
-                              tooltip: 'Back',
                               onTap: () {
                                 videoNotifier.setActiveViewType(VideoPlayerViewType.mini);
                                 Navigator.pop(context);
@@ -177,12 +175,12 @@ class _DedicatedVideoPlayerState extends ConsumerState<DedicatedVideoPlayer> {
                             Padding(
                               padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 2.0),
                               child: ReusableSeekSlider(
-                                value: videoState.position.inSeconds.toDouble(),
-                                max: videoState.duration.inSeconds.toDouble() > 0 
-                                    ? videoState.duration.inSeconds.toDouble() 
+                                value: videoState.position.inMilliseconds.toDouble(),
+                                max: videoState.duration.inMilliseconds.toDouble() > 0 
+                                    ? videoState.duration.inMilliseconds.toDouble() 
                                     : 1.0,
                                 onChanged: (val) {
-                                  videoNotifier.seek(Duration(seconds: val.toInt()));
+                                  videoNotifier.seek(Duration(milliseconds: val.toInt()));
                                   ref.read(playerUIProvider.notifier).onInteraction(videoState.isPlaying);
                                 },
                               ),
@@ -211,7 +209,7 @@ class _DedicatedVideoPlayerState extends ConsumerState<DedicatedVideoPlayer> {
                                       mainAxisAlignment: MainAxisAlignment.center,
                                       children: [
                                         ReusableHoverIconButton(
-                                          icon: Icons.replay_10,
+                                          icon: UIcons.regular.rotate_left,
                                           iconSize: 22,
                                           tooltip: 'Skip Back 10s',
                                           color: Colors.white,
@@ -224,8 +222,8 @@ class _DedicatedVideoPlayerState extends ConsumerState<DedicatedVideoPlayer> {
                                         ReusableHoverIconButton(
                                           tooltip: videoState.isPlaying ? 'Pause' : 'Play',
                                           icon: videoState.isPlaying
-                                              ? Icons.pause_circle_filled
-                                              : Icons.play_circle_filled,
+                                              ? UIcons.solid.pause_circle
+                                              : UIcons.solid.play_circle,
                                           iconSize: 42,
                                           color: theme.primaryColor,
                                           onTap: () {
@@ -235,7 +233,7 @@ class _DedicatedVideoPlayerState extends ConsumerState<DedicatedVideoPlayer> {
                                         ),
                                         const SizedBox(width: 12),
                                         ReusableHoverIconButton(
-                                          icon: Icons.forward_10,
+                                          icon: UIcons.regular.rotate_right,
                                           iconSize: 22,
                                           tooltip: 'Skip Forward 10s',
                                           color: Colors.white,
@@ -258,7 +256,7 @@ class _DedicatedVideoPlayerState extends ConsumerState<DedicatedVideoPlayer> {
                                             (videoState.currentVideo?.path.startsWith('http') ?? false))
                                           PopupMenuButton<VideoTrack>(
                                             tooltip: 'Quality',
-                                            icon: const Icon(Icons.hd_outlined, color: Colors.white70, size: 20),
+                                            icon: Icon(UIcons.regular.high_definition, color: Colors.white70, size: 20),
                                             onSelected: (track) {
                                               videoNotifier.setVideoTrack(track);
                                               ref.read(playerUIProvider.notifier).onInteraction(videoState.isPlaying);
@@ -274,10 +272,10 @@ class _DedicatedVideoPlayerState extends ConsumerState<DedicatedVideoPlayer> {
                                         
                                         ReusableHoverIconButton(
                                           icon: videoState.volume == 0
-                                              ? Icons.volume_off
+                                              ? UIcons.regular.volume_off
                                               : videoState.volume < 0.5
-                                                  ? Icons.volume_down
-                                                  : Icons.volume_up,
+                                                  ? UIcons.regular.volume_down
+                                                  : UIcons.regular.volume,
                                           iconSize: 20,
                                           tooltip: 'Volume',
                                           color: Colors.white70,
@@ -288,7 +286,7 @@ class _DedicatedVideoPlayerState extends ConsumerState<DedicatedVideoPlayer> {
                                         ),
                                         const SizedBox(width: 8),
                                         ReusableHoverIconButton(
-                                          icon: Icons.fullscreen,
+                                          icon: UIcons.regular.expand,
                                           iconSize: 20,
                                           tooltip: 'Fullscreen',
                                           color: Colors.white70,

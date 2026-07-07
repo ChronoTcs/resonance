@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance_app/core/widgets/media_artwork_widget.dart';
 import 'package:resonance_app/core/widgets/media_actions_bottom_sheet.dart';
 import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
+import 'package:resonance_app/core/utils/uicons.dart';
 import 'package:resonance_app/features/library/application/library_provider.dart';
 import 'package:resonance_app/features/player/presentation/widgets/mini_player/shared/audio_settings_sheet.dart';
 import 'package:resonance_app/features/player/presentation/widgets/player_cards.dart';
@@ -114,13 +115,13 @@ class FullScreenAudioView extends ConsumerWidget {
       ),
       actions: [
         ReusableHoverIconButton(
-          icon: Icons.playlist_add,
+          icon: UIcons.regular.add,
           color: Colors.white70,
           tooltip: 'Media Actions',
           onTap: () => _showMediaActions(context, ref, displayTrack),
         ),
         ReusableHoverIconButton(
-          icon: Icons.more_horiz,
+          icon: UIcons.regular.menu_dots,
           color: Colors.white70,
           tooltip: 'Audio Settings',
           // [DRY PRINCIPLE] Memanfaatkan kembali AudioSettingsSheet yang sudah
@@ -128,7 +129,7 @@ class FullScreenAudioView extends ConsumerWidget {
           onTap: () => AudioSettingsSheet.show(context),
         ),
         ReusableHoverIconButton(
-          icon: Icons.close_fullscreen,
+          icon: UIcons.regular.compress,
           color: Colors.white70,
           tooltip: 'Exit',
           onTap: () => Navigator.pop(context),

@@ -9,8 +9,9 @@ import '../../../../core/widgets/media_actions_bottom_sheet.dart';
 import '../../../../core/widgets/media_artwork_widget.dart';
 import '../../../player/presentation/screens/web_video_sniffer_screen.dart';
 import '../../../player/application/providers/video_player_notifier.dart';
+import 'package:resonance_app/core/utils/uicons.dart';
 import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
-// import 'package:resonance_app/core/widgets/hover_widgets.dart'; // Removed
+import 'package:resonance_app/core/widgets/overflow_menu_button.dart';
 import 'package:resonance_app/features/playlist/presentation/screens/playlist_screen.dart';
 
 class LibraryScreen extends ConsumerStatefulWidget {
@@ -126,19 +127,20 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
         bottom: TabBar(
           controller: _tabController,
           tabs: Platform.isAndroid
-              ? const [
-                  Tab(text: 'Local', icon: Icon(Icons.folder_open)),
-                  Tab(text: 'Playlists', icon: Icon(Icons.queue_music)),
+              ? [
+                  Tab(text: 'Local', icon: Icon(UIcons.regular.folder_open, size: 18)),
+                  Tab(text: 'Playlists', icon: Icon(UIcons.regular.list_music, size: 18)),
                 ]
-              : const [
-                  Tab(text: 'Music', icon: Icon(Icons.music_note)),
-                  Tab(text: 'Video', icon: Icon(Icons.movie)),
+              : [
+                  Tab(text: 'Music', icon: Icon(UIcons.regular.music, size: 18)),
+                  Tab(text: 'Video', icon: Icon(UIcons.regular.video_camera, size: 18)),
                 ],
         ),
         actions: [
           ReusableHoverIconButton(
-            icon: _isSearching ? Icons.close : Icons.search,
+            icon: _isSearching ? UIcons.regular.cross_small : UIcons.regular.search,
             tooltip: _isSearching ? 'Close search' : 'Search library',
+            iconSize: 18,
             onTap: () {
               setState(() {
                 if (_isSearching) {
@@ -152,8 +154,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
             },
           ),
           ReusableHoverIconButton(
-            icon: libraryState.isLoading ? null : Icons.refresh,
+            icon: libraryState.isLoading ? null : UIcons.regular.refresh,
             tooltip: 'Scan folders',
+            iconSize: 18,
             onTap: () {
               // Only scan if on Local Library tab (index 0)
               if (_tabController.index == 0) {
@@ -216,7 +219,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                   width: 48,
                   height: 48,
                   borderRadius: 4,
-                  placeholderIcon: isAudio ? Icons.music_note : Icons.movie,
+                  placeholderIcon: isAudio ? UIcons.regular.music : UIcons.regular.video_camera,
                 )
               : Container(
                   width: 48,
@@ -225,8 +228,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                   color: Colors.blueAccent.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(4),
                   ),
-                  child: const Icon(
-                    Icons.movie,
+                  child: Icon(
+                    UIcons.regular.video_camera,
                     color: Colors.blueAccent,
                   ),
                 ),
@@ -236,8 +239,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-          trailing: ReusableHoverIconButton(
-            icon: Icons.more_vert,
+          trailing: OverflowMenuButton(
             tooltip: 'More options',
             onTap: () {
               showModalBottomSheet(
@@ -287,7 +289,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
               Expanded(
                 child: _buildChoiceCard(
                   title: 'Local Videos',
-                  icon: Icons.folder,
+                  icon: UIcons.regular.folder,
                   subtitle: '${videoList.length} files found',
                   onTap: () {
                     // Just stay in the list view
@@ -298,7 +300,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
               Expanded(
                 child: _buildChoiceCard(
                   title: 'Online Video',
-                  icon: Icons.public,
+                  icon: UIcons.regular.globe,
                   subtitle: 'Web Sniffer',
                   color: Colors.blueAccent,
                   onTap: () {

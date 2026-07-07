@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:resonance_app/core/utils/uicons.dart';
 import '../../application/providers/equalizer_controller.dart';
 
 class EqualizerSheet extends ConsumerWidget {
@@ -94,7 +95,7 @@ class EqualizerSheet extends ConsumerWidget {
                     value: eqState.preset,
                     dropdownColor: colorScheme.surfaceContainerHighest,
                     icon: Icon(
-                      Icons.keyboard_arrow_down,
+                      UIcons.regular.angle_small_down,
                       color: onSurfaceVariant,
                       size: 20,
                     ),

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:webview_windows/webview_windows.dart';
 import 'package:path/path.dart' as p;
+import 'package:resonance_app/core/utils/uicons.dart';
 import '../../application/services/youtube_auth_service.dart';
 
 class YoutubeLoginScreen extends ConsumerStatefulWidget {
@@ -114,7 +115,7 @@ class _YoutubeLoginScreenState extends ConsumerState<YoutubeLoginScreen> {
         backgroundColor: Colors.black,
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: Icon(UIcons.regular.refresh),
             onPressed: () => _controller.loadUrl('https://music.youtube.com/'),
           ),
         ],

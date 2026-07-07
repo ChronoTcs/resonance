@@ -61,3 +61,7 @@ android {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    implementation("com.github.ZemerTeam:zemer-cipher:master-SNAPSHOT")
+}
