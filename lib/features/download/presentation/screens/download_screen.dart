@@ -1,13 +1,15 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:resonance_app/core/utils/uicons.dart';
-import 'package:resonance_app/core/utils/app_icons.dart';
-import 'package:resonance_app/features/download/data/models/download_item.dart';
-import 'package:resonance_app/features/download/application/providers/download_provider.dart';
-import 'package:resonance_app/features/download/application/providers/download_settings_provider.dart';
-import 'package:resonance_app/features/download/presentation/screens/download_settings_screen.dart';
-import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
+import 'package:silky_scroll/silky_scroll.dart';
+import 'package:resonance/core/utils/uicons.dart';
+import 'package:resonance/core/utils/app_icons.dart';
+import 'package:resonance/features/download/data/models/download_item.dart';
+import 'package:resonance/features/download/application/providers/download_provider.dart';
+import 'package:resonance/features/download/application/providers/download_settings_provider.dart';
+import 'package:resonance/features/download/presentation/screens/download_settings_screen.dart';
+import 'package:resonance/core/widgets/top_navigation_header.dart';
+import 'package:resonance/core/widgets/reusable_hover_icon_button.dart';
 
 class DownloadScreen extends ConsumerStatefulWidget {
   const DownloadScreen({super.key});
@@ -79,51 +81,88 @@ class _DownloadScreenState extends ConsumerState<DownloadScreen>
         .where((i) => i.status == DownloadStatus.done)
         .length;
 
+    final bool isDesktop = MediaQuery.of(context).size.width > 600;
+
     return Scaffold(
-      body: CustomScrollView(
-        slivers: [
-          // ─── Header ──────────────────────────────────────────────
-          SliverToBoxAdapter(
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      body: Column(
+        children: [
+          if (isDesktop) ...[
+            TopNavigationHeader(
+              left: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Download Manager',
-                          style: theme.textTheme.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '$activeCount active · $queuedCount queued · $doneCount done',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.hintColor,
-                          ),
-                        ),
-                      ],
+                  Text(
+                    'Download Manager',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                  ReusableHoverIconButton(
-                    icon: UIcons.regular.settings,
-                    tooltip: 'Download Settings',
-                    iconSize: 18,
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const DownloadSettingsScreen(),
-                      ),
+                  const SizedBox(width: 12),
+                  Text(
+                    '$activeCount active · $queuedCount queued · $doneCount done',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.hintColor,
                     ),
                   ),
                 ],
               ),
+              right: ReusableHoverIconButton(
+                icon: UIcons.regular.settings,
+                tooltip: 'Download Settings',
+                iconSize: 18,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const DownloadSettingsScreen(),
+                  ),
+                ),
+              ),
             ),
-          ),
+          ] else ...[
+            TopNavigationHeader(
+              left: Text(
+                'Download Manager',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              right: ReusableHoverIconButton(
+                icon: UIcons.regular.settings,
+                tooltip: 'Download Settings',
+                iconSize: 18,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const DownloadSettingsScreen(),
+                  ),
+                ),
+              ),
+            ),
+            Container(
+              height: 28,
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              alignment: Alignment.centerLeft,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surface,
+                border: Border(
+                  bottom: BorderSide(
+                    color: theme.dividerColor.withValues(alpha: 0.05),
+                    width: 1,
+                  ),
+                ),
+              ),
+              child: Text(
+                '$activeCount active · $queuedCount queued · $doneCount done',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.hintColor,
+                ),
+              ),
+            ),
+          ],
+          Expanded(
+            child: SilkyCustomScrollView(
+              slivers: [
 
           // ─── Input Panel ──────────────────────────────────────────
           SliverToBoxAdapter(
@@ -390,6 +429,9 @@ class _DownloadScreenState extends ConsumerState<DownloadScreen>
             ),
         ],
       ),
+    ),
+  ],
+),
     );
   }
 }
@@ -630,7 +672,7 @@ class _DownloadTileState extends ConsumerState<_DownloadTile> {
                               ),
                             ),
                           )
-                        : SingleChildScrollView(
+                        : SilkySingleChildScrollView(
                             reverse: true, // Always show newest logs
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,

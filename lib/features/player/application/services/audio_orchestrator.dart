@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/application/services/maintenance_service.dart';
+import '../../../explore/data/repositories/youtube_search_repository.dart';
+import '../../../library/data/models/media_item.dart';
 import '../providers/audio_provider.dart';
 import 'playback_restoration_service.dart';
 import 'playback_sync_service.dart';
@@ -20,6 +22,12 @@ final audioOrchestratorProvider = Provider<AudioOrchestrator>((ref) {
 class AudioOrchestrator {
   final Ref _ref;
   bool _initialized = false;
+
+  // [Radio spam guard] Minimum tracks remaining before we refill
+  static const int _radioRefillThreshold = 8;
+  // [Radio spam guard] Minimum gap between consecutive radio fetches
+  DateTime? _lastRadioFetch;
+  static const Duration _radioCooldown = Duration(seconds: 60);
 
   AudioOrchestrator(this._ref);
 
@@ -45,8 +53,39 @@ class AudioOrchestrator {
       final isPlaying = _ref.read(audioProvider).isPlaying;
       _ref.read(playbackSyncServiceProvider).updateSync(next, isPlaying);
 
+      // Artwork + Lyrics: only on track change, not on every play/pause toggle
+      if (next != null && next != prev) {
+        _ref.read(playbackSyncServiceProvider).syncPersistentMetadataOnTrackChange(next);
+      }
+
       // Reset Gapless Lock on track change
       _ref.read(gaplessPrefetchServiceProvider).resetLock();
+
+      // [Radio] Fire-and-forget radio recommendation seeding.
+      // Guards:
+      //   1. Only when queue has ≤ _radioRefillThreshold tracks left ahead.
+      //   2. Cooldown: minimum 60s between fetches.
+      // This prevents cascading — radio tracks are also isStreaming, so
+      // without the threshold guard every radio track would re-trigger.
+      if (next != null && next.isStreaming) {
+        final seedId = next.id ?? next.path;
+        if (seedId.isNotEmpty) {
+          final audioState = _ref.read(audioProvider);
+          final remaining =
+              audioState.queue.length - audioState.currentIndex - 1;
+          final now = DateTime.now();
+          // Always bypass cooldown if the remaining queue is empty (meaning a new seed track was manually played)
+          final isManualSeedPlay = remaining <= 0;
+          final cooldownPassed = isManualSeedPlay ||
+              _lastRadioFetch == null ||
+              now.difference(_lastRadioFetch!) > _radioCooldown;
+
+          if (remaining <= _radioRefillThreshold && cooldownPassed) {
+            _lastRadioFetch = now;
+            _fetchAndAppendRadio(seedId);
+          }
+        }
+      }
     });
 
     _ref.listen(audioProvider.select((s) => s.isPlaying), (prev, next) {
@@ -74,5 +113,33 @@ class AudioOrchestrator {
         }
       }
     });
+  }
+
+  /// Async radio fetch — fire-and-forget, never throws.
+  /// Deduplicates against current queue before appending.
+  Future<void> _fetchAndAppendRadio(String videoId) async {
+    try {
+      final repo = _ref.read(youtubeSearchRepositoryProvider);
+      final recs = await repo.getRadioRecommendations(videoId);
+      if (recs.isEmpty) return;
+
+      final notifier = _ref.read(audioProvider.notifier);
+      final existingIds = _ref.read(audioProvider).queue
+          .map((t) => t.id ?? t.path)
+          .toSet();
+
+      // ponytail: batch-append to fire _updateNextTrack once, not once per track
+      final newTracks = <MediaItem>[];
+      for (final track in recs) {
+        final id = track.id ?? track.path;
+        if (!existingIds.contains(id)) {
+          newTracks.add(track);
+          existingIds.add(id); // prevent duplicate within the same batch
+        }
+      }
+      if (newTracks.isNotEmpty) {
+        notifier.addTracksToQueue(newTracks);
+      }
+    } catch (_) {}
   }
 }

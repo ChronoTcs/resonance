@@ -2,16 +2,16 @@ import 'dart:ui';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:resonance_app/core/utils/uicons.dart';
-import 'package:resonance_app/features/player/presentation/screens/dedicated_video_player.dart';
-import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
-import 'package:resonance_app/features/player/application/providers/video_player_notifier.dart' as v;
+import 'package:resonance/core/utils/uicons.dart';
+import 'package:resonance/features/player/presentation/screens/dedicated_video_player.dart';
+import 'package:resonance/core/widgets/reusable_hover_icon_button.dart';
+import 'package:resonance/features/player/application/providers/video_player_notifier.dart' as v;
 import 'package:media_kit_video/media_kit_video.dart' hide VideoState;
-import 'package:resonance_app/core/widgets/reusable_seek_slider.dart';
-import 'package:resonance_app/features/player/presentation/notifiers/mini_player_view_notifier.dart';
-import 'package:resonance_app/core/widgets/play_pause_button.dart';
-import 'package:resonance_app/features/player/presentation/widgets/mini_player/shared/volume_popup_dialog.dart';
-import 'package:resonance_app/features/player/utils/media_action_utils.dart';
+import 'package:resonance/core/widgets/reusable_seek_slider.dart';
+import 'package:resonance/features/player/presentation/notifiers/mini_player_view_notifier.dart';
+import 'package:resonance/core/widgets/play_pause_button.dart';
+import 'package:resonance/features/player/presentation/widgets/mini_player/shared/volume_popup_dialog.dart';
+import 'package:resonance/features/player/utils/media_action_utils.dart';
 
 class VideoDockedPlayer extends ConsumerWidget {
   const VideoDockedPlayer({super.key});

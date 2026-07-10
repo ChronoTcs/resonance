@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:resonance_app/core/utils/uicons.dart';
-import 'package:resonance_app/features/player/application/providers/audio_provider.dart';
-import 'package:resonance_app/features/player/presentation/widgets/equalizer_sheet.dart';
+import 'package:resonance/core/utils/uicons.dart';
+import 'package:resonance/features/player/application/providers/audio_provider.dart';
+import 'package:resonance/features/player/presentation/widgets/equalizer_sheet.dart';
 
 class AudioSettingsSheet extends ConsumerWidget {
   const AudioSettingsSheet({super.key});

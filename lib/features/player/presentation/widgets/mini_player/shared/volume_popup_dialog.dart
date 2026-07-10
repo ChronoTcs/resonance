@@ -1,9 +1,9 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:resonance_app/core/utils/uicons.dart';
-import 'package:resonance_app/features/player/application/providers/audio_provider.dart';
-import 'package:resonance_app/features/player/application/providers/video_player_notifier.dart' as v;
+import 'package:resonance/core/utils/uicons.dart';
+import 'package:resonance/features/player/application/providers/audio_provider.dart';
+import 'package:resonance/features/player/application/providers/video_player_notifier.dart' as v;
 
 class VolumePopupDialog extends ConsumerWidget {
   final Offset buttonOffset;

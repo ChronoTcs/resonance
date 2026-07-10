@@ -2,17 +2,17 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
-import 'package:resonance_app/features/player/application/providers/audio_provider.dart';
-import 'package:resonance_app/features/lyrics/application/lyrics_provider.dart';
-import 'package:resonance_app/features/lyrics/application/lyrics_translation_provider.dart';
-import 'package:resonance_app/features/lyrics/presentation/providers/lyrics_ui_provider.dart';
-import 'package:resonance_app/features/lyrics/presentation/widgets/lyrics_retry_button.dart';
-import 'package:resonance_app/core/widgets/media_artwork_widget.dart';
-import 'package:resonance_app/features/player/data/models/player_enums.dart';
-import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
-import 'package:resonance_app/core/widgets/play_pause_button.dart';
-import 'package:resonance_app/core/utils/uicons.dart';
-import 'package:resonance_app/features/lyrics/presentation/widgets/lyrics_translation_toggle.dart';
+import 'package:resonance/features/player/application/providers/audio_provider.dart';
+import 'package:resonance/features/lyrics/application/lyrics_provider.dart';
+import 'package:resonance/features/lyrics/application/lyrics_translation_provider.dart';
+import 'package:resonance/features/lyrics/presentation/providers/lyrics_ui_provider.dart';
+import 'package:resonance/features/lyrics/presentation/widgets/lyrics_retry_button.dart';
+import 'package:resonance/core/widgets/media_artwork_widget.dart';
+import 'package:resonance/features/player/data/models/player_enums.dart';
+import 'package:resonance/core/widgets/reusable_hover_icon_button.dart';
+import 'package:resonance/core/widgets/play_pause_button.dart';
+import 'package:resonance/core/utils/uicons.dart';
+import 'package:resonance/features/lyrics/presentation/widgets/lyrics_translation_toggle.dart';
 
 class MetadataCard extends StatelessWidget {
   final dynamic track;

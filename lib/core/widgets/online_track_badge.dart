@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:resonance_app/core/utils/app_icons.dart';
+import 'package:resonance/core/utils/app_icons.dart';
 
 class OnlineTrackBadge extends StatelessWidget {
   const OnlineTrackBadge({super.key});

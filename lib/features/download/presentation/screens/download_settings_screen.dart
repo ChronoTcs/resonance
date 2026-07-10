@@ -2,9 +2,9 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:resonance_app/core/utils/uicons.dart';
-import 'package:resonance_app/core/widgets/app_back_button.dart';
-import 'package:resonance_app/features/download/application/providers/download_settings_provider.dart';
+import 'package:resonance/core/utils/uicons.dart';
+import 'package:resonance/core/widgets/app_back_button.dart';
+import 'package:resonance/features/download/application/providers/download_settings_provider.dart';
 
 class DownloadSettingsScreen extends ConsumerWidget {
   const DownloadSettingsScreen({super.key});

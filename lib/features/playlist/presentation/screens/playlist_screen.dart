@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:resonance_app/core/utils/uicons.dart';
-import 'package:resonance_app/core/utils/app_icons.dart';
-import 'package:resonance_app/features/player/application/providers/audio_provider.dart';
-import 'package:resonance_app/features/playlist/data/models/playlist_model.dart';
-import 'package:resonance_app/features/playlist/application/playlist_provider.dart';
-import 'package:resonance_app/features/playlist/presentation/screens/playlist_detail_screen.dart';
-import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
-// import 'package:resonance_app/core/widgets/hover_widgets.dart'; // Removed
+import 'package:resonance/core/utils/uicons.dart';
+import 'package:resonance/core/utils/app_icons.dart';
+import 'package:resonance/features/player/application/providers/audio_provider.dart';
+import 'package:resonance/features/playlist/data/models/playlist_model.dart';
+import 'package:resonance/features/playlist/application/playlist_provider.dart';
+import 'package:resonance/features/playlist/presentation/screens/playlist_detail_screen.dart';
+import 'package:resonance/core/widgets/reusable_hover_icon_button.dart';
+// import 'package:resonance/core/widgets/hover_widgets.dart'; // Removed
+
+import 'package:resonance/core/widgets/top_navigation_header.dart';
 
 class PlaylistScreen extends ConsumerWidget {
   const PlaylistScreen({super.key});
@@ -17,9 +19,9 @@ class PlaylistScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final playlistsAsync = ref.watch(playlistProvider);
     final selectedId = ref.watch(selectedPlaylistIdProvider);
+    final theme = Theme.of(context);
 
     if (selectedId != null) {
-      // Logic to check if selectedId is online or local
       return PlaylistDetailScreen(playlistId: selectedId);
     }
 
@@ -27,46 +29,70 @@ class PlaylistScreen extends ConsumerWidget {
       length: 2,
       child: Scaffold(
         resizeToAvoidBottomInset: false,
-        appBar: AppBar(
-          toolbarHeight: 0, // Hide main toolbar for custom silver header
-          bottom: TabBar(
-            dividerColor: Colors.transparent,
-            indicatorSize: TabBarIndicatorSize.label,
-            tabs: [
-              Tab(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(AppIcons.folder, size: 18),
-                    const SizedBox(width: 8),
-                    const Text('Local'),
-                  ],
+        body: Column(
+          children: [
+            TopNavigationHeader(
+              left: Text(
+                'Playlists',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
                 ),
               ),
-              Tab(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(UIcons.regular.world, size: 18),
-                    const SizedBox(width: 8),
-                    const Text('YouTube Music'),
-                  ],
+              right: const SizedBox(),
+            ),
+            Container(
+              height: 38,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surface,
+                border: Border(
+                  bottom: BorderSide(
+                    color: theme.dividerColor.withValues(alpha: 0.05),
+                    width: 1,
+                  ),
                 ),
               ),
-            ],
-          ),
-        ),
-        body: playlistsAsync.when(
-          data: (state) {
-            return TabBarView(
-              children: [
-                _buildLocalSection(context, ref, state.local),
-                _buildOnlineSection(context, ref, state),
-              ],
-            );
-          },
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => Center(child: Text('Error: $e')),
+              child: TabBar(
+                dividerColor: Colors.transparent,
+                indicatorSize: TabBarIndicatorSize.label,
+                tabs: [
+                  Tab(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(AppIcons.folder, size: 14),
+                        const SizedBox(width: 6),
+                        const Text('Local'),
+                      ],
+                    ),
+                  ),
+                  Tab(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(UIcons.regular.world, size: 14),
+                        const SizedBox(width: 6),
+                        const Text('YouTube Music'),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: playlistsAsync.when(
+                data: (state) {
+                  return TabBarView(
+                    children: [
+                      _buildLocalSection(context, ref, state.local),
+                      _buildOnlineSection(context, ref, state),
+                    ],
+                  );
+                },
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (e, _) => Center(child: Text('Error: $e')),
+              ),
+            ),
+          ],
         ),
       ),
     );

@@ -2,17 +2,17 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
-import 'package:resonance_app/features/player/application/providers/audio_provider.dart';
-import 'package:resonance_app/features/player/presentation/notifiers/mini_player_view_notifier.dart';
-import 'package:resonance_app/core/widgets/media_artwork_widget.dart';
-import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
-import 'package:resonance_app/features/player/presentation/widgets/mini_player/floating/floating_bottom_bar.dart';
-import 'package:resonance_app/features/player/presentation/widgets/mini_player/floating/floating_overlay_controls.dart';
-import 'package:resonance_app/features/player/presentation/widgets/mini_player/floating/floating_lyrics_view.dart';
-import 'package:resonance_app/features/lyrics/presentation/widgets/lyrics_translation_toggle.dart';
-import 'package:resonance_app/core/utils/uicons.dart';
-import 'package:resonance_app/features/playlist/application/playlist_provider.dart';
-import 'package:resonance_app/features/playlist/data/models/playlist_model.dart';
+import 'package:resonance/features/player/application/providers/audio_provider.dart';
+import 'package:resonance/features/player/presentation/notifiers/mini_player_view_notifier.dart';
+import 'package:resonance/core/widgets/media_artwork_widget.dart';
+import 'package:resonance/core/widgets/reusable_hover_icon_button.dart';
+import 'package:resonance/features/player/presentation/widgets/mini_player/floating/floating_bottom_bar.dart';
+import 'package:resonance/features/player/presentation/widgets/mini_player/floating/floating_overlay_controls.dart';
+import 'package:resonance/features/player/presentation/widgets/mini_player/floating/floating_lyrics_view.dart';
+import 'package:resonance/features/lyrics/presentation/widgets/lyrics_translation_toggle.dart';
+import 'package:resonance/core/utils/uicons.dart';
+import 'package:resonance/features/playlist/application/playlist_provider.dart';
+import 'package:resonance/features/playlist/data/models/playlist_model.dart';
 
 class FloatingWindow extends ConsumerStatefulWidget {
   const FloatingWindow({super.key});

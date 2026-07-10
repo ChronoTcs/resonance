@@ -1,476 +1,164 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:resonance_app/core/utils/uicons.dart';
-import 'package:resonance_app/core/utils/app_icons.dart';
-import 'package:resonance_app/features/home/presentation/providers/recently_played_provider.dart';
-import 'package:resonance_app/features/library/data/models/media_item.dart';
-import 'package:resonance_app/features/library/application/library_provider.dart';
-import 'package:resonance_app/features/player/application/services/queue_orchestrator.dart';
-import 'package:resonance_app/core/widgets/media_actions_bottom_sheet.dart';
-import 'package:resonance_app/core/widgets/media_artwork_widget.dart';
-import 'package:resonance_app/features/playlist/application/playlist_provider.dart';
-import 'package:resonance_app/features/playlist/data/models/playlist_model.dart';
-import 'package:resonance_app/features/player/application/providers/audio_provider.dart';
-import 'package:resonance_app/core/widgets/top_navigation_header.dart';
+import 'package:resonance/core/utils/uicons.dart';
+import 'package:resonance/core/widgets/top_navigation_header.dart';
+import 'package:resonance/features/home/presentation/providers/home_navigation_provider.dart';
+import 'package:resonance/features/home/presentation/screens/components/recent_sub_page.dart';
+import 'package:resonance/features/home/presentation/screens/components/playlist_sub_page.dart';
+import 'package:resonance/features/home/presentation/screens/components/artist_sub_page.dart';
+import 'package:resonance/features/playlist/presentation/screens/playlist_detail_screen.dart';
 
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStateMixin {
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    // Watch current provider state initially
+    final initialTab = ref.read(homeNavigationProvider);
+    _tabController = TabController(length: 3, vsync: this, initialIndex: initialTab);
+    _tabController.addListener(() {
+      if (!_tabController.indexIsChanging) {
+        ref.read(homeNavigationProvider.notifier).setIndex(_tabController.index);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final recentlyPlayedAsync = ref.watch(recentlyPlayedProvider);
-    final library = ref.watch(libraryProvider);
+    final selectedPlaylistId = ref.watch(selectedHomePlaylistProvider);
 
-    final audioTracks = library.allMedia
-        .where((m) => m.type == 'audio')
-        .toList();
+    // Sync tab controller if state changes from elsewhere
+    ref.listen<int>(homeNavigationProvider, (prev, next) {
+      if (next != _tabController.index) {
+        _tabController.animateTo(next);
+      }
+    });
 
-    // Quick Picks: shuffle the full library for random recommendations
-    final quickPicks = List<MediaItem>.from(audioTracks)..shuffle(Random());
-    final displayedQuickPicks = quickPicks.take(10).toList();
+    // If a playlist is selected inside the Home context, show its detail view
+    if (selectedPlaylistId != null) {
+      return Scaffold(
+        body: Column(
+          children: [
+            TopNavigationHeader(
+              left: Row(
+                children: [
+                  IconButton(
+                    icon: Icon(UIcons.regular.angle_left),
+                    onPressed: () => ref.read(selectedHomePlaylistProvider.notifier).setSelectedId(null),
+                  ),
+                  const SizedBox(width: 8),
+                  const Text('Back to Home', style: TextStyle(fontWeight: FontWeight.bold)),
+                ],
+              ),
+              right: const SizedBox(),
+            ),
+            Expanded(
+              child: PlaylistDetailScreen(playlistId: selectedPlaylistId),
+            ),
+          ],
+        ),
+      );
+    }
 
-    // Recommendations: tracks by unique artists (one per artist)
-    final seenArtists = <String>{};
-    final recommendations = audioTracks
-        .where((t) {
-          final artist = t.artist ?? 'Unknown';
-          if (seenArtists.contains(artist)) return false;
-          seenArtists.add(artist);
-          return true;
-        })
-        .take(10)
-        .toList();
+    final bool isDesktop = MediaQuery.of(context).size.width > 600;
 
     return Scaffold(
       body: Column(
         children: [
-          const TopNavigationHeader(),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-              children: [
-                // ── Recently Played ──────────────────────────────────────
-          Text(
-            'Recently Played',
-            style: theme.textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            height: 200,
-            child: recentlyPlayedAsync.when(
-              data: (items) {
-                if (items.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          UIcons.regular.time_past,
-                          size: 48,
-                          color: theme.disabledColor,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Play a song to see it here.',
-                          style: theme.textTheme.bodySmall,
-                        ),
+          if (isDesktop) ...[
+            TopNavigationHeader(
+              left: Row(
+                children: [
+                  Text(
+                    'Home',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(width: 32),
+                  SizedBox(
+                    height: 50,
+                    width: 320,
+                    child: TabBar(
+                      controller: _tabController,
+                      dividerColor: Colors.transparent,
+                      indicatorSize: TabBarIndicatorSize.label,
+                      overlayColor: WidgetStateProperty.resolveWith<Color?>((states) {
+                        if (states.contains(WidgetState.hovered)) {
+                          return theme.primaryColor.withValues(alpha: 0.08);
+                        }
+                        return null;
+                      }),
+                      tabs: const [
+                        Tab(text: 'Recent'),
+                        Tab(text: 'Playlists'),
+                        Tab(text: 'Artists'),
                       ],
                     ),
-                  );
-                }
-                return ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: items.length,
-                  itemBuilder: (ctx, i) => _TrackCard(track: items[i]),
-                );
-              },
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(child: Text('Error: $e')),
-            ),
-          ),
-          const SizedBox(height: 32),
-
-          // ── Quick Picks ──────────────────────────────────────────
-          Text(
-            'Quick Picks',
-            style: theme.textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Randomly selected from your library',
-            style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
-          ),
-          const SizedBox(height: 16),
-          if (displayedQuickPicks.isEmpty)
-            _EmptySection(
-              icon: AppIcons.shuffle,
-              label: 'Add music to see Quick Picks',
-            )
-          else
-            SizedBox(
-              height: 200,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: displayedQuickPicks.length,
-                itemBuilder: (ctx, i) =>
-                    _HoverTrackCard(track: displayedQuickPicks[i]),
+                  ),
+                ],
               ),
+              right: const SizedBox.shrink(),
             ),
-          const SizedBox(height: 32),
-
-          // ── Recommendations ──────────────────────────────────────
-          Text(
-            'Explore by Artist',
-            style: theme.textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'One track per artist in your library',
-            style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
-          ),
-          const SizedBox(height: 16),
-          if (recommendations.isEmpty)
-            _EmptySection(
-              icon: UIcons.regular.users,
-              label: 'Add music to see recommendations',
-            )
-          else
-            SizedBox(
-              height: 200,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: recommendations.length,
-                itemBuilder: (ctx, i) => _TrackCard(
-                  track: recommendations[i],
-                  showArtistLabel: true,
-                ),
-              ),
-            ),
-          const SizedBox(height: 32),
-
-          // ── Your Library Row ─────────────────────────────────────
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Your Library',
-                style: theme.textTheme.headlineSmall?.copyWith(
+          ] else ...[
+            TopNavigationHeader(
+              left: Text(
+                'Home',
+                style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              Text(
-                '${audioTracks.length} songs',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.hintColor,
+              right: const SizedBox.shrink(),
+            ),
+            Container(
+              height: 38,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surface,
+                border: Border(
+                  bottom: BorderSide(
+                    color: theme.dividerColor.withValues(alpha: 0.05),
+                    width: 1,
+                  ),
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          if (audioTracks.isEmpty)
-            _EmptySection(
-              icon: AppIcons.music,
-              label: 'Your library is empty',
-            )
-          else
-            ...audioTracks.take(5).map((t) => _TrackListTile(track: t)),
-          if (audioTracks.length > 5)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                '... and ${audioTracks.length - 5} more',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.hintColor,
-                ),
-                textAlign: TextAlign.center,
+              child: TabBar(
+                controller: _tabController,
+                dividerColor: Colors.transparent,
+                indicatorSize: TabBarIndicatorSize.label,
+                tabs: const [
+                  Tab(text: 'Recent'),
+                  Tab(text: 'Playlists'),
+                  Tab(text: 'Artists'),
+                ],
               ),
             ),
+          ],
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: const [
+                RecentSubPage(key: ValueKey('recent_tab')),
+                PlaylistSubPage(key: ValueKey('playlist_tab')),
+                ArtistSubPage(key: ValueKey('artist_tab')),
               ],
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-// ──────────────────────────────────────────────────────────
-// Shared Helper Widgets
-// ──────────────────────────────────────────────────────────
-
-class _EmptySection extends StatelessWidget {
-  const _EmptySection({required this.icon, required this.label});
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 100,
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 40, color: Theme.of(context).disabledColor),
-            const SizedBox(height: 8),
-            Text(label, style: Theme.of(context).textTheme.bodySmall),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _TrackCard extends ConsumerWidget {
-  const _TrackCard({required this.track, this.showArtistLabel = false});
-  final MediaItem track;
-  final bool showArtistLabel;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-
-    return Padding(
-      padding: const EdgeInsets.only(right: 12),
-      child: InkWell(
-        onTap: () {
-          final library = ref.read(libraryProvider);
-          final audioTracks = library.allMedia.where((m) => m.type == 'audio').toList();
-          ref.read(queueOrchestratorProvider).playWithLocalRadioFallback(track, audioTracks);
-        },
-        onLongPress: () {
-          showModalBottomSheet(
-            context: context,
-            builder: (_) => MediaActionsBottomSheet(item: track),
-          );
-        },
-        borderRadius: BorderRadius.circular(10),
-        child: SizedBox(
-          width: 140,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Album Art
-              MediaArtworkWidget(
-                item: track,
-                width: 140,
-                height: 140,
-                borderRadius: 10,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                showArtistLabel
-                    ? (track.artist ?? 'Unknown Artist')
-                    : track.title,
-                style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              Text(
-                showArtistLabel
-                    ? track.title
-                    : (track.artist ?? 'Unknown Artist'),
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.hintColor,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TrackListTile extends ConsumerWidget {
-  const _TrackListTile({required this.track});
-  final MediaItem track;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 0, vertical: 2),
-      leading: MediaArtworkWidget(
-        item: track,
-        width: 44,
-        height: 44,
-        borderRadius: 6,
-      ),
-      title: Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: Text(
-        track.artist ?? 'Unknown Artist',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      onTap: () {
-        final library = ref.read(libraryProvider);
-        final audioTracks = library.allMedia.where((m) => m.type == 'audio').toList();
-        ref.read(queueOrchestratorProvider).playSequentialContext(track, audioTracks);
-      },
-      onLongPress: () {
-        showModalBottomSheet(
-          context: context,
-          builder: (_) => MediaActionsBottomSheet(item: track),
-        );
-      },
-    );
-  }
-}
-
-class _HoverTrackCard extends ConsumerStatefulWidget {
-  const _HoverTrackCard({required this.track});
-  final MediaItem track;
-
-  @override
-  ConsumerState<_HoverTrackCard> createState() => _HoverTrackCardState();
-}
-
-class _HoverTrackCardState extends ConsumerState<_HoverTrackCard> {
-  bool _isHovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final playlistState = ref.watch(playlistProvider).value;
-    
-    bool isLoved = false;
-    String? likedPlaylistId;
-    if (playlistState != null) {
-      final likedPl = playlistState.local.cast<Playlist?>().firstWhere(
-            (p) => p?.name == 'Liked Songs',
-            orElse: () => null,
-          );
-      if (likedPl != null) {
-        likedPlaylistId = likedPl.id;
-        final trackId = widget.track.id ?? widget.track.path;
-        isLoved = likedPl.tracks.any((t) => (t.id ?? t.path) == trackId);
-      }
-    }
-
-    return Padding(
-      padding: const EdgeInsets.only(right: 12),
-      child: MouseRegion(
-        onEnter: (_) => setState(() => _isHovered = true),
-        onExit: (_) => setState(() => _isHovered = false),
-        child: InkWell(
-          onTap: () {
-            final library = ref.read(libraryProvider);
-            final audioTracks = library.allMedia.where((m) => m.type == 'audio').toList();
-            ref.read(queueOrchestratorProvider).playWithLocalRadioFallback(widget.track, audioTracks);
-          },
-          onLongPress: () {
-            showModalBottomSheet(
-              context: context,
-              builder: (_) => MediaActionsBottomSheet(item: widget.track),
-            );
-          },
-          borderRadius: BorderRadius.circular(10),
-          child: SizedBox(
-            width: 140,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Stack(
-                  children: [
-                    MediaArtworkWidget(
-                      item: widget.track,
-                      width: 140,
-                      height: 140,
-                      borderRadius: 10,
-                    ),
-                    if (_isHovered)
-                      Positioned.fill(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.5),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Center(
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                IconButton(
-                                  icon: Icon(AppIcons.add, color: Colors.white),
-                                  iconSize: 22,
-                                  onPressed: () {
-                                    ref.read(audioProvider.notifier).addTrackToQueue(widget.track);
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text('Added "${widget.track.title}" to play queue', style: const TextStyle(color: Colors.white)),
-                                        duration: const Duration(seconds: 1),
-                                        behavior: SnackBarBehavior.floating,
-                                        backgroundColor: theme.primaryColor,
-                                      ),
-                                    );
-                                  },
-                                ),
-                                const SizedBox(width: 8),
-                                IconButton(
-                                  icon: Icon(
-                                    isLoved ? UIcons.solid.heart : UIcons.regular.heart,
-                                    color: isLoved ? Colors.red : Colors.white,
-                                  ),
-                                  iconSize: 22,
-                                  onPressed: () async {
-                                    final notifier = ref.read(playlistProvider.notifier);
-                                    if (likedPlaylistId == null) {
-                                      await notifier.createPlaylist('Liked Songs');
-                                      await Future.delayed(const Duration(milliseconds: 200));
-                                      final updatedState = ref.read(playlistProvider).value;
-                                      final newLikedPl = updatedState?.local.firstWhere((p) => p.name == 'Liked Songs');
-                                      if (newLikedPl != null) {
-                                        likedPlaylistId = newLikedPl.id;
-                                      }
-                                    }
-                                    if (likedPlaylistId != null) {
-                                      if (isLoved) {
-                                        await notifier.removeTrackFromPlaylist(likedPlaylistId!, widget.track.id ?? widget.track.path);
-                                      } else {
-                                        await notifier.addTrackToPlaylist(likedPlaylistId!, widget.track);
-                                      }
-                                    }
-                                  },
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  widget.track.title,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                Text(
-                  widget.track.artist ?? 'Unknown Artist',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.hintColor,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }

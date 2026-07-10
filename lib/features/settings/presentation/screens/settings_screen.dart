@@ -9,6 +9,8 @@ import '../widgets/translation_section.dart';
 import '../widgets/cache_management_section.dart';
 import '../widgets/support_update_section.dart';
 
+import '../../../../core/widgets/top_navigation_header.dart';
+
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
@@ -17,21 +19,23 @@ class SettingsScreen extends ConsumerWidget {
     final theme = Theme.of(context);
     
     return Scaffold(
-      body: ListView(
-        physics: const ClampingScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+      body: Column(
         children: [
-          // ─── Header ──────────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Text(
+          TopNavigationHeader(
+            left: Text(
               'Settings',
-              style: theme.textTheme.headlineSmall?.copyWith(
+              style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.bold,
               ),
             ),
+            right: const SizedBox(),
           ),
-          const SizedBox(height: 8),
+          Expanded(
+            child: ListView(
+              physics: const ClampingScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+              children: [
+                const SizedBox(height: 8),
 
           // 1. Appearance (Theme & Accent)
           const AppearanceSection(),
@@ -59,6 +63,9 @@ class SettingsScreen extends ConsumerWidget {
           const SizedBox(height: 32),
         ],
       ),
+    ),
+  ],
+),
     );
   }
 }

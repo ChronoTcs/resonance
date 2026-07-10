@@ -4,14 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
-import 'package:resonance_app/features/lyrics/presentation/providers/lyrics_ui_provider.dart';
-import 'package:resonance_app/features/lyrics/presentation/screens/lyrics_screen.dart';
-import 'package:resonance_app/core/widgets/media_artwork_widget.dart';
-import 'package:resonance_app/features/player/application/providers/audio_provider.dart';
-import 'package:resonance_app/features/player/application/providers/video_player_notifier.dart';
-import 'package:resonance_app/features/player/presentation/widgets/full_screen_player/full_screen_audio_view.dart';
-import 'package:resonance_app/features/player/presentation/widgets/full_screen_player/full_screen_video_view.dart';
-import 'package:resonance_app/features/player/presentation/widgets/full_screen_player/full_screen_bottom_bar.dart';
+import 'package:resonance/features/lyrics/presentation/providers/lyrics_ui_provider.dart';
+import 'package:resonance/features/lyrics/presentation/screens/lyrics_screen.dart';
+import 'package:resonance/core/widgets/media_artwork_widget.dart';
+import 'package:resonance/features/player/application/providers/audio_provider.dart';
+import 'package:resonance/features/player/application/providers/video_player_notifier.dart';
+import 'package:resonance/features/player/presentation/widgets/full_screen_player/full_screen_audio_view.dart';
+import 'package:resonance/features/player/presentation/widgets/full_screen_player/full_screen_video_view.dart';
+import 'package:resonance/features/player/presentation/widgets/full_screen_player/full_screen_bottom_bar.dart';
 
 /// [FullScreenPlayer] — Pure Orchestrator (SOTA V13.21)
 ///

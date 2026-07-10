@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:resonance_app/core/utils/uicons.dart';
-import 'package:resonance_app/features/library/application/services/music_restore_service.dart';
+import 'package:resonance/core/utils/uicons.dart';
+import 'package:resonance/features/library/application/services/music_restore_service.dart';
 import '../providers/package_info_provider.dart';
 
 class AboutCard extends ConsumerStatefulWidget {

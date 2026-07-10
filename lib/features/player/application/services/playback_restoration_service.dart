@@ -44,16 +44,25 @@ class PlaybackRestorationService {
           final Map<String, dynamic> trackData = Map<String, dynamic>.from(jsonDecode(s.lastTrackJson!));
           final lastTrack = MediaItem.fromJson(trackData);
           
-          final List<MediaItem> lastQueue = s.lastQueueJson!.map((j) {
+          final List<MediaItem> fullQueue = s.lastQueueJson!.map((j) {
             final Map<String, dynamic> itemData = Map<String, dynamic>.from(jsonDecode(j));
             return MediaItem.fromJson(itemData);
           }).toList();
-          
+
+          // [Radio bloat guard] Cap restored queue: keep current track + max 20 ahead.
+          // Prevents radio-inflated queues (80+ songs) from persisting across sessions.
+          // ponytail: simple slice, no extra state needed.
+          const int maxQueueAhead = 20;
+          final int savedIndex = s.lastIndex.clamp(0, fullQueue.length - 1);
+          final int endIdx = (savedIndex + maxQueueAhead + 1).clamp(0, fullQueue.length);
+          final List<MediaItem> lastQueue = fullQueue.sublist(savedIndex, endIdx);
+          final int restoredIndex = 0; // current track is now always at index 0 after slice
+
           // 1. Update internal state via Notifier
           notifier.restorePlaybackState(
             track: lastTrack,
             queue: lastQueue,
-            index: s.lastIndex,
+            index: restoredIndex,
             positionMs: s.lastPositionMs,
           );
 

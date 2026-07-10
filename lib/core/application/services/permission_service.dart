@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/material.dart';
-import 'package:resonance_app/core/utils/uicons.dart';
+import 'package:resonance/core/utils/uicons.dart';
 
 class PermissionService {
   /// Shows a clean rationale dialog before requesting a permission.

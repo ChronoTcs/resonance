@@ -5,9 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:permission_handler/permission_handler.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:resonance_app/features/library/application/library_provider.dart';
-import 'package:resonance_app/core/data/services/cache_manager.dart';
-import 'package:resonance_app/core/utils/path_utils.dart';
+import 'package:resonance/features/library/application/library_provider.dart';
+import 'package:resonance/core/data/services/cache_manager.dart';
+import 'package:resonance/core/utils/path_utils.dart';
 
 class MusicRestoreService {
   final Ref _ref;

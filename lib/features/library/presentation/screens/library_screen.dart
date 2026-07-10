@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:silky_scroll/silky_scroll.dart';
 import '../../application/library_provider.dart';
 import '../../data/models/media_item.dart';
 import '../../../player/application/services/queue_orchestrator.dart';
@@ -9,10 +10,11 @@ import '../../../../core/widgets/media_actions_bottom_sheet.dart';
 import '../../../../core/widgets/media_artwork_widget.dart';
 import '../../../player/presentation/screens/web_video_sniffer_screen.dart';
 import '../../../player/application/providers/video_player_notifier.dart';
-import 'package:resonance_app/core/utils/uicons.dart';
-import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
-import 'package:resonance_app/core/widgets/overflow_menu_button.dart';
-import 'package:resonance_app/features/playlist/presentation/screens/playlist_screen.dart';
+import 'package:resonance/core/utils/uicons.dart';
+import 'package:resonance/core/widgets/reusable_hover_icon_button.dart';
+import 'package:resonance/core/widgets/overflow_menu_button.dart';
+import 'package:resonance/core/widgets/top_navigation_header.dart';
+import 'package:resonance/features/playlist/presentation/screens/playlist_screen.dart';
 
 class LibraryScreen extends ConsumerStatefulWidget {
   const LibraryScreen({super.key});
@@ -43,6 +45,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final libraryState = ref.watch(libraryProvider);
 
     final bool hasPaths = libraryState.musicFolderPath != null || libraryState.videoFolderPath != null;
@@ -107,78 +110,141 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
 
     return Scaffold(
       resizeToAvoidBottomInset: false,
-      appBar: AppBar(
-        primary: false,
-        title: _isSearching
-            ? TextField(
-                controller: _searchController,
-                autofocus: true,
-                decoration: const InputDecoration(
-                  hintText: 'Search in library...',
-                  border: InputBorder.none,
-                ),
-                onChanged: (value) {
-                  setState(() {
-                    _searchQuery = value;
-                  });
-                },
-              )
-            : const Text('Local Library'),
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: Platform.isAndroid
-              ? [
-                  Tab(text: 'Local', icon: Icon(UIcons.regular.folder_open, size: 18)),
-                  Tab(text: 'Playlists', icon: Icon(UIcons.regular.list_music, size: 18)),
-                ]
-              : [
-                  Tab(text: 'Music', icon: Icon(UIcons.regular.music, size: 18)),
-                  Tab(text: 'Video', icon: Icon(UIcons.regular.video_camera, size: 18)),
-                ],
-        ),
-        actions: [
-          ReusableHoverIconButton(
-            icon: _isSearching ? UIcons.regular.cross_small : UIcons.regular.search,
-            tooltip: _isSearching ? 'Close search' : 'Search library',
-            iconSize: 18,
-            onTap: () {
-              setState(() {
-                if (_isSearching) {
-                  _isSearching = false;
-                  _searchQuery = '';
-                  _searchController.clear();
-                } else {
-                  _isSearching = true;
-                }
-              });
-            },
-          ),
-          ReusableHoverIconButton(
-            icon: libraryState.isLoading ? null : UIcons.regular.refresh,
-            tooltip: 'Scan folders',
-            iconSize: 18,
-            onTap: () {
-              // Only scan if on Local Library tab (index 0)
-              if (_tabController.index == 0) {
-                ref.read(libraryProvider.notifier).scanLibrary();
-              }
-            },
-            child: libraryState.isLoading
-                ? SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.5,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        Theme.of(context).primaryColor,
-                      ),
+      body: Column(
+        children: [
+          TopNavigationHeader(
+            left: _isSearching
+                ? TextField(
+                    controller: _searchController,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      hintText: 'Search in library...',
+                      border: InputBorder.none,
                     ),
+                    onChanged: (value) {
+                      setState(() {
+                        _searchQuery = value;
+                      });
+                    },
                   )
-                : null,
+                : Text(
+                    'Local Library',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+            right: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ReusableHoverIconButton(
+                  icon: _isSearching ? UIcons.regular.cross_small : UIcons.regular.search,
+                  tooltip: _isSearching ? 'Close search' : 'Search library',
+                  iconSize: 18,
+                  onTap: () {
+                    setState(() {
+                      if (_isSearching) {
+                        _isSearching = false;
+                        _searchQuery = '';
+                        _searchController.clear();
+                      } else {
+                        _isSearching = true;
+                      }
+                    });
+                  },
+                ),
+                const SizedBox(width: 8),
+                ReusableHoverIconButton(
+                  icon: libraryState.isLoading ? null : UIcons.regular.refresh,
+                  tooltip: 'Scan folders',
+                  iconSize: 18,
+                  onTap: () {
+                    if (_tabController.index == 0) {
+                      ref.read(libraryProvider.notifier).scanLibrary();
+                    }
+                  },
+                  child: libraryState.isLoading
+                      ? SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              theme.primaryColor,
+                            ),
+                          ),
+                        )
+                      : null,
+                ),
+              ],
+            ),
+          ),
+          Container(
+            height: 38,
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surface,
+              border: Border(
+                bottom: BorderSide(
+                  color: theme.dividerColor.withValues(alpha: 0.05),
+                  width: 1,
+                ),
+              ),
+            ),
+            child: TabBar(
+              controller: _tabController,
+              dividerColor: Colors.transparent,
+              indicatorSize: TabBarIndicatorSize.label,
+              tabs: Platform.isAndroid
+                  ? [
+                      Tab(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(UIcons.regular.folder_open, size: 14),
+                            const SizedBox(width: 6),
+                            const Text('Local'),
+                          ],
+                        ),
+                      ),
+                      Tab(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(UIcons.regular.list_music, size: 14),
+                            const SizedBox(width: 6),
+                            const Text('Playlists'),
+                          ],
+                        ),
+                      ),
+                    ]
+                  : [
+                      Tab(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(UIcons.regular.music, size: 14),
+                            const SizedBox(width: 6),
+                            const Text('Music'),
+                          ],
+                        ),
+                      ),
+                      Tab(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(UIcons.regular.video_camera, size: 14),
+                            const SizedBox(width: 6),
+                            const Text('Video'),
+                          ],
+                        ),
+                      ),
+                    ],
+            ),
+          ),
+          Expanded(
+            child: content,
           ),
         ],
       ),
-      body: content,
     );
   }
 
@@ -192,7 +258,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
       );
     }
 
-    return ListView.builder(
+    return SilkyListView.builder(
       itemCount: mediaList.length,
       padding: const EdgeInsets.only(bottom: 80),
       itemBuilder: (context, index) {

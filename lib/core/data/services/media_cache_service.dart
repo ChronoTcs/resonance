@@ -42,6 +42,7 @@ class MediaCacheService {
   }
 
   final Map<String, Future<void>> _activeDownloads = {};
+  final Set<String> _activeArtworkDownloads = {};
 
   Future<String> getAudioPath(String songId, String streamUrl, {String? userAgent}) async {
     final dir = await _cacheManager.getStreamAudioDir();
@@ -203,6 +204,8 @@ class MediaCacheService {
 
   Future<String?> cacheArtwork(String songId, String? url) async {
     if (url == null || !url.startsWith('http')) return null;
+    // ponytail: in-flight guard prevents 3 concurrent callers downloading same file
+    if (_activeArtworkDownloads.contains(songId)) return null;
 
     try {
       final dir = await _cacheManager.getStreamImagesDir();
@@ -217,6 +220,7 @@ class MediaCacheService {
       
       if (file.existsSync()) return file.path;
 
+      _activeArtworkDownloads.add(songId);
       final response = await _client.get(Uri.parse(url));
       if (response.statusCode == 200) {
         await file.writeAsBytes(response.bodyBytes);
@@ -225,6 +229,8 @@ class MediaCacheService {
       }
     } catch (e) {
       debugPrint('MediaCacheService: Artwork caching error: $e');
+    } finally {
+      _activeArtworkDownloads.remove(songId);
     }
     return null;
   }

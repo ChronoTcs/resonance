@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
-import 'package:resonance_app/core/data/services/po_token_provider_service.dart';
-import 'package:resonance_app/features/player/application/providers/audio_provider.dart';
-import 'package:resonance_app/features/library/data/models/media_item.dart';
+import 'package:resonance/core/data/services/po_token_provider_service.dart';
+import 'package:resonance/features/player/application/providers/audio_provider.dart';
+import 'package:resonance/features/library/data/models/media_item.dart';
 
 /// [TrayService]
 /// Mengelola integrasi System Tray untuk Windows.

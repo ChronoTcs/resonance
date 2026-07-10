@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:resonance_app/features/library/data/models/media_item.dart';
+import 'package:resonance/features/library/data/models/media_item.dart';
 
 @immutable
 class Playlist {

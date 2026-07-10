@@ -1,16 +1,17 @@
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:resonance_app/core/utils/uicons.dart';
-import 'package:resonance_app/features/player/application/providers/audio_provider.dart';
-import 'package:resonance_app/features/playlist/application/playlist_provider.dart';
-import 'package:resonance_app/features/library/application/library_provider.dart';
-import 'package:resonance_app/core/widgets/media_actions_bottom_sheet.dart';
-import 'package:resonance_app/core/widgets/media_artwork_widget.dart';
-import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
-import 'package:resonance_app/core/widgets/app_back_button.dart';
-import 'package:resonance_app/core/widgets/online_track_badge.dart';
-// import 'package:resonance_app/core/widgets/hover_widgets.dart'; // Unused
+import 'package:silky_scroll/silky_scroll.dart';
+import 'package:resonance/core/utils/uicons.dart';
+import 'package:resonance/features/player/application/providers/audio_provider.dart';
+import 'package:resonance/features/playlist/application/playlist_provider.dart';
+import 'package:resonance/features/library/application/library_provider.dart';
+import 'package:resonance/core/widgets/media_actions_bottom_sheet.dart';
+import 'package:resonance/core/widgets/media_artwork_widget.dart';
+import 'package:resonance/core/widgets/reusable_hover_icon_button.dart';
+import 'package:resonance/core/widgets/app_back_button.dart';
+import 'package:resonance/core/widgets/online_track_badge.dart';
+// import 'package:resonance/core/widgets/hover_widgets.dart'; // Unused
 
 class PlaylistDetailScreen extends ConsumerWidget {
   const PlaylistDetailScreen({super.key, required this.playlistId});
@@ -39,7 +40,7 @@ class PlaylistDetailScreen extends ConsumerWidget {
           final tracks = playlist.tracks;
           final firstTrack = tracks.isNotEmpty ? tracks.first : null;
 
-          return CustomScrollView(
+          return SilkyCustomScrollView(
             slivers: [
               // Hero AppBar with art background
               SliverAppBar(
@@ -325,7 +326,7 @@ class _MusicPickerSheetState extends ConsumerState<_MusicPickerSheet> {
             ),
             const SizedBox(height: 8),
             Expanded(
-              child: ListView.builder(
+              child: SilkyListView.builder(
                 controller: scrollController,
                 itemCount: music.length,
                 itemBuilder: (context, index) {

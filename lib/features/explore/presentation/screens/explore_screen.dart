@@ -1,20 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:silky_scroll/silky_scroll.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:resonance_app/features/explore/presentation/providers/explore_provider.dart';
-import 'package:resonance_app/features/player/application/providers/audio_provider.dart';
-import 'package:resonance_app/features/library/data/models/media_item.dart';
-import 'package:resonance_app/features/home/presentation/providers/recently_played_provider.dart';
-import 'package:resonance_app/core/widgets/media_actions_bottom_sheet.dart';
-import 'package:resonance_app/core/widgets/media_artwork_widget.dart';
-import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
-import 'package:resonance_app/core/widgets/overflow_menu_button.dart';
-import 'package:resonance_app/core/utils/uicons.dart';
-import 'package:resonance_app/core/utils/app_icons.dart';
+import 'package:resonance/features/explore/presentation/providers/explore_provider.dart';
+import 'package:resonance/features/player/application/providers/audio_provider.dart';
+import 'package:resonance/features/library/data/models/media_item.dart';
+import 'package:resonance/features/home/presentation/providers/recently_played_provider.dart';
+import 'package:resonance/core/widgets/media_actions_bottom_sheet.dart';
+import 'package:resonance/core/widgets/media_artwork_widget.dart';
+import 'package:resonance/core/widgets/reusable_hover_icon_button.dart';
+import 'package:resonance/core/widgets/overflow_menu_button.dart';
+import 'package:resonance/core/utils/uicons.dart';
+import 'package:resonance/core/utils/app_icons.dart';
 import '../../application/services/youtube_auth_service.dart';
 
 import 'youtube_login_screen.dart';
-// import 'package:resonance_app/core/widgets/hover_widgets.dart'; // Unused
+import 'package:resonance/core/widgets/top_navigation_header.dart';
+// import 'package:resonance/core/widgets/hover_widgets.dart'; // Unused
 
 class ExploreScreen extends ConsumerStatefulWidget {
   const ExploreScreen({super.key});
@@ -48,42 +50,63 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
     final currentQuery = ref.watch(searchQueryProvider);
 
     return Scaffold(
-      body: CustomScrollView(
-        slivers: [
-          // ─── Search Bar App Bar ──────────────────────────────────────────
-          SliverAppBar(
-            primary: false,
-            floating: true,
-            pinned: true,
-            title: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: 'Search songs online...',
-                prefixIcon: Icon(AppIcons.search, size: 18),
-                suffixIcon: ReusableHoverIconButton(
-                  icon: AppIcons.close,
-                  tooltip: 'Clear search',
-                  iconSize: 18,
-                  onTap: () {
-                    _searchController.clear();
-                    ref.read(searchQueryProvider.notifier).setQuery('');
-                  },
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(30),
-                  borderSide: BorderSide.none,
-                ),
-                filled: true,
-                contentPadding: const EdgeInsets.symmetric(vertical: 0),
+      body: Column(
+        children: [
+          TopNavigationHeader(
+            left: Text(
+              'Explore',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
               ),
-              textInputAction: TextInputAction.search,
-              onSubmitted: (_) => _onSearch(),
             ),
-            actions: [
-              _buildAuthButton(context, ref),
-              const SizedBox(width: 8),
-            ],
+            right: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: MediaQuery.of(context).size.width > 600 ? 240 : 150,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: TextField(
+                    controller: _searchController,
+                    style: theme.textTheme.bodyMedium,
+                    textAlignVertical: TextAlignVertical.center,
+                    decoration: InputDecoration(
+                      isDense: true,
+                      hintText: 'Search songs online...',
+                      hintStyle: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.hintColor,
+                      ),
+                      prefixIcon: Icon(AppIcons.search, size: 16, color: theme.hintColor),
+                      suffixIcon: _searchController.text.isNotEmpty
+                          ? ReusableHoverIconButton(
+                              icon: AppIcons.close,
+                              tooltip: 'Clear search',
+                              iconSize: 14,
+                              onTap: () {
+                                _searchController.clear();
+                                ref.read(searchQueryProvider.notifier).setQuery('');
+                                setState(() {});
+                              },
+                            )
+                          : null,
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.only(top: 0, bottom: 4),
+                    ),
+                    textInputAction: TextInputAction.search,
+                    onSubmitted: (_) => _onSearch(),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                _buildAuthButton(context, ref),
+              ],
+            ),
           ),
+          Expanded(
+            child: SilkyCustomScrollView(
+              slivers: [
 
           // ─── Content Area ───────────────────────────────────────────────
           if (currentQuery.isEmpty) ...[
@@ -221,6 +244,9 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
           ],
         ],
       ),
+    ),
+  ],
+),
     );
   }
 

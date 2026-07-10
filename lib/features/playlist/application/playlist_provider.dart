@@ -1,11 +1,11 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:resonance_app/features/playlist/data/models/playlist_model.dart';
-import 'package:resonance_app/features/library/data/models/media_item.dart';
-import 'package:resonance_app/features/playlist/data/repositories/playlist_repository.dart';
-import 'package:resonance_app/features/explore/data/repositories/youtube_playlist_repository.dart';
-import 'package:resonance_app/features/explore/application/services/youtube_auth_service.dart';
+import 'package:resonance/features/playlist/data/models/playlist_model.dart';
+import 'package:resonance/features/library/data/models/media_item.dart';
+import 'package:resonance/features/playlist/data/repositories/playlist_repository.dart';
+import 'package:resonance/features/explore/data/repositories/youtube_playlist_repository.dart';
+import 'package:resonance/features/explore/application/services/youtube_auth_service.dart';
 
 final playlistProvider = AsyncNotifierProvider<PlaylistNotifier, PlaylistState>(() {
   return PlaylistNotifier();

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:resonance_app/core/utils/app_icons.dart';
-import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
+import 'package:resonance/core/utils/app_icons.dart';
+import 'package:resonance/core/widgets/reusable_hover_icon_button.dart';
 
 class AppBackButton extends StatelessWidget {
   const AppBackButton({super.key, this.onTap, this.color});

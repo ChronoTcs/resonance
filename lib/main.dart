@@ -25,8 +25,8 @@ import 'package:path_provider/path_provider.dart';
 import 'features/player/application/audio_handler.dart';
 import 'core/data/services/po_token_provider_service.dart';
 
-import 'package:resonance_app/features/player/presentation/widgets/mini_player/floating/floating_window.dart';
-import 'package:resonance_app/features/player/presentation/notifiers/mini_player_view_notifier.dart';
+import 'package:resonance/features/player/presentation/widgets/mini_player/floating/floating_window.dart';
+import 'package:resonance/features/player/presentation/notifiers/mini_player_view_notifier.dart';
 
 Future<void> _cleanSharedPreferences() async {
   try {
@@ -166,6 +166,17 @@ void main() async {
 
   final player = Player(configuration: const PlayerConfiguration(pitch: true));
 
+  if (Platform.isAndroid) {
+    Future.microtask(() async {
+      try {
+        await (player.platform as dynamic).setProperty('ao', 'audiotrack');
+        debugPrint('Audio Engine: Switched output backend to audiotrack');
+      } catch (e) {
+        debugPrint('Audio Engine: Failed to switch output backend: $e');
+      }
+    });
+  }
+
   final audioHandler = await AudioService.init(
     builder: () => ResonanceAudioHandler(player),
     config: const AudioServiceConfig(
@@ -191,6 +202,7 @@ void main() async {
 
   if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
     await windowManager.ensureInitialized();
+    windowManager.addListener(_GlobalWindowListener());
     final prefs = await SharedPreferences.getInstance();
 
     final width = prefs.getDouble('window_width') ?? 1280;
@@ -203,6 +215,7 @@ void main() async {
       center: x == null,
       minimumSize: const Size(800, 600),
       title: 'Resonance',
+      titleBarStyle: TitleBarStyle.hidden,
     );
 
     await windowManager.waitUntilReadyToShow(windowOptions, () async {
@@ -299,17 +312,31 @@ class _ResonanceAppState extends ConsumerState<ResonanceApp>
 
   @override
   Widget build(BuildContext context) {
-    final themeMode = ref.watch(themeProvider);
+    final appThemeMode = ref.watch(themeProvider);
     final accentColor = ref.watch(accentColorProvider);
+
+    ThemeMode resolvedThemeMode;
+    switch (appThemeMode) {
+      case AppThemeMode.light:
+        resolvedThemeMode = ThemeMode.light;
+        break;
+      case AppThemeMode.dark:
+      case AppThemeMode.onyx:
+        resolvedThemeMode = ThemeMode.dark;
+        break;
+      case AppThemeMode.system:
+        resolvedThemeMode = ThemeMode.system;
+        break;
+    }
 
     return MaterialApp(
       navigatorKey: navigatorKey,
       navigatorObservers: [AppRouteObserver(ref)],
       title: 'Resonance',
       debugShowCheckedModeBanner: false,
-      themeMode: themeMode,
+      themeMode: resolvedThemeMode,
       theme: AppTheme.getLightTheme(accentColor),
-      darkTheme: AppTheme.getDarkTheme(accentColor),
+      darkTheme: AppTheme.getDarkTheme(accentColor, isOnyx: appThemeMode == AppThemeMode.onyx),
       scrollBehavior: FluentScrollBehavior(),
       builder: (context, child) {
         final content = Material(
@@ -375,5 +402,17 @@ class _ResonanceAppState extends ConsumerState<ResonanceApp>
       },
       home: const GlobalShortcutWrapper(child: MainDashboard()),
     );
+  }
+}
+
+class _GlobalWindowListener extends WindowListener {
+  @override
+  void onWindowLeaveFullScreen() {
+    windowManager.setTitleBarStyle(TitleBarStyle.hidden);
+  }
+
+  @override
+  void onWindowRestore() {
+    windowManager.setTitleBarStyle(TitleBarStyle.hidden);
   }
 }

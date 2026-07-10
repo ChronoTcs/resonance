@@ -150,6 +150,16 @@ class QueueService {
     return null;
   }
 
+  /// Appends a single track without resetting the queue cursor.
+  void appendTrack(MediaItem item) {
+    _queue = [..._queue, item];
+  }
+
+  /// Appends multiple tracks without resetting the queue cursor.
+  void appendTracks(List<MediaItem> items) {
+    _queue = [..._queue, ...items];
+  }
+
   MediaItem? getPreviousTrack() {
     int prevIndex = getPreviousIndex();
     if (prevIndex != -1) {

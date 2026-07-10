@@ -1,10 +1,14 @@
-package com.chronostudio.resonance_app
+package com.chronostudio.resonance
 
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import com.ryanheise.audioservice.AudioServiceActivity
 
 import com.zemer.cipher.CipherDeobfuscator
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : AudioServiceActivity() {
     private val CHANNEL = "com.chronostudio.resonance/potoken"
@@ -30,11 +34,15 @@ class MainActivity : AudioServiceActivity() {
                     val signatureCipher = call.argument<String>("signatureCipher")
                     val videoId = call.argument<String>("videoId")
                     if (signatureCipher != null && videoId != null) {
-                        try {
-                            val deciphered = CipherDeobfuscator.deobfuscateStreamUrl(signatureCipher, videoId)
-                            result.success(deciphered)
-                        } catch (e: Exception) {
-                            result.error("ERROR", e.message, null)
+                        CoroutineScope(Dispatchers.Main).launch {
+                            try {
+                                val deciphered = withContext(Dispatchers.IO) {
+                                    CipherDeobfuscator.deobfuscateStreamUrl(signatureCipher, videoId)
+                                }
+                                result.success(deciphered)
+                            } catch (e: Exception) {
+                                result.error("ERROR", e.message, null)
+                            }
                         }
                     } else {
                         result.error("BAD_ARGS", "Missing arguments", null)
@@ -43,11 +51,15 @@ class MainActivity : AudioServiceActivity() {
                 "decipherN" -> {
                     val url = call.argument<String>("url")
                     if (url != null) {
-                        try {
-                            val deciphered = CipherDeobfuscator.transformNParamInUrl(url)
-                            result.success(deciphered)
-                        } catch (e: Exception) {
-                            result.error("ERROR", e.message, null)
+                        CoroutineScope(Dispatchers.Main).launch {
+                            try {
+                                val deciphered = withContext(Dispatchers.IO) {
+                                    CipherDeobfuscator.transformNParamInUrl(url)
+                                }
+                                result.success(deciphered)
+                            } catch (e: Exception) {
+                                result.error("ERROR", e.message, null)
+                            }
                         }
                     } else {
                         result.error("BAD_ARGS", "Missing url", null)

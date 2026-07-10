@@ -4,11 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:webview_windows/webview_windows.dart';
-import 'package:resonance_app/core/utils/uicons.dart';
+import 'package:resonance/core/utils/uicons.dart';
 import '../../application/providers/video_player_notifier.dart';
 import '../../application/providers/webview_provider.dart'; // GLOBAL PROVIDER
 import '../../../library/data/models/media_item.dart';
-import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
+import 'package:resonance/core/widgets/reusable_hover_icon_button.dart';
 import 'dart:ui'; // For BackdropFilter
 
 class WebVideoSnifferScreen extends ConsumerStatefulWidget {

@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:resonance_app/features/playlist/data/models/playlist_model.dart';
-import 'package:resonance_app/core/data/services/storage_service.dart';
+import 'package:resonance/features/playlist/data/models/playlist_model.dart';
+import 'package:resonance/core/data/services/storage_service.dart';
 
 /// Key penyimpanan untuk SharedPreferences
 const _playlistsKey = 'user_playlists';

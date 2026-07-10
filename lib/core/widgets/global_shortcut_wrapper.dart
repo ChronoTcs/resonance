@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:resonance_app/features/player/application/providers/audio_provider.dart';
-import 'package:resonance_app/features/player/application/providers/video_player_notifier.dart';
-import 'package:resonance_app/features/player/application/providers/active_media_focus_provider.dart';
+import 'package:resonance/features/player/application/providers/audio_provider.dart';
+import 'package:resonance/features/player/application/providers/video_player_notifier.dart';
+import 'package:resonance/features/player/application/providers/active_media_focus_provider.dart';
 
 class GlobalShortcutWrapper extends ConsumerStatefulWidget {
   final Widget child;

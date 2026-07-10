@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
-import 'package:resonance_app/features/lyrics/application/lyrics_provider.dart';
-import 'package:resonance_app/features/lyrics/application/lyrics_translation_provider.dart';
+import 'package:resonance/features/lyrics/application/lyrics_provider.dart';
+import 'package:resonance/features/lyrics/application/lyrics_translation_provider.dart';
 
 class FloatingLyricsView extends ConsumerStatefulWidget {
   const FloatingLyricsView({super.key});

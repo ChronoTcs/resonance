@@ -6,8 +6,8 @@ import 'package:audio_metadata_reader/audio_metadata_reader.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/media_item.dart';
 
-import 'package:resonance_app/core/data/services/cache_manager.dart';
-import 'package:resonance_app/core/utils/path_utils.dart';
+import 'package:resonance/core/data/services/cache_manager.dart';
+import 'package:resonance/core/utils/path_utils.dart';
 
 class LibraryRepository {
   final CacheManager _cacheManager;

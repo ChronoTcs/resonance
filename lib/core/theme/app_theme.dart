@@ -17,10 +17,10 @@ class AppTheme {
 
   static Color? _resolveAccent(String? mode, Brightness brightness) {
     if (mode == null) {
-      // Default fallback: Auroral Glow for Light Mode, Copper-Amber / Gilded Gold for Dark Mode
+      // Default fallback: Auroral Glow for Light Mode, Copper-Amber for Dark Mode
       return brightness == Brightness.light
           ? const Color(0xFFE9AD71)
-          : const Color(0xFFD5A24E);
+          : const Color(0xFFAE8C50);
     }
     if (mode == 'windows') {
       return SystemTheme.accentColor.accent;
@@ -139,18 +139,21 @@ class AppTheme {
     );
   }
 
-  static ThemeData getDarkTheme(String? accentMode) {
+  static ThemeData getDarkTheme(String? accentMode, {bool isOnyx = false}) {
+    final defaultAccent = isOnyx ? const Color(0xFFE2B35B) : const Color(0xFFAE8C50);
     final accentColor = _resolveAccent(accentMode, Brightness.dark);
-    final primary = accentColor ?? creamBackground;
+    final primary = accentColor ?? defaultAccent;
+    final bg = isOnyx ? const Color(0xFF090C0E) : darkBackground;
+    final surf = isOnyx ? const Color(0xFF12161A) : darkSurface;
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
       primaryColor: primary, // Cream or custom primary in dark mode
-      scaffoldBackgroundColor: darkBackground,
+      scaffoldBackgroundColor: bg,
       colorScheme: ColorScheme.dark(
         primary: primary,
         secondary: accentSoft,
-        surface: darkSurface,
+        surface: surf,
         onSurface: textLight,
       ),
       textTheme: GoogleFonts.interTextTheme(
@@ -167,16 +170,16 @@ class AppTheme {
           fontWeight: FontWeight.bold,
         ),
       ),
-      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-        backgroundColor: darkBackground,
+      bottomNavigationBarTheme: BottomNavigationBarThemeData(
+        backgroundColor: bg,
         selectedItemColor: creamBackground,
         unselectedItemColor: accentGrey,
         type: BottomNavigationBarType.fixed,
         elevation: 10,
       ),
-      navigationRailTheme: const NavigationRailThemeData(
-        backgroundColor: darkSurface,
-        selectedIconTheme: IconThemeData(color: creamBackground),
+      navigationRailTheme: NavigationRailThemeData(
+        backgroundColor: surf,
+        selectedIconTheme: const IconThemeData(color: creamBackground),
         unselectedIconTheme: IconThemeData(color: accentGrey),
         selectedLabelTextStyle: TextStyle(color: creamBackground),
         unselectedLabelTextStyle: TextStyle(color: accentGrey),

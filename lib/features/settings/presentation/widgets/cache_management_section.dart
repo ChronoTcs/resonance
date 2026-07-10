@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:resonance_app/core/utils/uicons.dart';
+import 'package:resonance/core/utils/uicons.dart';
 import '../../application/maintenance_provider.dart';
-import 'package:resonance_app/core/widgets/danger_icon_button.dart';
+import 'package:resonance/core/widgets/danger_icon_button.dart';
 
 class CacheManagementSection extends ConsumerWidget {
   const CacheManagementSection({super.key});

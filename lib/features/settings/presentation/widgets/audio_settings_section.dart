@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:resonance_app/core/utils/uicons.dart';
-import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
+import 'package:resonance/core/utils/uicons.dart';
+import 'package:resonance/core/widgets/reusable_hover_icon_button.dart';
 import '../../../../core/data/services/storage_service.dart';
 import '../../../player/application/providers/audio_provider.dart';
 

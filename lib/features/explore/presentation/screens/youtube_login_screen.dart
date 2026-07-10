@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:webview_windows/webview_windows.dart';
 import 'package:path/path.dart' as p;
-import 'package:resonance_app/core/utils/uicons.dart';
+import 'package:resonance/core/utils/uicons.dart';
 import '../../application/services/youtube_auth_service.dart';
 
 class YoutubeLoginScreen extends ConsumerStatefulWidget {

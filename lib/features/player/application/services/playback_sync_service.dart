@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../tray/application/tray_service.dart';
 import '../../../library/data/models/media_item.dart';
@@ -29,9 +30,12 @@ class PlaybackSyncService {
     if (Platform.isWindows) {
       _ref.read(trayServiceProvider).updateTrayMetadata(track, isPlaying);
     }
+  }
 
-    // 3. Persistent Metadata Sync (V17.0 mandate)
-    _syncPersistentMetadata(track);
+  /// Called only on track change (not play/pause toggle) to cache artwork and lyrics.
+  /// Separated from updateSync to prevent duplicate downloads on isPlaying toggles.
+  Future<void> syncPersistentMetadataOnTrackChange(MediaItem track) async {
+    return _syncPersistentMetadata(track);
   }
 
   /// [V18.4 SOTA] Force Taskbar Synchronization.
@@ -47,9 +51,21 @@ class PlaybackSyncService {
     final songId = track.id ?? track.path;
     final cache = _ref.read(mediaCacheServiceProvider);
     
-    if (track.thumbnailUrl != null && track.thumbnailUrl!.startsWith('http')) {
-      await cache.cacheArtwork(songId, track.thumbnailUrl);
+    // Non-blocking background task for artwork so it does not delay lyrics fetching
+    Future.microtask(() async {
+      try {
+        if (track.thumbnailUrl != null && track.thumbnailUrl!.startsWith('http')) {
+          await cache.cacheArtwork(songId, track.thumbnailUrl);
+        }
+      } catch (e) {
+        debugPrint('[PlaybackSyncService] Failed to cache artwork: $e');
+      }
+    });
+
+    try {
+      await _ref.read(lyricsRepositoryProvider).getLyrics(track);
+    } catch (e) {
+      debugPrint('[PlaybackSyncService] Failed to fetch lyrics: $e');
     }
-    await _ref.read(lyricsRepositoryProvider).getLyrics(track);
   }
 }

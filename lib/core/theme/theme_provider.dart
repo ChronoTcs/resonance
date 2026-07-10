@@ -1,14 +1,20 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-class ThemeProvider extends Notifier<ThemeMode> {
+enum AppThemeMode {
+  system,
+  light, // Modern Glass
+  dark,  // Deep Opulence
+  onyx,  // Onyx (Pure Dark)
+}
+
+class ThemeProvider extends Notifier<AppThemeMode> {
   static const String _themeKey = 'app_theme_mode';
 
   @override
-  ThemeMode build() {
+  AppThemeMode build() {
     _loadTheme();
-    return ThemeMode.system; // Default until loaded
+    return AppThemeMode.system; // Default until loaded
   }
 
   Future<void> _loadTheme() async {
@@ -16,27 +22,30 @@ class ThemeProvider extends Notifier<ThemeMode> {
     final themeString = prefs.getString(_themeKey);
 
     if (themeString == 'light') {
-      state = ThemeMode.light;
+      state = AppThemeMode.light;
     } else if (themeString == 'dark') {
-      state = ThemeMode.dark;
+      state = AppThemeMode.dark;
+    } else if (themeString == 'onyx') {
+      state = AppThemeMode.onyx;
     } else {
-      state = ThemeMode.system;
+      state = AppThemeMode.system;
     }
   }
 
-  Future<void> setTheme(ThemeMode mode) async {
+  Future<void> setTheme(AppThemeMode mode) async {
     state = mode;
     final prefs = await SharedPreferences.getInstance();
 
     String themeString = 'system';
-    if (mode == ThemeMode.light) themeString = 'light';
-    if (mode == ThemeMode.dark) themeString = 'dark';
+    if (mode == AppThemeMode.light) themeString = 'light';
+    if (mode == AppThemeMode.dark) themeString = 'dark';
+    if (mode == AppThemeMode.onyx) themeString = 'onyx';
 
     await prefs.setString(_themeKey, themeString);
   }
 }
 
-final themeProvider = NotifierProvider<ThemeProvider, ThemeMode>(() {
+final themeProvider = NotifierProvider<ThemeProvider, AppThemeMode>(() {
   return ThemeProvider();
 });
 

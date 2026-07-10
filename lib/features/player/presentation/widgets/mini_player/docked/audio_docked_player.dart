@@ -1,16 +1,16 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:resonance_app/features/player/application/providers/audio_provider.dart';
+import 'package:resonance/features/player/application/providers/audio_provider.dart';
 
-import 'package:resonance_app/core/widgets/reusable_seek_slider.dart';
-import 'package:resonance_app/features/player/presentation/widgets/mini_player/docked/components/audio_track_info.dart';
-import 'package:resonance_app/features/player/presentation/widgets/mini_player/docked/components/audio_core_controls.dart';
-import 'package:resonance_app/features/player/presentation/widgets/mini_player/docked/components/audio_extra_actions.dart';
+import 'package:resonance/core/widgets/reusable_seek_slider.dart';
+import 'package:resonance/features/player/presentation/widgets/mini_player/docked/components/audio_track_info.dart';
+import 'package:resonance/features/player/presentation/widgets/mini_player/docked/components/audio_core_controls.dart';
+import 'package:resonance/features/player/presentation/widgets/mini_player/docked/components/audio_extra_actions.dart';
 
 // Import NowPlayingScreen notifier (this is typically in the same or separate provider file depending on architecture)
 // Since we isolated things, I'll rely on the global navigation or a similar provider.
-import 'package:resonance_app/features/lyrics/presentation/providers/lyrics_ui_provider.dart';
+import 'package:resonance/features/lyrics/presentation/providers/lyrics_ui_provider.dart';
 
 class AudioDockedPlayer extends ConsumerWidget {
   const AudioDockedPlayer({super.key});

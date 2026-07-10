@@ -1,8 +1,8 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:resonance_app/core/utils/uicons.dart';
-import 'package:resonance_app/core/utils/app_icons.dart';
+import 'package:resonance/core/utils/uicons.dart';
+import 'package:resonance/core/utils/app_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../widgets/about_card.dart';
 import '../screens/help_screen.dart';

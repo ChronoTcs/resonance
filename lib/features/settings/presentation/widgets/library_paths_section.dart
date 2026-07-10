@@ -2,10 +2,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:resonance_app/core/utils/uicons.dart';
+import 'package:resonance/core/utils/uicons.dart';
 import '../../../library/application/library_provider.dart';
 import '../../../../core/application/services/permission_service.dart';
-import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
+import 'package:resonance/core/widgets/reusable_hover_icon_button.dart';
 
 class LibraryPathsSection extends ConsumerWidget {
   const LibraryPathsSection({super.key});

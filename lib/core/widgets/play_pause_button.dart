@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:resonance_app/core/utils/uicons.dart';
+import 'package:resonance/core/utils/uicons.dart';
 import 'reusable_hover_icon_button.dart';
 
 enum PlayPauseSize { small, medium, large }

@@ -4,14 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart' hide VideoState;
-import 'package:resonance_app/core/utils/uicons.dart';
+import 'package:resonance/core/utils/uicons.dart';
 import '../../application/providers/video_player_notifier.dart';
-import 'package:resonance_app/core/utils/formatters.dart';
-import 'package:resonance_app/core/widgets/reusable_seek_slider.dart';
+import 'package:resonance/core/utils/formatters.dart';
+import 'package:resonance/core/widgets/reusable_seek_slider.dart';
 import '../notifiers/player_ui_controller.dart';
 import 'dedicated_fullscreen_video.dart';
-import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
-import 'package:resonance_app/core/widgets/app_back_button.dart';
+import 'package:resonance/core/widgets/reusable_hover_icon_button.dart';
+import 'package:resonance/core/widgets/app_back_button.dart';
 
 class DedicatedVideoPlayer extends ConsumerStatefulWidget {
   const DedicatedVideoPlayer({super.key});

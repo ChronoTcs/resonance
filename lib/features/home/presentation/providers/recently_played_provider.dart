@@ -1,9 +1,9 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:resonance_app/features/library/data/models/media_item.dart';
-import 'package:resonance_app/core/data/services/media_cache_service.dart';
-import 'package:resonance_app/core/data/services/storage_service.dart';
+import 'package:resonance/features/library/data/models/media_item.dart';
+import 'package:resonance/core/data/services/media_cache_service.dart';
+import 'package:resonance/core/data/services/storage_service.dart';
 
 const _recentlyPlayedKey = 'recently_played_items';
 const _maxRecentlyPlayed = 20;

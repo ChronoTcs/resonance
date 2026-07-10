@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:resonance_app/core/widgets/media_artwork_widget.dart';
-import 'package:resonance_app/core/widgets/media_actions_bottom_sheet.dart';
-import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
-import 'package:resonance_app/core/utils/uicons.dart';
-import 'package:resonance_app/features/library/application/library_provider.dart';
-import 'package:resonance_app/features/player/presentation/widgets/mini_player/shared/audio_settings_sheet.dart';
-import 'package:resonance_app/features/player/presentation/widgets/player_cards.dart';
+import 'package:resonance/core/widgets/media_artwork_widget.dart';
+import 'package:resonance/core/widgets/media_actions_bottom_sheet.dart';
+import 'package:resonance/core/widgets/reusable_hover_icon_button.dart';
+import 'package:resonance/core/utils/uicons.dart';
+import 'package:resonance/features/library/application/library_provider.dart';
+import 'package:resonance/features/player/presentation/widgets/mini_player/shared/audio_settings_sheet.dart';
+import 'package:resonance/features/player/presentation/widgets/player_cards.dart';
 
 /// [FullScreenAudioView]
 /// Bertanggung jawab HANYA untuk layout mode Audio:

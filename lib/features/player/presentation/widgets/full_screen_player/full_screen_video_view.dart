@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit_video/media_kit_video.dart';
-import 'package:resonance_app/features/player/application/providers/video_player_notifier.dart';
+import 'package:resonance/features/player/application/providers/video_player_notifier.dart';
 
 /// [FullScreenVideoView]
 /// Bertanggung jawab HANYA untuk layout mode Video:

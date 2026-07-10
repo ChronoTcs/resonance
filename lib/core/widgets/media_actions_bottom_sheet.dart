@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:resonance_app/core/utils/uicons.dart';
-import 'package:resonance_app/core/utils/app_icons.dart';
+import 'package:resonance/core/utils/uicons.dart';
+import 'package:resonance/core/utils/app_icons.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart' as yt;
 import '../../features/library/data/models/media_item.dart';
 import '../../features/playlist/application/playlist_provider.dart';

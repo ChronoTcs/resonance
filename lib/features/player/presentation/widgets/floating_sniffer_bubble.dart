@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:webview_windows/webview_windows.dart';
-import 'package:resonance_app/core/utils/uicons.dart';
+import 'package:resonance/core/utils/uicons.dart';
 import '../../application/providers/webview_provider.dart';
 import '../screens/web_video_sniffer_screen.dart';
 import '../../../../main.dart';
 import '../../../../core/routing/route_provider.dart';
 import '../../application/providers/video_player_notifier.dart' as v;
-import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
+import 'package:resonance/core/widgets/reusable_hover_icon_button.dart';
 
 class FloatingSnifferBubble extends ConsumerStatefulWidget {
   const FloatingSnifferBubble({super.key});

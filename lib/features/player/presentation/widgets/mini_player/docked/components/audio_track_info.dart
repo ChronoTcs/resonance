@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:resonance_app/features/library/data/models/media_item.dart';
-import 'package:resonance_app/core/widgets/media_artwork_widget.dart';
-import 'package:resonance_app/core/utils/formatters.dart';
-import 'package:resonance_app/features/player/application/providers/audio_provider.dart';
+import 'package:resonance/features/library/data/models/media_item.dart';
+import 'package:resonance/core/widgets/media_artwork_widget.dart';
+import 'package:resonance/core/utils/formatters.dart';
+import 'package:resonance/features/player/application/providers/audio_provider.dart';
 
 class AudioTrackInfo extends ConsumerWidget {
   final MediaItem track;

@@ -9,7 +9,6 @@ import '../../../home/presentation/providers/recently_played_provider.dart';
 import '../../../library/data/models/media_item.dart';
 import '../../../library/application/library_provider.dart';
 
-import '../../../../core/data/services/media_cache_service.dart';
 import '../services/windows_system_media_service.dart';
 import 'active_media_focus_provider.dart';
 import '../services/playback_architecture_service.dart';
@@ -18,6 +17,8 @@ import '../../data/models/player_enums.dart';
 import 'package:audio_session/audio_session.dart';
 import '../audio_handler.dart';
 import '../../../../core/data/services/stream_cache_tracker_service.dart';
+
+import '../services/playback_engine_service.dart';
 
 // ── Extracted Services ────────────────────────────────────────────────────────
 import '../states/audio_state.dart';
@@ -40,12 +41,9 @@ class AudioNotifier extends Notifier<AudioState> {
 
   // ── Navigation guards ──────────────────────────────────────────────────────
   bool _isNavigating = false;
+  bool _isGaplessTransitioning = false;
   final List<StreamSubscription> _subscriptions = [];
   DateTime? _lastCompletionTime;
-
-  // ── Anti-loop guard (MUST stay here) ──────────────────────────────────────
-  int _consecutiveErrorCount = 0;
-  DateTime? _lastErrorTime;
 
   // ── Services ───────────────────────────────────────────────────────────────
   late QueueService _queue;
@@ -53,6 +51,7 @@ class AudioNotifier extends Notifier<AudioState> {
   late AudioPersistenceService _persistence;
   late AudioMetadataService _metadata;
   late StreamResolutionService _resolver;
+  PlaybackEngineService get _engine => ref.read(playbackEngineServiceProvider);
 
   @override
   AudioState build() {
@@ -70,12 +69,10 @@ class AudioNotifier extends Notifier<AudioState> {
 
     // Cache path listener
     ref.listen(libraryProvider.select((s) => s.cacheFolderPath), (_, next) {
-      ref.read(mediaCacheServiceProvider).setCustomPath(next);
-      MpvConfigurator.applyCacheSettings(_player, next);
+      _engine.configureCache(_player, next);
     });
     final initialPath = ref.read(libraryProvider).cacheFolderPath;
-    ref.read(mediaCacheServiceProvider).setCustomPath(initialPath);
-    MpvConfigurator.applyCacheSettings(_player, initialPath);
+    _engine.configureCache(_player, initialPath);
 
     if (isWindows) {
       _smtc.initialize(
@@ -185,6 +182,12 @@ class AudioNotifier extends Notifier<AudioState> {
 
       _player.stream.completed.listen((completed) {
         if (!completed) return;
+        // CRITICAL: If player already has a pre-buffered track in its playlist
+        // (GaplessPrefetchService called player.add()), the playlist.index listener
+        // will handle the transition via _acceptGaplessTransition().
+        // completed fires BEFORE playlist.index, so _gaplessTransitionInProgress
+        // cannot intercept it — we must check the player's live state instead.
+        if (_player.state.playlist.medias.length > 1) return;
         final now = DateTime.now();
         if (_lastCompletionTime != null &&
             now.difference(_lastCompletionTime!).inMilliseconds < 800) {
@@ -200,32 +203,21 @@ class AudioNotifier extends Notifier<AudioState> {
         }
       }),
 
+      // Gapless transition: engine auto-moved to pre-buffered index 1.
+      // Only update Dart state — do NOT call player.open() again.
       _player.stream.playlist.listen((playlist) {
         if (playlist.index == 1 &&
             ref.read(mediaFocusProvider) == MediaFocus.audio) {
-          debugPrint('Gapless: Engine transitioned to pre-fetched track');
-          next(fromCompletion: true);
+          debugPrint('[Gapless] Engine auto-transitioned to pre-buffered track.');
+          _acceptGaplessTransition();
         }
       }),
 
       // ── Anti-Loop Error Guard ─────────────────────────────────────────────
       _player.stream.error.listen((error) {
-        final errStr = error.toString();
-        if (errStr.contains('.lrc')) return;
-        final now = DateTime.now();
-        if (_lastErrorTime != null &&
-            now.difference(_lastErrorTime!).inSeconds < 5) {
-          _consecutiveErrorCount++;
-        } else {
-          _consecutiveErrorCount = 1;
-        }
-        _lastErrorTime = now;
-        if (_consecutiveErrorCount >= 3) {
-          debugPrint(
-            '[AudioNotifier] CRITICAL: Stopping to prevent infinite error loop.',
-          );
+        final shouldStop = _engine.handlePlaybackError(error);
+        if (shouldStop) {
           state = state.copyWith(isPlaying: false, isLoading: false);
-          _consecutiveErrorCount = 0;
           return;
         }
         if (ref.read(mediaFocusProvider) == MediaFocus.audio) {
@@ -233,6 +225,49 @@ class AudioNotifier extends Notifier<AudioState> {
         }
       }),
     ]);
+  }
+
+  // ── Gapless Accept (no player.open — engine already transitioned) ──────────
+
+  Future<void> _acceptGaplessTransition() async {
+    if (_isNavigating || _isGaplessTransitioning) return;
+    _isGaplessTransitioning = true;
+    _isNavigating = true;
+
+    final nextTrack = _queue.getNextTrack(
+      state.loopMode,
+      state.isShuffleEnabled,
+      fromCompletion: true,
+    );
+
+    if (nextTrack != null) {
+      _onTrackChanged(nextTrack, _queue.currentIndex);
+      ref.read(mediaFocusProvider.notifier).setAudioFocus();
+      _smtc.setCallbacks(
+        onPlay: play,
+        onPause: pause,
+        onNext: next,
+        onPrevious: previous,
+        onStop: stop,
+      );
+      _engine.resetErrorGuard();
+
+      // Shift media_kit playlist back by removing the completed track at index 0.
+      // This resets index 1 back to index 0.
+      try {
+        await _player.remove(0);
+        debugPrint('[Gapless] Successfully removed completed track from player playlist.');
+      } catch (e) {
+        debugPrint('[Gapless] Failed to remove completed track: $e');
+      }
+    }
+    state = state.copyWith(currentIndex: _queue.currentIndex);
+    _updateNextTrack();
+    _isNavigating = false;
+
+    // Cooldown lock to let media_kit playlist events settle
+    await Future.delayed(const Duration(milliseconds: 500));
+    _isGaplessTransitioning = false;
   }
 
   // ── Track Changed ──────────────────────────────────────────────────────────
@@ -299,12 +334,29 @@ class AudioNotifier extends Notifier<AudioState> {
       state = state.copyWith(queue: [item], currentIndex: 0);
       index = 0;
     }
-    _onTrackChanged(item, index);
+
+    MediaItem trackToPlay = item;
+    if (item.isStreaming && !item.path.startsWith('http') && !item.path.contains('/') && !item.path.contains('\\')) {
+      state = state.copyWith(isLoading: true, currentTrack: item);
+      try {
+        final resolvedPath = await _resolver.resolve(item);
+        trackToPlay = item.copyWith(path: resolvedPath);
+      } catch (e) {
+        debugPrint('[AudioNotifier] Stream resolution failed in playTrack: $e');
+        state = state.copyWith(isPlaying: false, isLoading: false);
+        return;
+      }
+    }
+
+    _onTrackChanged(trackToPlay, index);
+    state = state.copyWith(isLoading: true);
     try {
-      await _player.open(_resolver.buildMedia(item.path), play: true);
-      _consecutiveErrorCount = 0;
+      await _player.open(_resolver.buildMedia(trackToPlay.path), play: true);
+      _engine.resetErrorGuard();
     } catch (e) {
       debugPrint('[AudioNotifier] CRITICAL: Error opening track: $e');
+    } finally {
+      state = state.copyWith(isLoading: false);
     }
     _updateNextTrack();
   }
@@ -332,9 +384,21 @@ class AudioNotifier extends Notifier<AudioState> {
     if (state.queue.isEmpty) {
       playPlaylist([item]);
     } else {
-      final updatedQueue = [...state.queue, item];
-      _queue.setQueue(updatedQueue, initialIndex: state.currentIndex);
-      state = state.copyWith(queue: updatedQueue);
+      // ponytail: appendTrack preserves cursor — avoids setQueue cursor reset
+      _queue.appendTrack(item);
+      state = state.copyWith(queue: [...state.queue, item]);
+      _updateNextTrack();
+    }
+  }
+
+  /// Batch-appends tracks to queue. Fires _updateNextTrack once — not once per track.
+  void addTracksToQueue(List<MediaItem> items) {
+    if (items.isEmpty) return;
+    if (state.queue.isEmpty) {
+      playPlaylist(items);
+    } else {
+      _queue.appendTracks(items);
+      state = state.copyWith(queue: [...state.queue, ...items]);
       _updateNextTrack();
     }
   }
@@ -397,8 +461,14 @@ class AudioNotifier extends Notifier<AudioState> {
   }
 
   void previous() {
+    if (_isNavigating) return;
+    _isNavigating = true;
     final prev = _queue.getPreviousTrack();
-    if (prev != null) _playCurrentFromQueue(prev);
+    if (prev != null) {
+      _playCurrentFromQueue(prev).then((_) => _isNavigating = false);
+    } else {
+      _isNavigating = false;
+    }
     state = state.copyWith(currentIndex: _queue.currentIndex);
     _updateNextTrack();
   }

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:resonance_app/core/utils/uicons.dart';
-import 'package:resonance_app/features/player/application/providers/audio_provider.dart';
-import 'package:resonance_app/core/widgets/play_pause_button.dart';
-import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
-import 'package:resonance_app/core/widgets/reusable_seek_slider.dart';
+import 'package:resonance/core/utils/uicons.dart';
+import 'package:resonance/features/player/application/providers/audio_provider.dart';
+import 'package:resonance/core/widgets/play_pause_button.dart';
+import 'package:resonance/core/widgets/reusable_hover_icon_button.dart';
+import 'package:resonance/core/widgets/reusable_seek_slider.dart';
 
 class FloatingBottomBar extends ConsumerWidget {
   const FloatingBottomBar({super.key});

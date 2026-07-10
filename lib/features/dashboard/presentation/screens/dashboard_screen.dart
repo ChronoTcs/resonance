@@ -1,22 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:resonance_app/features/home/presentation/screens/home_screen.dart';
-import 'package:resonance_app/features/download/presentation/screens/download_screen.dart';
-import 'package:resonance_app/features/playlist/presentation/screens/playlist_screen.dart';
-import 'package:resonance_app/features/settings/presentation/screens/settings_screen.dart';
-import 'package:resonance_app/features/library/presentation/screens/library_screen.dart';
-import 'package:resonance_app/features/player/presentation/widgets/mini_player/docked/docked_mini_player.dart';
-import 'package:resonance_app/features/lyrics/presentation/screens/lyrics_screen.dart';
-import 'package:resonance_app/features/lyrics/presentation/providers/lyrics_ui_provider.dart';
-import 'package:resonance_app/core/providers/navigation_provider.dart';
-import 'package:resonance_app/features/explore/presentation/screens/explore_screen.dart';
-import 'package:resonance_app/features/player/presentation/screens/now_playing_screen.dart';
-import 'package:resonance_app/core/widgets/reusable_hover_icon_button.dart';
-import 'package:resonance_app/core/utils/uicons.dart';
-import 'package:resonance_app/core/application/services/permission_service.dart';
+import 'package:resonance/core/widgets/custom_title_bar.dart';
+import 'package:resonance/features/home/presentation/screens/home_screen.dart';
+import 'package:resonance/features/download/presentation/screens/download_screen.dart';
+import 'package:resonance/features/playlist/presentation/screens/playlist_screen.dart';
+import 'package:resonance/features/settings/presentation/screens/settings_screen.dart';
+import 'package:resonance/features/library/presentation/screens/library_screen.dart';
+import 'package:resonance/features/player/presentation/widgets/mini_player/docked/docked_mini_player.dart';
+import 'package:resonance/features/lyrics/presentation/screens/lyrics_screen.dart';
+import 'package:resonance/features/lyrics/presentation/providers/lyrics_ui_provider.dart';
+import 'package:resonance/core/providers/navigation_provider.dart';
+import 'package:resonance/features/explore/presentation/screens/explore_screen.dart';
+import 'package:resonance/features/player/presentation/screens/now_playing_screen.dart';
+import 'package:resonance/core/widgets/reusable_hover_icon_button.dart';
+import 'package:resonance/core/utils/uicons.dart';
+import 'package:resonance/core/application/services/permission_service.dart';
 import 'dart:io';
-import 'package:resonance_app/features/tray/application/tray_service.dart';
-import 'package:resonance_app/features/player/application/services/audio_orchestrator.dart';
+import 'package:resonance/features/tray/application/tray_service.dart';
+import 'package:resonance/features/player/application/services/audio_orchestrator.dart';
 
 class MainDashboard extends ConsumerStatefulWidget {
   const MainDashboard({super.key});
@@ -90,8 +91,9 @@ class _MainDashboardState extends ConsumerState<MainDashboard> {
     int getPhysicalIndex(int logicalIndex) {
       if (!isDesktop) {
         if (logicalIndex == 3) return 2; // Playlists -> Library
-        if (logicalIndex > 3)
+        if (logicalIndex > 3) {
           return logicalIndex - 1; // Download (4->3), Settings (5->4)
+        }
       }
       return logicalIndex;
     }
@@ -99,8 +101,9 @@ class _MainDashboardState extends ConsumerState<MainDashboard> {
     // Menerjemahkan tap fisik (0-4) kembali ke index logis (0-5)
     int getLogicalIndex(int physicalIndex) {
       if (!isDesktop) {
-        if (physicalIndex >= 3)
+        if (physicalIndex >= 3) {
           return physicalIndex + 1; // 3->4 (Download), 4->5 (Settings)
+        }
       }
       return physicalIndex;
     }
@@ -112,6 +115,7 @@ class _MainDashboardState extends ConsumerState<MainDashboard> {
       resizeToAvoidBottomInset: false,
       body: Column(
         children: [
+          if (isDesktop) const CustomTitleBar(),
           Expanded(
             child: Row(
               children: [
@@ -149,23 +153,94 @@ class _MainDashboardState extends ConsumerState<MainDashboard> {
                           child: Stack(
                             children: [
                               // Floating Active Indicator
+                              if (logicalIndex != 5)
+                                TweenAnimationBuilder<double>(
+                                  duration: const Duration(milliseconds: 300),
+                                  curve: Curves.easeOutBack,
+                                  tween: Tween<double>(
+                                    begin: logicalIndex * 44.0,
+                                    end: logicalIndex * 44.0,
+                                  ),
+                                  builder: (context, value, child) {
+                                    return Positioned(
+                                      top: value + 2.0,
+                                      left: 0,
+                                      child: Container(
+                                        width: 3,
+                                        height: 40,
+                                        margin: const EdgeInsets.only(left: 4),
+                                        child: child,
+                                      ),
+                                    );
+                                  },
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context).primaryColor,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                  ),
+                                ),
+                              // Nav items list
+                              ListView(
+                                padding: EdgeInsets.zero,
+                                physics: const NeverScrollableScrollPhysics(),
+                                children: [
+                                  _buildNavItem(
+                                    0,
+                                    'Home',
+                                    UIcons.regular.home,
+                                    UIcons.solid.home,
+                                  ),
+                                  _buildNavItem(
+                                    1,
+                                    'Explore',
+                                    UIcons.regular.compass_alt,
+                                    UIcons.solid.compass_alt,
+                                  ),
+                                  _buildNavItem(
+                                    2,
+                                    'Library',
+                                    UIcons.regular.headphones,
+                                    UIcons.solid.headphones,
+                                  ),
+                                  _buildNavItem(
+                                    3,
+                                    'Playlists',
+                                    UIcons.regular.list_music,
+                                    UIcons.solid.list_music,
+                                  ),
+                                  _buildNavItem(
+                                    4,
+                                    'Download',
+                                    UIcons.regular.download,
+                                    UIcons.solid.download,
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        // Settings Button positioned at the bottom of the rail with identical slide indicator animation
+                        Container(
+                          height: 50,
+                          margin: const EdgeInsets.only(bottom: 12),
+                          child: Stack(
+                            children: [
                               TweenAnimationBuilder<double>(
                                 duration: const Duration(milliseconds: 300),
                                 curve: Curves.easeOutBack,
                                 tween: Tween<double>(
-                                  begin: logicalIndex * 46.0,
-                                  end: logicalIndex * 46.0,
+                                  begin: logicalIndex == 5 ? 0.0 : 50.0,
+                                  end: logicalIndex == 5 ? 0.0 : 50.0,
                                 ),
                                 builder: (context, value, child) {
+                                  if (value >= 44.0) return const SizedBox.shrink();
                                   return Positioned(
-                                    top: value,
+                                    top: value + 5.0,
                                     left: 0,
                                     child: Container(
                                       width: 3,
-                                      height: 46,
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 12,
-                                      ),
+                                      height: 40,
                                       margin: const EdgeInsets.only(left: 4),
                                       child: child,
                                     ),
@@ -178,47 +253,11 @@ class _MainDashboardState extends ConsumerState<MainDashboard> {
                                   ),
                                 ),
                               ),
-                              // Nav items list
-                              ListView(
-                                physics: const NeverScrollableScrollPhysics(),
-                                children: [
-                                  _buildNavItem(
-                                    0,
-                                    'Home',
-                                    Icons.home_outlined,
-                                    Icons.home,
-                                  ),
-                                  _buildNavItem(
-                                    1,
-                                    'Explore',
-                                    Icons.explore_outlined,
-                                    Icons.explore,
-                                  ),
-                                  _buildNavItem(
-                                    2,
-                                    'Library',
-                                    Icons.library_music_outlined,
-                                    Icons.library_music,
-                                  ),
-                                  _buildNavItem(
-                                    3,
-                                    'Playlists',
-                                    Icons.queue_music_outlined,
-                                    Icons.queue_music,
-                                  ),
-                                  _buildNavItem(
-                                    4,
-                                    'Download',
-                                    Icons.download_outlined,
-                                    Icons.download_rounded,
-                                  ),
-                                  _buildNavItem(
-                                    5,
-                                    'Settings',
-                                    Icons.settings_outlined,
-                                    Icons.settings,
-                                  ),
-                                ],
+                              _buildNavItem(
+                                5,
+                                'Settings',
+                                UIcons.regular.settings,
+                                UIcons.solid.settings,
                               ),
                             ],
                           ),
@@ -305,30 +344,30 @@ class _MainDashboardState extends ConsumerState<MainDashboard> {
                     .read(mainNavigationProvider.notifier)
                     .setIndex(getLogicalIndex(index));
               },
-              items: const [
+              items: [
                 BottomNavigationBarItem(
-                  icon: Icon(Icons.home_outlined),
-                  activeIcon: Icon(Icons.home),
+                  icon: Icon(UIcons.regular.home),
+                  activeIcon: Icon(UIcons.solid.home),
                   label: 'Home',
                 ),
                 BottomNavigationBarItem(
-                  icon: Icon(Icons.explore_outlined),
-                  activeIcon: Icon(Icons.explore),
+                  icon: Icon(UIcons.regular.compass_alt),
+                  activeIcon: Icon(UIcons.solid.compass_alt),
                   label: 'Explore',
                 ),
                 BottomNavigationBarItem(
-                  icon: Icon(Icons.library_music_outlined),
-                  activeIcon: Icon(Icons.library_music),
+                  icon: Icon(UIcons.regular.headphones),
+                  activeIcon: Icon(UIcons.solid.headphones),
                   label: 'Library',
                 ),
                 BottomNavigationBarItem(
-                  icon: Icon(Icons.download_outlined),
-                  activeIcon: Icon(Icons.download_rounded),
+                  icon: Icon(UIcons.regular.download),
+                  activeIcon: Icon(UIcons.solid.download),
                   label: 'Download',
                 ),
                 BottomNavigationBarItem(
-                  icon: Icon(Icons.settings_outlined),
-                  activeIcon: Icon(Icons.settings),
+                  icon: Icon(UIcons.regular.settings),
+                  activeIcon: Icon(UIcons.solid.settings),
                   label: 'Settings',
                 ),
               ],
@@ -351,7 +390,7 @@ class _MainDashboardState extends ConsumerState<MainDashboard> {
     final inactiveColor = theme.iconTheme.color!.withValues(alpha: 0.5);
     final color = isSelected ? activeColor : inactiveColor;
 
-    return ReusableHoverIconButton(
+    final button = ReusableHoverIconButton(
       icon: isSelected ? selectedIconData : iconData,
       tooltip: title,
       onTap: () {
@@ -371,5 +410,7 @@ class _MainDashboardState extends ConsumerState<MainDashboard> {
         fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
       ),
     );
+
+    return button;
   }
 }

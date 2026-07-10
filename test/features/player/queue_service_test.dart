@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:resonance_app/features/library/data/models/media_item.dart';
-import 'package:resonance_app/features/player/application/services/queue_service.dart';
-import 'package:resonance_app/features/player/data/models/player_enums.dart';
+import 'package:resonance/features/library/data/models/media_item.dart';
+import 'package:resonance/features/player/application/services/queue_service.dart';
+import 'package:resonance/features/player/data/models/player_enums.dart';
 
 void main() {
   late QueueService queueService;
