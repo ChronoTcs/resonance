@@ -20,16 +20,7 @@ class _CustomTitleBarState extends ConsumerState<CustomTitleBar> with WindowList
 
   static const _hoverChannel = MethodChannel('resonance/titlebar_hover');
 
-  static const Map<String, List<Color>> _paletteGradients = {
-    'palette1': [Color(0xFFDBCDC2), Color(0xFFA89689)],
-    'palette2': [Color(0xFFFCFAF5), Color(0xFFDDD4C5)],
-    'palette3': [Color(0xFFE4ECE8), Color(0xFFA3B5AE)],
-    'palette4': [Color(0xFFE2EBEE), Color(0xFFA5B6BD)],
-    'palette5': [Color(0xFFCBD8DF), Color(0xFF8A9EA9)],
-    'palette6': [Color(0xFFB7C9D1), Color(0xFF738995)],
-    'palette7': [Color(0xFFE9AD71), Color(0xFFFFCEAA)],
-    'palette8': [Color(0xFFAE8C50), Color(0xFFBB6B4C)],
-  };
+
 
   @override
   void initState() {
@@ -63,10 +54,6 @@ class _CustomTitleBarState extends ConsumerState<CustomTitleBar> with WindowList
     setState(() => _isMaximized = false);
   }
 
-  @override
-  void onWindowLeaveFullScreen() {
-    windowManager.setTitleBarStyle(TitleBarStyle.hidden);
-  }
 
   Future<void> _checkMaximizedState() async {
     final max = await windowManager.isMaximized();
@@ -119,7 +106,7 @@ class _CustomTitleBarState extends ConsumerState<CustomTitleBar> with WindowList
       case AppThemeMode.system:
         return 'Theme: System Default';
       case AppThemeMode.light:
-        return 'Theme: Modern Glass (Light)';
+        return 'Theme: Gilded Ivory (Light)';
       case AppThemeMode.dark:
         return 'Theme: Deep Opulence (Dark)';
       case AppThemeMode.onyx:
@@ -142,14 +129,10 @@ class _CustomTitleBarState extends ConsumerState<CustomTitleBar> with WindowList
         ? '${currentTrack.title} - ${currentTrack.artist ?? "Unknown"} | Resonance'
         : 'Resonance';
 
-    // Resolve palette/accent gradient colors
-    List<Color> gradientColors;
-    if (accentMode != null && _paletteGradients.containsKey(accentMode)) {
-      gradientColors = _paletteGradients[accentMode]!;
-    } else {
-      final primary = theme.primaryColor;
-      gradientColors = [primary, primary.withValues(alpha: 0.85)];
-    }
+    // Resolve palette/accent gradient colors dynamically from the ColorScheme
+    final primaryColor = theme.colorScheme.primary;
+    final tertiaryColor = theme.colorScheme.tertiary;
+    final gradientColors = [primaryColor, tertiaryColor];
 
     // Determine text & icon colors (contrast)
     final double luminance = gradientColors.first.computeLuminance();
@@ -160,8 +143,8 @@ class _CustomTitleBarState extends ConsumerState<CustomTitleBar> with WindowList
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: gradientColors,
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
       ),
       child: Row(
@@ -183,11 +166,11 @@ class _CustomTitleBarState extends ConsumerState<CustomTitleBar> with WindowList
                     Expanded(
                       child: Text(
                         titleText,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontFamily: 'Segoe UI',
                           fontSize: 12,
                           fontWeight: FontWeight.normal,
-                          color: Colors.white, // Locked to native white per screenshot
+                          color: contentColor,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,

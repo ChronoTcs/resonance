@@ -96,7 +96,6 @@ class LyricsTranslationNotifier extends Notifier<LyricsTranslationState> {
           error: null,
         );
         
-        // SOTA V3.3: Attempt early cache discovery immediately
         if (effectiveId != null) {
           _tryEarlyCacheLoad(effectiveId);
         }
@@ -176,7 +175,6 @@ class LyricsTranslationNotifier extends Notifier<LyricsTranslationState> {
     });
   }
 
-  /// SOTA V3.3: Instant disk discovery without waiting for LRC parser.
   /// Uses a Race Condition guard to prevent stale state updates.
   Future<void> _tryEarlyCacheLoad(String trackId) async {
     final cacheManager = ref.read(cacheManagerProvider);
@@ -287,7 +285,6 @@ class LyricsTranslationNotifier extends Notifier<LyricsTranslationState> {
 
     if (state.isLoading) return; 
 
-    // SOTA V3.3: State-First Discovery. If early loader already finished, use that data.
     List<LyricLine>? fetchedTranslated = state.translatedLyrics;
     List<LyricLine>? fetchedRomanized = state.romanizedLyrics;
 
@@ -352,7 +349,6 @@ class LyricsTranslationNotifier extends Notifier<LyricsTranslationState> {
             if (_needsRomanization(originalLyrics)) {
               requiresNetwork = true;
             } else {
-              // OPTIMIZATION SOTA V3.3: Lirik Latin, gunakan original sebagai Romanized (Silent Healing)
               fetchedRomanized ??= List.from(originalLyrics);
               // Background fire-and-forget write to satisfy hasAllNeeded in future
               romanCacheFile.writeAsString(service.stringify(fetchedRomanized)).catchError((e) {

@@ -30,7 +30,6 @@ class PlaybackArchitectureService {
   // In-memory cache for audio URLs
   final Map<String, CachedStreamInfo> _urlCache = {};
   
-  // [V20.16 SOTA Patch] Atomic Request Map (Future tracking)
   // Ensures only 1 network request is ever active for a specific ID.
   final Map<String, Future<String?>> _activeRequests = {};
 
@@ -64,7 +63,6 @@ class PlaybackArchitectureService {
       _urlCache.remove(videoId);
     }
 
-    // 2. [V20.16 SOTA] Atomic Concurrency Control
     // If there is an active request (prefetch or user action), join it.
     final existingRequest = _activeRequests[videoId];
     if (existingRequest != null) {
@@ -85,7 +83,6 @@ class PlaybackArchitectureService {
 
   Future<String?> _performFetch(String videoId) async {
     try {
-      // 3. Fetch from specialized repository (SOTA Deciphering)
       final String? url = await _repository.getStreamUrl(videoId);
 
       if (url != null) {
@@ -118,7 +115,7 @@ class PlaybackArchitectureService {
         }
       }
 
-      // 2. Cek folder stream cache (m4a)
+      // 2. Check stream cache folder (m4a)
       final cacheService = _ref.read(mediaCacheServiceProvider);
       final cachePath = await cacheService.getCachedAudioPath(videoId);
       if (cachePath != null) return cachePath;
@@ -127,33 +124,33 @@ class PlaybackArchitectureService {
   }
 
   /// Proactively fetches URLs for a list of video IDs (e.g. next 3 tracks).
-  /// Hanya melakukan URL pre-warm (tidak mendownload full byte) agar hemat kuota.
+  /// Only performs URL pre-warm (does not download full byte) to save bandwidth.
   void predictiveFetch(List<String> videoIds) {
-    // 1. BATALKAN penjadwalan sebelumnya segera
+    // 1. Cancel previous scheduling immediately
     _prefetchTimer?.cancel();
 
     if (videoIds.isEmpty) return;
 
-    // 2. Tingkatkan Session ID untuk mengabaikan fetch yang sedang 'terbang' (jika ada)
+    // 2. Increment Session ID to ignore outstanding fetches
     _prefetchSessionId++;
     final currentSession = _prefetchSessionId;
 
-    // 3. Hanya ambil 1 lagu berikutnya
+    // 3. Only fetch the next track
     final nextId = videoIds.first;
     
-    // 4. DEBOUNCE WAJIB 15 DETIK: 
-    // Jika user pindah sebelum 15 detik, timer dibatalkan dan 
-    // network request getStreamUrl TIDAK PERNAH dikirim.
+    // 4. MANDATORY 15-SECOND DEBOUNCE:
+    // If user moves before 15s, timer is canceled and
+    // network request getStreamUrl is NEVER sent.
     debugPrint('RateLimit Defender: Scheduling prefetch for $nextId in 15 seconds...');
     _prefetchTimer = Timer(const Duration(seconds: 15), () async {
-      // Cek apakah sesi masih valid setelah 15 detik (User tidak skip lagu)
+      // Check if session is still valid after 15s (user did not skip track)
       if (_prefetchSessionId != currentSession) {
         debugPrint('RateLimit Defender: Aborted ghost prefetch for SESSION $currentSession');
         return;
       }
       
       if (!_urlCache.containsKey(nextId) && !_activeRequests.containsKey(nextId)) {
-        // Cek file lokal dulu (tanpa internet)
+        // Check local files first (no internet)
         final localPath = await _checkLocalFile(nextId);
         if (localPath != null) {
           _urlCache[nextId] = CachedStreamInfo(localPath, DateTime.now());
@@ -161,7 +158,7 @@ class PlaybackArchitectureService {
           return;
         }
 
-        // Jika tidak ada di lokal, baru jemput URL (Request Jaringan)
+        // If not found locally, fetch the URL via network
         debugPrint('RateLimit Defender: [NETWORK] Prefetching next track URL from YouTube for SESSION $currentSession...');
         final url = await getStreamUrl(nextId);
         if (url != null) {

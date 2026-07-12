@@ -16,7 +16,6 @@ const _kEqLinked = 'audio_eq_linked';
 const _kLoopMode = 'audio_loop_mode';
 const _kShuffle = 'audio_shuffle';
 
-// -- Playback State Keys (V16.1) --
 const _kLastTrack = 'audio_last_track';
 const _kLastQueue = 'audio_last_queue';
 const _kLastIndex = 'audio_last_index';
@@ -36,7 +35,6 @@ class AudioPersistedSettings {
   final LoopMode loopMode;
   final bool isShuffleEnabled;
 
-  // -- Playback State (V16.1) --
   final String? lastTrackJson;
   final List<String>? lastQueueJson;
   final int lastIndex;
@@ -91,7 +89,6 @@ class AudioPersistenceService {
     final loopMode = LoopMode.values[loopIndex.clamp(0, LoopMode.values.length - 1)];
     final shuffle = _prefs.getBool(_kShuffle) ?? false;
 
-    // -- Playback State (V16.1) --
     final lastTrack = _prefs.getString(_kLastTrack);
     final lastQueue = _prefs.getStringList(_kLastQueue);
     final lastIndex = _prefs.getInt(_kLastIndex) ?? -1;
@@ -116,7 +113,6 @@ class AudioPersistenceService {
 
   // ── Save (Debounced) ───────────────────────────────────────────────────────
 
-  /// General-purpose debounced save. Each key has its own independent timer (V16.1 Hotfix).
   void _scheduleSave(String key, dynamic value) {
     _saveTimers[key]?.cancel();
     _saveTimers[key] = Timer(const Duration(milliseconds: 500), () {
@@ -165,9 +161,7 @@ class AudioPersistenceService {
     _prefs.setBool(_kShuffle, enabled);
   }
 
-  // -- Playback Persistence (V16.1) --
 
-  /// Persists the full playback context. Limit queue to 200 items as per V16.1 SOTA.
   void savePlaybackState({
     required String trackJson,
     required List<String> queueJson,
@@ -175,15 +169,19 @@ class AudioPersistenceService {
   }) {
     _prefs.setString(_kLastTrack, trackJson);
     
-    // V16.1 Hotfix: Remove limit since albumArtBase64 is stripped from JSON
     _prefs.setStringList(_kLastQueue, queueJson);
     
     _prefs.setInt(_kLastIndex, index);
   }
 
   void savePosition(int milliseconds) {
-    // Seek position changes very often, so we use the internal debouncing timer
-    _scheduleSave(_kLastPosition, milliseconds);
+    // Seek position changes very often. We use a 1-second debounce timer to prevent
+    // constant rewriting of the SharedPreferences JSON file on Windows, saving disk writes.
+    _saveTimers[_kLastPosition]?.cancel();
+    _saveTimers[_kLastPosition] = Timer(const Duration(seconds: 1), () {
+      _write(_kLastPosition, milliseconds);
+      _saveTimers.remove(_kLastPosition);
+    });
   }
 
   void dispose() {

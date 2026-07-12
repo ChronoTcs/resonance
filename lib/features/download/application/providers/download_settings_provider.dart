@@ -71,7 +71,7 @@ class DownloadSettingsNotifier extends AsyncNotifier<DownloadSettings> {
   Future<DownloadSettings> build() async {
     final prefs = await SharedPreferences.getInstance();
     final defaultMusic = await PathUtils.getMusicDefault();
-    final defaultVideo = await PathUtils.getVideoDefault();
+    final defaultVideo = '';
     final defaultLyrics = await PathUtils.getLyricsDefault();
 
     return DownloadSettings(

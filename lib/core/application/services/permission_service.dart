@@ -82,19 +82,19 @@ class PermissionService {
         }
       }
     } else if (sdkInt >= 30) {
-      // Android 11 & 12: MANAGE_EXTERNAL_STORAGE handles the "settings" redirect automatically
-      final status = await Permission.manageExternalStorage.status;
+      // Android 11 & 12: READ_EXTERNAL_STORAGE as normal popup (not settings redirect)
+      final status = await Permission.storage.status;
       if (!status.isGranted) {
         if (!context.mounted) return;
         final proceed = await showRationaleDialog(
           context: context,
           icon: UIcons.regular.folder,
-          title: 'Full Storage Access',
-          message: 'On Android 11+, Resonance needs "All Files Access" to scan your music library and manage downloads efficiently.',
+          title: 'Storage Access',
+          message: 'Resonance needs access to your storage to scan your music library and manage downloads.',
         );
         if (!context.mounted) return;
         if (proceed) {
-          await Permission.manageExternalStorage.request();
+          await Permission.storage.request();
         }
       }
     } else {
@@ -146,20 +146,8 @@ class PermissionService {
 
   static Future<bool> requestStoragePermission() async {
     if (!Platform.isAndroid) return true;
-
-    var status = await Permission.manageExternalStorage.status;
-    if (!status.isGranted) {
-      status = await Permission.manageExternalStorage.request();
-    }
-
-    if (!status.isGranted) {
-      status = await Permission.storage.status;
-      if (!status.isGranted) {
-        status = await Permission.storage.request();
-      }
-    }
-
-    return status.isGranted;
+    // ponytail: delegate to download permissions — same logic
+    return requestDownloadPermissions();
   }
 
   /// Request essential permissions for downloading (specifically for Android storage).
@@ -168,22 +156,21 @@ class PermissionService {
     if (!Platform.isAndroid) return true;
 
     final sdkInt = await getAndroidSdkInt();
-    
-    // Android 11+ (API 30+) requires Manage External Storage for root-level folders 
+
+    // Android 13+ (API 33+): MediaStore handles writes — no explicit permission needed
+    if (sdkInt >= 33) return true;
+
+    // Android 11–12 (API 30–32): READ_EXTERNAL_STORAGE only
     if (sdkInt >= 30) {
-      var manageStatus = await Permission.manageExternalStorage.status;
-      if (!manageStatus.isGranted) {
-        manageStatus = await Permission.manageExternalStorage.request();
-      }
-      return manageStatus.isGranted;
-    } else {
-      // Android 10 and below
-      var storageStatus = await Permission.storage.status;
-      if (!storageStatus.isGranted) {
-        storageStatus = await Permission.storage.request();
-      }
-      return storageStatus.isGranted;
+      var status = await Permission.storage.status;
+      if (!status.isGranted) status = await Permission.storage.request();
+      return status.isGranted;
     }
+
+    // Android 9–10 (API 28–29): both READ + WRITE
+    var readStatus = await Permission.storage.status;
+    if (!readStatus.isGranted) readStatus = await Permission.storage.request();
+    return readStatus.isGranted;
   }
 
   static Future<int> getAndroidSdkInt() async {

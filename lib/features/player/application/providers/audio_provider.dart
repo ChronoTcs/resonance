@@ -19,6 +19,7 @@ import '../audio_handler.dart';
 import '../../../../core/data/services/stream_cache_tracker_service.dart';
 
 import '../services/playback_engine_service.dart';
+import '../../../settings/application/notification_provider.dart';
 
 // ── Extracted Services ────────────────────────────────────────────────────────
 import '../states/audio_state.dart';
@@ -98,7 +99,6 @@ class AudioNotifier extends Notifier<AudioState> {
     return AudioState();
   }
 
-  // ── Public Accessors & Restoration Helpers (V17.0) ────────────────────────
 
   Player get player => _player;
 
@@ -163,7 +163,6 @@ class AudioNotifier extends Notifier<AudioState> {
       _player.stream.position.listen((position) {
         state = state.copyWith(position: position);
 
-        // V16.1: Persist position (debounced internally by persistence service)
         _persistence.savePosition(position.inMilliseconds);
         if (ref.read(mediaFocusProvider) == MediaFocus.audio) {
           _metadata.onPositionChanged(
@@ -215,6 +214,11 @@ class AudioNotifier extends Notifier<AudioState> {
 
       // ── Anti-Loop Error Guard ─────────────────────────────────────────────
       _player.stream.error.listen((error) {
+        ref.read(notificationProvider.notifier).showNotification(
+          'Playback Error',
+          'Streaming / Playback error: $error',
+          isError: true,
+        );
         final shouldStop = _engine.handlePlaybackError(error);
         if (shouldStop) {
           state = state.copyWith(isPlaying: false, isLoading: false);
@@ -448,11 +452,21 @@ class AudioNotifier extends Notifier<AudioState> {
     );
 
     if (nextTrack != null) {
+      if (fromCompletion && state.loopMode == LoopMode.one) {
+        ref.read(notificationProvider.notifier).showNotification(
+          'Track Repeating',
+          'Repeating: ${nextTrack.title}',
+        );
+      }
       _playCurrentFromQueue(nextTrack).then((_) => _isNavigating = false);
     } else if (fromCompletion) {
       _isNavigating = false;
       pause();
       seek(Duration.zero);
+      ref.read(notificationProvider.notifier).showNotification(
+        'Queue Completed',
+        'Finished playing all tracks in the queue.',
+      );
     } else {
       _isNavigating = false;
     }

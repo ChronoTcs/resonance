@@ -8,15 +8,10 @@ import 'package:resonance/features/library/data/models/media_item.dart';
 import 'package:resonance/features/home/presentation/providers/recently_played_provider.dart';
 import 'package:resonance/core/widgets/media_actions_bottom_sheet.dart';
 import 'package:resonance/core/widgets/media_artwork_widget.dart';
-import 'package:resonance/core/widgets/reusable_hover_icon_button.dart';
 import 'package:resonance/core/widgets/overflow_menu_button.dart';
 import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/core/utils/app_icons.dart';
-import '../../application/services/youtube_auth_service.dart';
-
-import 'youtube_login_screen.dart';
 import 'package:resonance/core/widgets/top_navigation_header.dart';
-// import 'package:resonance/core/widgets/hover_widgets.dart'; // Unused
 
 class ExploreScreen extends ConsumerStatefulWidget {
   const ExploreScreen({super.key});
@@ -26,22 +21,6 @@ class ExploreScreen extends ConsumerStatefulWidget {
 }
 
 class _ExploreScreenState extends ConsumerState<ExploreScreen> {
-  final TextEditingController _searchController = TextEditingController();
-
-  void _onSearch() {
-    final query = _searchController.text.trim();
-    if (query.isNotEmpty) {
-      ref.read(searchQueryProvider.notifier).setQuery(query);
-      FocusScope.of(context).unfocus(); // Dismiss keyboard
-    }
-  }
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -58,50 +37,6 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
               style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.bold,
               ),
-            ),
-            right: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: MediaQuery.of(context).size.width > 600 ? 240 : 150,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: TextField(
-                    controller: _searchController,
-                    style: theme.textTheme.bodyMedium,
-                    textAlignVertical: TextAlignVertical.center,
-                    decoration: InputDecoration(
-                      isDense: true,
-                      hintText: 'Search songs online...',
-                      hintStyle: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.hintColor,
-                      ),
-                      prefixIcon: Icon(AppIcons.search, size: 16, color: theme.hintColor),
-                      suffixIcon: _searchController.text.isNotEmpty
-                          ? ReusableHoverIconButton(
-                              icon: AppIcons.close,
-                              tooltip: 'Clear search',
-                              iconSize: 14,
-                              onTap: () {
-                                _searchController.clear();
-                                ref.read(searchQueryProvider.notifier).setQuery('');
-                                setState(() {});
-                              },
-                            )
-                          : null,
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.only(top: 0, bottom: 4),
-                    ),
-                    textInputAction: TextInputAction.search,
-                    onSubmitted: (_) => _onSearch(),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                _buildAuthButton(context, ref),
-              ],
             ),
           ),
           Expanded(
@@ -167,7 +102,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
 
                         final mediaItem = MediaItem(
                           id: item.id,
-                          path: item.id, // Gunakan ID sebagai path awal agar isStreaming terpicu
+                          path: item.id, // Use ID as initial path so isStreaming is triggered
                           title: item.title,
                           artist: item.author,
                           thumbnailUrl: item.thumbnailUrl,
@@ -250,44 +185,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
     );
   }
 
-  Widget _buildAuthButton(BuildContext context, WidgetRef ref) {
-    final authService = ref.watch(youtubeAuthServiceProvider);
-    final isLoggedIn = authService.isLoggedIn;
 
-    return ReusableHoverIconButton(
-      icon: isLoggedIn ? UIcons.regular.user : UIcons.regular.enter,
-      tooltip: isLoggedIn ? 'YouTube Account Active' : 'Login to YouTube',
-      color: isLoggedIn ? Colors.redAccent : null,
-      iconSize: 18,
-      onTap: () async {
-        if (isLoggedIn) {
-          final confirm = await showDialog<bool>(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: const Text('YouTube Logout'),
-              content: const Text('Are you sure you want to logout from YouTube?'),
-              actions: [
-                TextButton(child: const Text('Cancel'), onPressed: () => Navigator.pop(context, false)),
-                TextButton(
-                  child: const Text('Logout', style: TextStyle(color: Colors.red)),
-                  onPressed: () => Navigator.pop(context, true),
-                ),
-              ],
-            ),
-          );
-          if (confirm == true) {
-            await ref.read(youtubeAuthServiceProvider).logout();
-            setState(() {});
-          }
-        } else {
-          final success = await Navigator.of(context).push<bool>(
-            MaterialPageRoute(builder: (_) => const YoutubeLoginScreen()),
-          );
-          if (success == true) setState(() {});
-        }
-      },
-    );
-  }
 
   Widget _buildRecentPlays(WidgetRef ref, ThemeData theme) {
     final recentAsync = ref.watch(recentlyPlayedProvider).whenData(

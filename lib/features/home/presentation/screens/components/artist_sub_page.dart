@@ -61,10 +61,14 @@ class ArtistSubPage extends ConsumerWidget {
                     child: Icon(UIcons.regular.user, size: 14, color: theme.primaryColor),
                   ),
                   const SizedBox(width: 10),
-                  Text(
-                    artist,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
+                  Expanded(
+                    child: Text(
+                      artist,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],

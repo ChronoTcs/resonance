@@ -43,6 +43,10 @@ class MediaCacheService {
 
   final Map<String, Future<void>> _activeDownloads = {};
   final Set<String> _activeArtworkDownloads = {};
+  // ponytail: cooldown map prevents retry deadlock on network flicker
+  final Map<String, DateTime> _failedDownloads = {};
+  static const _kFailureCooldown = Duration(seconds: 60);
+
 
   Future<String> getAudioPath(String songId, String streamUrl, {String? userAgent}) async {
     final dir = await _cacheManager.getStreamAudioDir();
@@ -61,6 +65,14 @@ class MediaCacheService {
       debugPrint('MediaCacheService: Existing prefetch in progress for $songId. Returning streamUrl to avoid blocking.');
       return streamUrl;
     }
+
+    // [Deadlock Guard] If this song recently failed, suppress retry and stream directly
+    final failedAt = _failedDownloads[songId];
+    if (failedAt != null && DateTime.now().difference(failedAt) < _kFailureCooldown) {
+      debugPrint('MediaCacheService: [$songId] In failure cooldown. Streaming directly.');
+      return streamUrl;
+    }
+    _failedDownloads.remove(songId); // cooldown expired — clear it
 
     debugPrint('MediaCacheService: Cache miss for $songId. Starting background cache...');
     final downloadFuture = _downloadAudioInBackground(songId, streamUrl, file.path, userAgent: userAgent).catchError((e) {
@@ -89,10 +101,8 @@ class MediaCacheService {
     try {
       final request = http.Request('GET', Uri.parse(url));
       
-      // [V20.20 SOTA] UA Consistency Guard - Delegate identity to match resolver
       final activeUA = userAgent ?? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36";
       
-      // [V20.22 SOTA] Anti-Spoofing WAF Bypass
       final isAndroid = activeUA.contains('Android');
       
       final Map<String, String> resolvedHeaders = {
@@ -116,7 +126,6 @@ class MediaCacheService {
       
       final response = await _client.send(request).timeout(const Duration(minutes: 5));
       
-      // [V20.20 SOTA] Cacher Rechecker - Validate stream status before saving
       if (response.statusCode == 200 || response.statusCode == 206) {
         sink = file.openWrite();
         int downloadedBytes = 0;
@@ -138,19 +147,18 @@ class MediaCacheService {
         
         _scheduleCleanup();
       } else {
-        // [V20.20] Immediate Identity Mismatch Detection (403/401)
         throw Exception('Media Integrity Check failed: Server returned ${response.statusCode}');
       }
     } catch (e) {
-      // [V20.21 SOTA] Atomic Cleanup for failed/forbidden streams
-      _activeDownloads.remove(songId); 
+      _activeDownloads.remove(songId);
+      // [Deadlock Guard] Record failure time to suppress retry spam
+      _failedDownloads[songId] = DateTime.now();
       
       debugPrint('MediaCacheService: Audio caching failed for $songId: $e');
       if (sink != null) {
         try { await sink.close(); } catch (_) {}
       }
       
-      // [V20.20] Mandatory Cleanup for failed/forbidden streams
       if (file.existsSync()) {
         try { 
           await file.delete(); 

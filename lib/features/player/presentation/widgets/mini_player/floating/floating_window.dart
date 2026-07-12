@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
+import 'package:resonance/core/widgets/blur_transition_overlay.dart';
 import 'package:resonance/features/player/application/providers/audio_provider.dart';
 import 'package:resonance/features/player/presentation/notifiers/mini_player_view_notifier.dart';
 import 'package:resonance/core/widgets/media_artwork_widget.dart';
@@ -22,7 +23,6 @@ class FloatingWindow extends ConsumerStatefulWidget {
 }
 
 class _FloatingWindowState extends ConsumerState<FloatingWindow> {
-  // SOTA V3.0: Relocated logic from Overlay to Window for Header integration
   Future<void> _handleAddToLibrary() async {
     final track = ref.read(currentTrackProvider);
     if (track == null) return;
@@ -67,7 +67,6 @@ class _FloatingWindowState extends ConsumerState<FloatingWindow> {
     if (track == null) return const SizedBox.shrink();
 
     final viewState = popState.viewState;
-    // SOTA V3.1: Expanded Header Visibility for unified auto-hide UX
     final bool isHeaderVisible = viewState != MiniPlayerViewState.idle && 
                                viewState != MiniPlayerViewState.idleLyrics;
 
@@ -77,14 +76,12 @@ class _FloatingWindowState extends ConsumerState<FloatingWindow> {
         borderRadius: BorderRadius.circular(12),
         child: Column(
           children: [
-            // AREA 1: MEDIA & CONTROLS (Layered SOTA)
             Expanded(
               child: MouseRegion(
                 onEnter: (_) {
                   Future.microtask(() => popNotifier.setViewState(MiniPlayerViewState.hover));
                 },
                 onExit: (_) {
-                  // SOTA V3.1: Prevent exit from 'lyrics' mode when mouse leaves the PiP window
                   if (popState.viewState != MiniPlayerViewState.lyrics && 
                       popState.viewState != MiniPlayerViewState.idleLyrics) {
                     Future.microtask(() => popNotifier.setViewState(MiniPlayerViewState.normal));
@@ -150,7 +147,6 @@ class _FloatingWindowState extends ConsumerState<FloatingWindow> {
                         child: FloatingLyricsView(),
                       ),
 
-                    // E. TOP HANDLE BAR (Spotify Slide-in Style) - OVERLAY UNIFIED V3.1
                     AnimatedPositioned(
                       duration: const Duration(milliseconds: 250),
                       curve: Curves.easeOutCubic,
@@ -169,7 +165,6 @@ class _FloatingWindowState extends ConsumerState<FloatingWindow> {
                             // 2. Wrap Drag functionality
                             const Positioned.fill(child: DragToMoveArea(child: SizedBox())),
                             
-                            // 3. LEFT Controls (Add to Library) - SOTA V3.0
                             Positioned(
                               left: 4,
                               top: 0,
@@ -202,7 +197,10 @@ class _FloatingWindowState extends ConsumerState<FloatingWindow> {
                                     icon: UIcons.regular.cross_small,
                                     onTap: (viewState == MiniPlayerViewState.lyrics || viewState == MiniPlayerViewState.idleLyrics)
                                         ? () => Future.microtask(() => popNotifier.setViewState(MiniPlayerViewState.normal))
-                                        : () => Future.microtask(() => popNotifier.togglePop()),
+                                        : () => BlurTransitionOverlay.run(
+                                            ref,
+                                            () async => popNotifier.togglePop(),
+                                          ),
                                     tooltip: (viewState == MiniPlayerViewState.lyrics || viewState == MiniPlayerViewState.idleLyrics) ? 'Close Lyrics' : 'Close Miniplayer',
                                     iconSize: 16,
                                     padding: 4,

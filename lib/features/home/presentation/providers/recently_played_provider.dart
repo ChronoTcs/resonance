@@ -1,11 +1,12 @@
+import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart' as p;
 import 'package:resonance/features/library/data/models/media_item.dart';
 import 'package:resonance/core/data/services/media_cache_service.dart';
-import 'package:resonance/core/data/services/storage_service.dart';
+import 'package:resonance/core/data/services/cache_manager.dart';
 
-const _recentlyPlayedKey = 'recently_played_items';
 const _maxRecentlyPlayed = 20;
 
 final recentlyPlayedProvider = AsyncNotifierProvider<RecentlyPlayedNotifier, List<MediaItem>>(() {
@@ -13,15 +14,26 @@ final recentlyPlayedProvider = AsyncNotifierProvider<RecentlyPlayedNotifier, Lis
 });
 
 class RecentlyPlayedNotifier extends AsyncNotifier<List<MediaItem>> {
+  Future<File> _getHistoryFile() async {
+    final cacheManager = ref.read(cacheManagerProvider);
+    final dir = await cacheManager.getBaseCacheDir();
+    return File(p.join(dir.path, 'recently_played.json'));
+  }
 
   @override
   Future<List<MediaItem>> build() async {
-    final prefs = ref.read(sharedPreferencesProvider);
-    final jsonList = prefs.getStringList(_recentlyPlayedKey) ?? [];
-    if (jsonList.isEmpty) return [];
+    try {
+      final file = await _getHistoryFile();
+      if (!await file.exists()) return [];
+      final content = await file.readAsString();
+      if (content.isEmpty) return [];
 
-    // Use compute for JSON parsing to avoid blocking UI thread
-    return await compute(_parseRecentlyPlayedJson, jsonList);
+      // Use compute for JSON parsing to avoid blocking UI thread
+      return await compute(_parseRecentlyPlayedJson, content);
+    } catch (e) {
+      debugPrint('RecentlyPlayedNotifier: Failed to load history: $e');
+      return [];
+    }
   }
 
   Future<void> addTrack(MediaItem item) async {
@@ -57,28 +69,42 @@ class RecentlyPlayedNotifier extends AsyncNotifier<List<MediaItem>> {
     state = AsyncValue.data(updatedList);
     
     // Save to disk without heavy album art bytes to prevent UI freezes
-    // Using the fixed copyWith to explicitly clear the art
     final listForStorage = updatedList.map((item) => item.copyWith(clearAlbumArt: true)).toList();
     await _saveState(listForStorage);
   }
 
   Future<void> clearHistory() async {
     state = const AsyncValue.data([]);
-    await _saveState([]);
+    try {
+      final file = await _getHistoryFile();
+      if (await file.exists()) {
+        await file.delete();
+      }
+    } catch (e) {
+      debugPrint('RecentlyPlayedNotifier: Failed to clear history file: $e');
+    }
   }
 
   Future<void> _saveState(List<MediaItem> listToSave) async {
-    final prefs = ref.read(sharedPreferencesProvider);
-    // Use the optimized toJson that skips art serialization
-    final jsonList = listToSave.map((item) => jsonEncode(item.toJson(includeArt: false))).toList();
-    await prefs.setStringList(_recentlyPlayedKey, jsonList);
+    try {
+      final file = await _getHistoryFile();
+      final cacheManager = ref.read(cacheManagerProvider);
+      
+      final jsonList = listToSave.map((item) => item.toJson(includeArt: false)).toList();
+      final content = jsonEncode(jsonList);
+      
+      await cacheManager.synchronizedWrite(file, content);
+    } catch (e) {
+      debugPrint('RecentlyPlayedNotifier: Failed to save history: $e');
+    }
   }
 }
 
 /// Isolate-safe JSON parser for Recently Played
-List<MediaItem> _parseRecentlyPlayedJson(List<String> jsonList) {
+List<MediaItem> _parseRecentlyPlayedJson(String jsonString) {
   try {
-    return jsonList.map((item) => MediaItem.fromJson(jsonDecode(item))).toList();
+    final List<dynamic> decoded = jsonDecode(jsonString);
+    return decoded.map((item) => MediaItem.fromJson(item as Map<String, dynamic>)).toList();
   } catch (e) {
     debugPrint('RecentlyPlayed Isolate: Failed to parse JSON: $e');
     return [];

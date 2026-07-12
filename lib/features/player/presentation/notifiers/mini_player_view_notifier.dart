@@ -10,7 +10,7 @@ enum MiniPlayerViewState {
   idle,
   hover,
   lyrics,
-  idleLyrics // SOTA V3.1: State for auto-hide in lyrics mode
+  idleLyrics
 }
 
 class MiniPlayerPopState {
@@ -57,7 +57,6 @@ class MiniPlayerPopNotifier extends Notifier<MiniPlayerPopState> {
     _idleTimer = Timer(const Duration(seconds: 10), () {
       if (!state.isPopped) return;
 
-      // SOTA V3.1: Unified Auto-Hide for both Normal and Lyrics mode
       if (state.viewState == MiniPlayerViewState.lyrics) {
         state = state.copyWith(viewState: MiniPlayerViewState.idleLyrics);
       } else if (state.viewState != MiniPlayerViewState.idle && state.viewState != MiniPlayerViewState.idleLyrics) {
@@ -69,7 +68,6 @@ class MiniPlayerPopNotifier extends Notifier<MiniPlayerPopState> {
   void resetIdleTimer() {
     if (!state.isPopped) return;
     
-    // SOTA V3.1: Intelligent Reset based on current mode
     if (state.viewState == MiniPlayerViewState.idle) {
       state = state.copyWith(viewState: MiniPlayerViewState.normal);
     } else if (state.viewState == MiniPlayerViewState.idleLyrics) {
@@ -84,7 +82,6 @@ class MiniPlayerPopNotifier extends Notifier<MiniPlayerPopState> {
     
     state = state.copyWith(viewState: view);
     
-    // SOTA V3.1: Always maintain idle timer regardless of view (unifiedUX)
     _startIdleTimer();
   }
 
@@ -141,10 +138,8 @@ class MiniPlayerPopNotifier extends Notifier<MiniPlayerPopState> {
     _idleTimer?.cancel();
 
     if (Platform.isWindows) {
-      // SOTA V9.0: Synchronous Zero Gravity Restoration.
-      // Pastikan semua batasan OS dibersihkan dan posisi direstorasi 
-      // secara tuntas SEBELUM mengubah state isPopped menjadi false.
-      // SOTA V10.1: Unbind Max Size to prevent OS crushing the window.
+      // Ensure OS bounds are cleared and position is restored
+      // completely BEFORE changing state to popped = false.
       await windowManager.setAlwaysOnTop(false);
       await windowManager.setMinimumSize(const Size(0, 0));
       await windowManager.setMaximumSize(const Size(99999, 99999));
@@ -152,7 +147,6 @@ class MiniPlayerPopNotifier extends Notifier<MiniPlayerPopState> {
       await windowManager.setMinimizable(true);
       await windowManager.setMaximizable(true);
       
-      // SOTA V9.1: Restore UI Constraints for normal mode
       await windowManager.setMinimumSize(const Size(800, 600));
 
       if (state.originalSize != null) {
@@ -163,7 +157,7 @@ class MiniPlayerPopNotifier extends Notifier<MiniPlayerPopState> {
         await windowManager.setPosition(state.originalPosition!);
       }
 
-      await Future.delayed(const Duration(milliseconds: 50)); // Buffer stabilisasi OS
+      await Future.delayed(const Duration(milliseconds: 50)); // OS stabilization buffer
     }
     
     state = state.copyWith(

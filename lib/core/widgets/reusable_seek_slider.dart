@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-/// Nama: ReusableSeekSlider (SOTA V13.14)
-/// Deskripsi: Komponen timeline tunggal (True Source) untuk musik dan video.
-/// Fitur: Tooltip Edge-Guard, Smooth Hover, Adaptive Geometry.
+/// Single timeline component for music and video.
+/// Features: Tooltip Edge-Guard, Smooth Hover, Adaptive Geometry.
 class ReusableSeekSlider extends StatefulWidget {
   final double value;
   final double max;
@@ -131,7 +130,6 @@ class _ReusableSeekSliderState extends State<ReusableSeekSlider> {
   Widget _buildTooltip(double totalWidth, double trackWidth, ThemeData theme) {
     final double rawX = _calculateTooltipX(totalWidth, trackWidth);
     
-    // SOTA Edge-Guard Logic: Clamp tooltip position so it doesn't "drown" at screen edges
     // Tooltip width is roughly 60-80px, half is 30-40px.
     const double minEdgePadding = 40.0; 
     final double clampedX = rawX.clamp(minEdgePadding, totalWidth - minEdgePadding);
@@ -147,7 +145,6 @@ class _ReusableSeekSliderState extends State<ReusableSeekSlider> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                // Theme extraction from app_theme.dart SOTA specs
                 color: const Color(0xFF000000).withValues(alpha: 0.85),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: Colors.white.withValues(alpha: 0.1), width: 1),
@@ -168,7 +165,6 @@ class _ReusableSeekSliderState extends State<ReusableSeekSlider> {
                 ),
               ),
             ),
-            // SOTA Triangle (Following rawX even if tooltip is clamped, optional but nice)
             // For simplicity, we center it under the clamped tooltip
             CustomPaint(
               size: const Size(10, 5),

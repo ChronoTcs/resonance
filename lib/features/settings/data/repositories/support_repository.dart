@@ -7,7 +7,7 @@ final supportRepositoryProvider = Provider((ref) => SupportRepository());
 class SupportRepository {
   final String _configUrl = 'https://raw.githubusercontent.com/ChronoTechs/resonance/refs/heads/main/app_config.json';
   
-  /// Mengambil URL donasi dari repository GitHub secara asinkron.
+  /// Fetches the donation URL from the GitHub repository asynchronously.
   Future<String?> getDonateUrl() async {
     try {
       final response = await http.get(Uri.parse(_configUrl)).timeout(const Duration(seconds: 5));
@@ -16,6 +16,6 @@ class SupportRepository {
         return data['donate_url'] as String?;
       }
     } catch (_) {}
-    return null; // Fallback ke sistem internal jika API gagal
+    return null; // Fallback to internal system if API fails
   }
 }

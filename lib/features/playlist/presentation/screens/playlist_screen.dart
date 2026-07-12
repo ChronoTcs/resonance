@@ -1,6 +1,9 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:path/path.dart' as p;
 import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/core/utils/app_icons.dart';
 import 'package:resonance/features/player/application/providers/audio_provider.dart';
@@ -8,12 +11,15 @@ import 'package:resonance/features/playlist/data/models/playlist_model.dart';
 import 'package:resonance/features/playlist/application/playlist_provider.dart';
 import 'package:resonance/features/playlist/presentation/screens/playlist_detail_screen.dart';
 import 'package:resonance/core/widgets/reusable_hover_icon_button.dart';
-// import 'package:resonance/core/widgets/hover_widgets.dart'; // Removed
+import 'package:resonance/core/widgets/resonance_button.dart';
+import 'package:resonance/core/widgets/resonance_context_menu.dart';
+import 'package:resonance/core/widgets/resonance_confirm_dialog.dart';
 
 import 'package:resonance/core/widgets/top_navigation_header.dart';
 
 class PlaylistScreen extends ConsumerWidget {
-  const PlaylistScreen({super.key});
+  final bool isLocalOnly;
+  const PlaylistScreen({super.key, this.isLocalOnly = false});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -25,6 +31,14 @@ class PlaylistScreen extends ConsumerWidget {
       return PlaylistDetailScreen(playlistId: selectedId);
     }
 
+    if (isLocalOnly) {
+      return playlistsAsync.when(
+        data: (state) => _buildLocalSection(context, ref, state.local),
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text('Error: $e')),
+      );
+    }
+
     return DefaultTabController(
       length: 2,
       child: Scaffold(
@@ -32,51 +46,57 @@ class PlaylistScreen extends ConsumerWidget {
         body: Column(
           children: [
             TopNavigationHeader(
-              left: Text(
-                'Playlists',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              right: const SizedBox(),
-            ),
-            Container(
-              height: 38,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surface,
-                border: Border(
-                  bottom: BorderSide(
-                    color: theme.dividerColor.withValues(alpha: 0.05),
-                    width: 1,
-                  ),
-                ),
-              ),
-              child: TabBar(
-                dividerColor: Colors.transparent,
-                indicatorSize: TabBarIndicatorSize.label,
-                tabs: [
-                  Tab(
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(AppIcons.folder, size: 14),
-                        const SizedBox(width: 6),
-                        const Text('Local'),
-                      ],
+              left: Row(
+                children: [
+                  SizedBox(
+                    width: 180,
+                    child: Text(
+                      'Playlists',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
-                  Tab(
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(UIcons.regular.world, size: 14),
-                        const SizedBox(width: 6),
-                        const Text('YouTube Music'),
+                  const SizedBox(width: 32),
+                  SizedBox(
+                    height: 50,
+                    width: 260,
+                    child: TabBar(
+                      dividerColor: Colors.transparent,
+                      indicatorSize: TabBarIndicatorSize.label,
+                      overlayColor: WidgetStateProperty.resolveWith<Color?>((states) {
+                        if (states.contains(WidgetState.hovered)) {
+                          return theme.primaryColor.withValues(alpha: 0.08);
+                        }
+                        return null;
+                      }),
+                      tabs: [
+                        Tab(
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(UIcons.regular.folder, size: 14),
+                              const SizedBox(width: 6),
+                              const Text('Local'),
+                            ],
+                          ),
+                        ),
+                        Tab(
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(UIcons.regular.world, size: 14),
+                              const SizedBox(width: 6),
+                              const Text('Stream'),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
                   ),
                 ],
               ),
+              right: const SizedBox(),
             ),
             Expanded(
               child: playlistsAsync.when(
@@ -115,10 +135,11 @@ class PlaylistScreen extends ConsumerWidget {
                     ),
                   ),
                 ),
-                FilledButton.tonalIcon(
+                ResonanceButton(
                   onPressed: () => _showCreateDialog(context, ref),
-                  icon: Icon(AppIcons.add, size: 18),
-                  label: const Text('New'),
+                  icon: AppIcons.add,
+                  label: 'New',
+                  style: ResonanceButtonStyle.secondary,
                 ),
               ],
             ),
@@ -147,35 +168,39 @@ class PlaylistScreen extends ConsumerWidget {
               children: [
                 Expanded(
                   child: Text(
-                    'Liked & Saved Playlists',
+                    'My Stream Playlists',
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
-                if (state.isLoadingOnline)
-                  const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                else
-                  IconButton(
-                    onPressed: () => ref.read(playlistProvider.notifier).refreshOnlinePlaylists(),
-                    icon: Icon(AppIcons.refresh, size: 20),
-                    tooltip: 'Refresh Online',
-                  ),
+                IconButton(
+                  onPressed: () => _importPlaylistDialog(context, ref),
+                  icon: Icon(AppIcons.download, size: 20),
+                  tooltip: 'Import Playlist',
+                ),
+                const SizedBox(width: 8),
+                ResonanceButton(
+                  onPressed: () => _showCreateDialog(context, ref, isStream: true),
+                  icon: AppIcons.add,
+                  label: 'New',
+                  style: ResonanceButtonStyle.secondary,
+                ),
               ],
             ),
           ),
         ),
         const SliverToBoxAdapter(child: SizedBox(height: 16)),
-        if (playlists.isEmpty && !state.isLoadingOnline)
+        if (playlists.isEmpty)
           _buildEmptyState(
             context, 
             ref, 
-            'No online playlists', 
-            'Login to sync your YouTube Music library.',
-            isOnline: true
+            'No stream playlists', 
+            'Create or import a playlist to organize online streaming tracks.',
+            isOnline: true,
           )
         else
-          _buildPlaylistList(playlists, isOnline: true),
+          _buildPlaylistList(playlists),
         const SliverToBoxAdapter(child: SizedBox(height: 100)),
       ],
     );
@@ -204,12 +229,15 @@ class PlaylistScreen extends ConsumerWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              isOnline ? UIcons.regular.cloud_disabled : AppIcons.playlist,
+              UIcons.regular.list_music,
               size: 64,
-              color: theme.disabledColor,
+              color: theme.hintColor.withValues(alpha: 0.5),
             ),
             const SizedBox(height: 16),
-            Text(title, style: theme.textTheme.titleMedium),
+            Text(
+              title,
+              style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 8),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 32),
@@ -219,60 +247,144 @@ class PlaylistScreen extends ConsumerWidget {
                 style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
               ),
             ),
-            if (!isOnline) ...[
-              const SizedBox(height: 24),
-              FilledButton.icon(
-                onPressed: () => _showCreateDialog(context, ref),
-                icon: Icon(AppIcons.add),
-                label: const Text('Create Local Playlist'),
-              ),
-            ]
+            const SizedBox(height: 24),
+            ResonanceButton(
+              onPressed: () => _showCreateDialog(context, ref, isStream: isOnline),
+              icon: AppIcons.add,
+              label: isOnline ? 'Create Stream Playlist' : 'Create Local Playlist',
+              style: ResonanceButtonStyle.primary,
+            ),
           ],
         ),
       ),
     );
   }
 
-  void _showCreateDialog(BuildContext context, WidgetRef ref) {
+  void _showCreateDialog(BuildContext context, WidgetRef ref, {bool isStream = false}) {
     final ctrl = TextEditingController();
+    final theme = Theme.of(context);
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('New Playlist'),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          decoration: const InputDecoration(
-            hintText: 'Playlist name',
-            border: OutlineInputBorder(),
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          width: 360,
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface.withValues(alpha: 0.95),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: theme.primaryColor.withValues(alpha: 0.2),
+              width: 1,
+            ),
           ),
-          textCapitalization: TextCapitalization.sentences,
-          onSubmitted: (v) {
-            if (v.trim().isNotEmpty) {
-              ref.read(playlistProvider.notifier).createPlaylist(v.trim());
-              Navigator.pop(context);
-            }
-          },
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                isStream ? 'New Stream Playlist' : 'New Local Playlist',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.onSurface,
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: ctrl,
+                autofocus: true,
+                style: theme.textTheme.bodyMedium?.copyWith(fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: 'Playlist name',
+                  hintStyle: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.hintColor.withValues(alpha: 0.6),
+                    fontSize: 14,
+                  ),
+                  filled: true,
+                  fillColor: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(
+                      color: theme.dividerColor.withValues(alpha: 0.08),
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(
+                      color: theme.colorScheme.primary.withValues(alpha: 0.5),
+                      width: 1.5,
+                    ),
+                  ),
+                ),
+                textCapitalization: TextCapitalization.sentences,
+                onSubmitted: (v) {
+                  if (v.trim().isNotEmpty) {
+                    ref.read(playlistProvider.notifier).createPlaylist(v.trim(), isStream: isStream);
+                    Navigator.pop(context);
+                  }
+                },
+              ),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  ResonanceButton(
+                    onPressed: () => Navigator.pop(context),
+                    label: 'Cancel',
+                    style: ResonanceButtonStyle.secondary,
+                  ),
+                  const SizedBox(width: 12),
+                  ResonanceButton(
+                    onPressed: () {
+                      if (ctrl.text.trim().isNotEmpty) {
+                        ref
+                            .read(playlistProvider.notifier)
+                            .createPlaylist(ctrl.text.trim(), isStream: isStream);
+                        Navigator.pop(context);
+                      }
+                    },
+                    label: 'Create',
+                    style: ResonanceButtonStyle.primary,
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (ctrl.text.trim().isNotEmpty) {
-                ref
-                    .read(playlistProvider.notifier)
-                    .createPlaylist(ctrl.text.trim());
-                Navigator.pop(context);
-              }
-            },
-            child: const Text('Create'),
-          ),
-        ],
       ),
     );
+  }
+
+  Future<void> _importPlaylistDialog(BuildContext context, WidgetRef ref) async {
+    try {
+      final FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+      );
+      if (result == null || result.files.single.path == null) return;
+
+      final file = File(result.files.single.path!);
+      final content = await file.readAsString();
+      
+      await ref.read(playlistProvider.notifier).importPlaylist(content);
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Playlist imported successfully!')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to import playlist: $e')),
+        );
+      }
+    }
   }
 }
 
@@ -287,9 +399,6 @@ class _PlaylistTile extends ConsumerWidget {
     final theme = Theme.of(context);
     final firstTrack = playlist.tracks.isNotEmpty ? playlist.tracks.first : null;
 
-    // Detect if this is an online playlist and needs track loading
-    final bool isEmptyOnline = isOnline && playlist.tracks.isEmpty;
-
     return Card(
       margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -298,9 +407,6 @@ class _PlaylistTile extends ConsumerWidget {
         padding: 12,
         scaleOnHover: 1.0, // No scale for list tile card
         onTap: () {
-          if (isEmptyOnline) {
-             ref.read(playlistProvider.notifier).loadOnlinePlaylistTracks(playlist.id);
-          }
           ref.read(selectedPlaylistIdProvider.notifier).setSelectedId(playlist.id);
         },
         child: Row(
@@ -350,65 +456,45 @@ class _PlaylistTile extends ConsumerWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    isEmptyOnline 
-                      ? 'Click to sync tracks' 
-                      : '${playlist.tracks.length} track${playlist.tracks.length == 1 ? '' : 's'} • ${isOnline ? 'Online' : 'Local'}',
+                    '${playlist.tracks.length} track${playlist.tracks.length == 1 ? '' : 's'} • ${isOnline ? 'Stream' : 'Local'}',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: isOnline ? theme.colorScheme.primary : theme.hintColor,
-                      fontWeight: isEmptyOnline ? FontWeight.bold : null,
                     ),
                   ),
                 ],
               ),
             ),
             // Context menu
-            PopupMenuButton<_PlaylistAction>(
-              onSelected: (action) =>
-                  _handleAction(context, ref, action, playlist),
-              itemBuilder: (_) => [
-                PopupMenuItem(
-                  value: _PlaylistAction.play,
-                  child: ListTile(
-                    leading: Icon(UIcons.regular.play),
-                    title: const Text('Play all'),
-                    contentPadding: EdgeInsets.zero,
-                    visualDensity: VisualDensity.compact,
-                  ),
+            ResonanceContextMenu(
+              items: [
+                ResonanceContextMenuItem(
+                  icon: UIcons.regular.play,
+                  label: 'Play all',
+                  onTap: () => _playAll(context, ref, playlist),
+                ),
+                ResonanceContextMenuItem(
+                  icon: UIcons.regular.edit,
+                  label: 'Rename',
+                  onTap: () => _showRenameDialog(context, ref, playlist),
                 ),
                 if (isOnline)
-                  PopupMenuItem(
-                    value: _PlaylistAction.convertToLocal,
-                    child: ListTile(
-                      leading: Icon(AppIcons.download),
-                      title: const Text('Convert to Local'),
-                      contentPadding: EdgeInsets.zero,
-                      visualDensity: VisualDensity.compact,
-                    ),
+                  ResonanceContextMenuItem(
+                    icon: UIcons.regular.upload,
+                    label: 'Export JSON',
+                    onTap: () => _exportPlaylist(context, ref, playlist),
                   ),
-                if (!isOnline) ...[
-                  PopupMenuItem(
-                    value: _PlaylistAction.rename,
-                    child: ListTile(
-                      leading: Icon(UIcons.regular.edit),
-                      title: const Text('Rename'),
-                      contentPadding: EdgeInsets.zero,
-                      visualDensity: VisualDensity.compact,
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: _PlaylistAction.delete,
-                    child: ListTile(
-                      leading: Icon(AppIcons.trash, color: Colors.red),
-                      title: const Text(
-                        'Delete',
-                        style: TextStyle(color: Colors.red),
-                      ),
-                      contentPadding: EdgeInsets.zero,
-                      visualDensity: VisualDensity.compact,
-                    ),
-                  ),
-                ],
+                ResonanceContextMenuItem(
+                  icon: AppIcons.trash,
+                  label: 'Delete',
+                  isDanger: true,
+                  onTap: () => _confirmDelete(context, ref, playlist),
+                ),
               ],
+              child: ReusableHoverIconButton(
+                icon: AppIcons.moreVert,
+                tooltip: 'More options',
+                iconSize: 16,
+              ),
             ),
           ],
         ),
@@ -416,30 +502,7 @@ class _PlaylistTile extends ConsumerWidget {
     );
   }
 
-  void _handleAction(
-    BuildContext context,
-    WidgetRef ref,
-    _PlaylistAction action,
-    Playlist playlist,
-  ) {
-    switch (action) {
-      case _PlaylistAction.play:
-        _playAll(context, ref, playlist);
-        break;
-      case _PlaylistAction.convertToLocal:
-        ref.read(playlistProvider.notifier).convertOnlineToLocal(playlist);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Converted "${playlist.name}" to local.')),
-        );
-        break;
-      case _PlaylistAction.rename:
-        _showRenameDialog(context, ref, playlist);
-        break;
-      case _PlaylistAction.delete:
-        _confirmDelete(context, ref, playlist);
-        break;
-    }
-  }
+
 
   void _playAll(BuildContext context, WidgetRef ref, Playlist playlist) {
     if (playlist.tracks.isEmpty) {
@@ -452,39 +515,127 @@ class _PlaylistTile extends ConsumerWidget {
     ref.read(audioProvider.notifier).playTrack(first);
   }
 
+  Future<void> _exportPlaylist(BuildContext context, WidgetRef ref, Playlist playlist) async {
+    try {
+      final String? directory = await FilePicker.platform.getDirectoryPath();
+      if (directory == null) return;
+      
+      final jsonString = await ref.read(playlistProvider.notifier).exportPlaylist(playlist.id);
+      if (jsonString == null) return;
+
+      final safeName = playlist.name.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
+      final file = File(p.join(directory, 'playlist_$safeName.json'));
+      await file.writeAsString(jsonString);
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Successfully exported to ${p.basename(file.path)}')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to export playlist: $e')),
+        );
+      }
+    }
+  }
+
   void _showRenameDialog(
     BuildContext context,
     WidgetRef ref,
     Playlist playlist,
   ) {
     final ctrl = TextEditingController(text: playlist.name);
+    final theme = Theme.of(context);
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Rename Playlist'),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          decoration: const InputDecoration(border: OutlineInputBorder()),
-          textCapitalization: TextCapitalization.sentences,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          width: 360,
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface.withValues(alpha: 0.95),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: theme.primaryColor.withValues(alpha: 0.2),
+              width: 1,
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Rename Playlist',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.onSurface,
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: ctrl,
+                autofocus: true,
+                style: theme.textTheme.bodyMedium?.copyWith(fontSize: 14),
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(
+                      color: theme.dividerColor.withValues(alpha: 0.08),
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(
+                      color: theme.colorScheme.primary.withValues(alpha: 0.5),
+                      width: 1.5,
+                    ),
+                  ),
+                ),
+                textCapitalization: TextCapitalization.sentences,
+                onSubmitted: (v) {
+                  if (v.trim().isNotEmpty) {
+                    ref.read(playlistProvider.notifier).renamePlaylist(playlist.id, v.trim());
+                    Navigator.pop(context);
+                  }
+                },
+              ),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  ResonanceButton(
+                    onPressed: () => Navigator.pop(context),
+                    label: 'Cancel',
+                    style: ResonanceButtonStyle.secondary,
+                  ),
+                  const SizedBox(width: 12),
+                  ResonanceButton(
+                    onPressed: () {
+                      if (ctrl.text.trim().isNotEmpty) {
+                        ref
+                            .read(playlistProvider.notifier)
+                            .renamePlaylist(playlist.id, ctrl.text.trim());
+                        Navigator.pop(context);
+                      }
+                    },
+                    label: 'Save',
+                    style: ResonanceButtonStyle.primary,
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (ctrl.text.trim().isNotEmpty) {
-                ref
-                    .read(playlistProvider.notifier)
-                    .renamePlaylist(playlist.id, ctrl.text.trim());
-                Navigator.pop(context);
-              }
-            },
-            child: const Text('Save'),
-          ),
-        ],
       ),
     );
   }
@@ -492,28 +643,17 @@ class _PlaylistTile extends ConsumerWidget {
   void _confirmDelete(BuildContext context, WidgetRef ref, Playlist playlist) {
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Delete Playlist'),
-        content: Text(
-          'Are you sure you want to delete "${playlist.name}"? This cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () {
-              ref.read(playlistProvider.notifier).deletePlaylist(playlist.id);
-              Navigator.pop(context);
-            },
-            child: const Text('Delete'),
-          ),
-        ],
+      builder: (context) => ResonanceConfirmDialog(
+        title: 'Delete Playlist',
+        content: 'Are you sure you want to delete "${playlist.name}"? This cannot be undone.',
+        confirmLabel: 'Delete',
+        isDanger: true,
+        onConfirm: () {
+          ref.read(playlistProvider.notifier).deletePlaylist(playlist.id);
+        },
       ),
     );
   }
 }
 
-enum _PlaylistAction { play, rename, delete, convertToLocal }
+

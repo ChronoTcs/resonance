@@ -19,12 +19,10 @@ class PlaybackRestorationService {
   PlaybackRestorationService(this._ref);
 
   /// Restores the last playback session from persistence.
-  /// Follows V16.1 SOTA: Engine Seek Guard and Cold Start Tray Sync.
   Future<void> restoreSession(AudioNotifier notifier) async {
     final persistence = _ref.read(audioPersistenceServiceProvider);
     final s = persistence.loadSettings();
 
-    // -- Restoration Build-Phase Guard (V17.7 SOTA) --
     // We wrap state changes in microtask to prevent Infinite Build loops
     // when triggered during DashboardScreen.initState/build.
     Future.microtask(() async {
@@ -35,10 +33,8 @@ class PlaybackRestorationService {
         pitch: s.pitch,
       );
 
-      // -- Equalizer Restoration (V17.5) --
       _ref.read(equalizerControllerProvider.notifier).loadSettings();
 
-      // -- Global Resume Orchestration (V16.1) --
       if (s.lastTrackJson != null && s.lastQueueJson != null) {
         try {
           final Map<String, dynamic> trackData = Map<String, dynamic>.from(jsonDecode(s.lastTrackJson!));
@@ -66,7 +62,6 @@ class PlaybackRestorationService {
             positionMs: s.lastPositionMs,
           );
 
-          // 2. [SOTA] Engine Seek Guard: Open but don't play yet
           final player = notifier.player;
           final resolver = _ref.read(streamResolutionServiceProvider);
           await player.open(resolver.buildMedia(lastTrack.path), play: false);

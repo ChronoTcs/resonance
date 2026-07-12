@@ -18,6 +18,7 @@ import 'package:resonance/core/application/services/permission_service.dart';
 import 'dart:io';
 import 'package:resonance/features/tray/application/tray_service.dart';
 import 'package:resonance/features/player/application/services/audio_orchestrator.dart';
+import 'package:resonance/core/widgets/glossy_animated_background.dart';
 
 class MainDashboard extends ConsumerStatefulWidget {
   const MainDashboard({super.key});
@@ -33,7 +34,6 @@ class _MainDashboardState extends ConsumerState<MainDashboard> {
   void initState() {
     super.initState();
 
-    // SOTA V11.0: Android Permission Resilience
     // Pindah ke sini agar memiliki context di bawah MaterialApp (MaterialLocalizations tersedia)
     if (Platform.isAndroid) {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -42,12 +42,10 @@ class _MainDashboardState extends ConsumerState<MainDashboard> {
       });
     }
 
-    // [SOTA V17.0] The Audio Orchestrator Bootstrapper
     // This connects all reactive background services (Sync, Tracking, Maintenance, Restoration)
     // without polluting the UI Layer.
     ref.read(audioOrchestratorProvider);
 
-    // [SOTA V14.1] Inisialisasi System Tray pada Windows
     if (Platform.isWindows) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ref.read(trayServiceProvider).initTray();
@@ -66,7 +64,6 @@ class _MainDashboardState extends ConsumerState<MainDashboard> {
         const SettingsScreen(), // 5
       ];
     }
-    // SOTA V6.0: Indexed Stability Guard.
     // On Mobile, Playlists is merged into Library.
     // Length must be 6 to prevent RangeError when resizing from Desktop index 5.
     return [
@@ -86,7 +83,6 @@ class _MainDashboardState extends ConsumerState<MainDashboard> {
     final bool showLyrics = ref.watch(lyricsOverlayProvider);
     final bool showNowPlaying = ref.watch(nowPlayingOverlayProvider);
 
-    // SOTA V6.0: Indexed Stability Logic
     // Menerjemahkan index logis (0-5) ke index fisik BottomNavigationBar (0-4)
     int getPhysicalIndex(int logicalIndex) {
       if (!isDesktop) {
@@ -122,12 +118,12 @@ class _MainDashboardState extends ConsumerState<MainDashboard> {
                 if (isDesktop) ...[
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
-                    width: _isExtended ? 200 : 50,
+                    width: _isExtended ? 160 : 50,
                     color:
                         Theme.of(context).navigationRailTheme.backgroundColor ??
                         Theme.of(context).colorScheme.surface,
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         // Hamburger Menu
                         Container(
@@ -152,14 +148,14 @@ class _MainDashboardState extends ConsumerState<MainDashboard> {
                         Expanded(
                           child: Stack(
                             children: [
-                              // Floating Active Indicator
+                               // Floating Active Indicator
                               if (logicalIndex != 5)
                                 TweenAnimationBuilder<double>(
                                   duration: const Duration(milliseconds: 300),
                                   curve: Curves.easeOutBack,
                                   tween: Tween<double>(
-                                    begin: logicalIndex * 44.0,
-                                    end: logicalIndex * 44.0,
+                                    begin: logicalIndex * 38.0,
+                                    end: logicalIndex * 38.0,
                                   ),
                                   builder: (context, value, child) {
                                     return Positioned(
@@ -167,7 +163,7 @@ class _MainDashboardState extends ConsumerState<MainDashboard> {
                                       left: 0,
                                       child: Container(
                                         width: 3,
-                                        height: 40,
+                                        height: 34,
                                         margin: const EdgeInsets.only(left: 4),
                                         child: child,
                                       ),
@@ -181,48 +177,52 @@ class _MainDashboardState extends ConsumerState<MainDashboard> {
                                   ),
                                 ),
                               // Nav items list
-                              ListView(
-                                padding: EdgeInsets.zero,
-                                physics: const NeverScrollableScrollPhysics(),
-                                children: [
-                                  _buildNavItem(
-                                    0,
-                                    'Home',
-                                    UIcons.regular.home,
-                                    UIcons.solid.home,
-                                  ),
-                                  _buildNavItem(
-                                    1,
-                                    'Explore',
-                                    UIcons.regular.compass_alt,
-                                    UIcons.solid.compass_alt,
-                                  ),
-                                  _buildNavItem(
-                                    2,
-                                    'Library',
-                                    UIcons.regular.headphones,
-                                    UIcons.solid.headphones,
-                                  ),
-                                  _buildNavItem(
-                                    3,
-                                    'Playlists',
-                                    UIcons.regular.list_music,
-                                    UIcons.solid.list_music,
-                                  ),
-                                  _buildNavItem(
-                                    4,
-                                    'Download',
-                                    UIcons.regular.download,
-                                    UIcons.solid.download,
-                                  ),
-                                ],
+                              Positioned(
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    _buildNavItem(
+                                      0,
+                                      'Home',
+                                      UIcons.regular.home,
+                                      UIcons.solid.home,
+                                    ),
+                                    _buildNavItem(
+                                      1,
+                                      'Explore',
+                                      UIcons.regular.compass_alt,
+                                      UIcons.solid.compass_alt,
+                                    ),
+                                    _buildNavItem(
+                                      2,
+                                      'Library',
+                                      UIcons.regular.headphones,
+                                      UIcons.solid.headphones,
+                                    ),
+                                    _buildNavItem(
+                                      3,
+                                      'Playlists',
+                                      UIcons.regular.list_music,
+                                      UIcons.solid.list_music,
+                                    ),
+                                    _buildNavItem(
+                                      4,
+                                      'Download',
+                                      UIcons.regular.download,
+                                      UIcons.solid.download,
+                                    ),
+                                  ],
+                                ),
                               ),
                             ],
                           ),
                         ),
                         // Settings Button positioned at the bottom of the rail with identical slide indicator animation
                         Container(
-                          height: 50,
+                          height: 38,
                           margin: const EdgeInsets.only(bottom: 12),
                           child: Stack(
                             children: [
@@ -230,17 +230,17 @@ class _MainDashboardState extends ConsumerState<MainDashboard> {
                                 duration: const Duration(milliseconds: 300),
                                 curve: Curves.easeOutBack,
                                 tween: Tween<double>(
-                                  begin: logicalIndex == 5 ? 0.0 : 50.0,
-                                  end: logicalIndex == 5 ? 0.0 : 50.0,
+                                  begin: logicalIndex == 5 ? 0.0 : 38.0,
+                                  end: logicalIndex == 5 ? 0.0 : 38.0,
                                 ),
                                 builder: (context, value, child) {
-                                  if (value >= 44.0) return const SizedBox.shrink();
+                                  if (value >= 34.0) return const SizedBox.shrink();
                                   return Positioned(
-                                    top: value + 5.0,
+                                    top: value + 2.0,
                                     left: 0,
                                     child: Container(
                                       width: 3,
-                                      height: 40,
+                                      height: 34,
                                       margin: const EdgeInsets.only(left: 4),
                                       child: child,
                                     ),
@@ -253,11 +253,13 @@ class _MainDashboardState extends ConsumerState<MainDashboard> {
                                   ),
                                 ),
                               ),
-                              _buildNavItem(
-                                5,
-                                'Settings',
-                                UIcons.regular.settings,
-                                UIcons.solid.settings,
+                              Positioned.fill(
+                                child: _buildNavItem(
+                                  5,
+                                  'Settings',
+                                  UIcons.regular.settings,
+                                  UIcons.solid.settings,
+                                ),
                               ),
                             ],
                           ),
@@ -265,7 +267,21 @@ class _MainDashboardState extends ConsumerState<MainDashboard> {
                       ],
                     ),
                   ),
-                  const VerticalDivider(thickness: 1, width: 1),
+                  GlossyAnimatedBackground(
+                    isSelected: true,
+                    borderRadius: BorderRadius.zero,
+                    baseColor: Colors.transparent,
+                    border: Border(
+                      right: BorderSide(
+                        color: Theme.of(context).primaryColor.withValues(alpha: 0.25),
+                        width: 1,
+                      ),
+                    ),
+                    child: const SizedBox(
+                      width: 1,
+                      height: double.infinity,
+                    ),
+                  ),
                 ],
                 // Main Content area
                 Expanded(
@@ -398,12 +414,13 @@ class _MainDashboardState extends ConsumerState<MainDashboard> {
       },
       color: color,
       hoverColor: theme.primaryColor,
-      iconSize: 20,
-      padding: 10,
-      scaleOnHover: 1.0, // SOTA V3.4: Minimalist sidebar (No pop animation)
+      iconSize: 18,
+      padding: 8,
+      isSelected: isSelected,
+      scaleOnHover: 1.0,
       margin: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 2.0),
       label: title, // Always pass label for smooth reveal transition
-      showLabel: _isExtended, // SOTA V3.7: Fade label based on sidebar state
+      showLabel: _isExtended,
       labelStyle: TextStyle(
         color: color,
         fontSize: 15,

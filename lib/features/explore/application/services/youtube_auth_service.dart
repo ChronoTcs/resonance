@@ -114,6 +114,13 @@ class YoutubeAuthService {
   String? get visitorData => _prefs.getString(_kVisitorDataKey);
   String? get dataSyncId => _prefs.getString(_kDataSyncIdKey);
 
+  /// Caches a real visitorData fetched from YouTube InnerTube response.
+  Future<void> cacheVisitorData(String visitorData) async {
+    if (visitorData.isNotEmpty) {
+      await _prefs.setString(_kVisitorDataKey, visitorData);
+    }
+  }
+
   /// Builds the authenticated headers for InnerTube requests.
   /// Includes SAPISIDHASH if cookies are available.
   Map<String, String> getAuthenticatedHeaders() {

@@ -5,52 +5,34 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 class PathUtils {
-  static Future<String> getMusicDefault() async {
-    if (Platform.isAndroid) {
-      // Sub-folder Music di dalam Master Folder Resonance
-      return '/storage/emulated/0/Resonance/Music';
-    } else {
-      final docDir = await getDownloadsDirectory() ?? await getApplicationDocumentsDirectory();
-      // On Windows, getDownloadsDirectory often returns user's Downloads. 
-      // But usually Music is preferred.
-      final home = Platform.environment['USERPROFILE'] ?? '';
-      if (home.isNotEmpty) {
-        return p.join(home, 'Music', 'Resonance Downloads');
-      }
-      return p.join(docDir.path, 'Resonance Music');
+  static String get _windowsBaseDir {
+    final localAppData = Platform.environment['LOCALAPPDATA'];
+    if (localAppData != null && localAppData.isNotEmpty) {
+      return p.join(localAppData, 'ChronoTech', 'Resonance');
     }
+    final home = Platform.environment['USERPROFILE'] ?? '';
+    return p.join(home, 'AppData', 'Local', 'ChronoTech', 'Resonance');
   }
 
-  static Future<String> getVideoDefault() async {
+  static Future<String> getMusicDefault() async {
     if (Platform.isAndroid) {
-      // Sub-folder Video di dalam Master Folder Resonance
-      return '/storage/emulated/0/Resonance/Video';
+      return '/storage/emulated/0/Resonance/Music';
     } else {
-      final home = Platform.environment['USERPROFILE'] ?? '';
-      if (home.isNotEmpty) {
-        return p.join(home, 'Videos', 'Resonance Downloads');
-      }
-      final docDir = await getApplicationDocumentsDirectory();
-      return p.join(docDir.path, 'Resonance Videos');
+      return p.join(_windowsBaseDir, 'Music');
     }
   }
 
   static Future<String> getLyricsDefault() async {
     if (Platform.isAndroid) {
-      // Sub-folder Lyrics di dalam Master Folder Resonance
       return '/storage/emulated/0/Resonance/Lyrics';
     } else {
-      final music = await getMusicDefault();
-      return p.join(music, 'Lyrics');
+      return p.join(_windowsBaseDir, 'Lyrics');
     }
   }
 
   static Future<String> getCacheDefault() async {
     if (Platform.isWindows) {
-      final userProfile = Platform.environment['USERPROFILE'];
-      if (userProfile != null) {
-        return p.join(userProfile, 'resonance_cache');
-      }
+      return p.join(_windowsBaseDir, 'cache');
     }
     final docDir = await getApplicationDocumentsDirectory();
     return p.join(docDir.path, 'resonance_cache');

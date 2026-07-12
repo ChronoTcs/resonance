@@ -61,18 +61,42 @@ static LRESULT CALLBACK ChildSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, L
   return DefSubclassProc(hwnd, uMsg, wParam, lParam);
 }
 
+// Helper: check if hwnd currently covers its monitor (i.e. is truly fullscreen).
+// ponytail: O(1), called from NCHITTEST and NCLBUTTONDOWN guards.
+static bool IsWindowFullscreen(HWND hwnd) {
+  RECT wr;
+  if (!GetWindowRect(hwnd, &wr)) return false;
+  HMONITOR mon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+  if (!mon) return false;
+  MONITORINFO mi;
+  mi.cbSize = sizeof(MONITORINFO);
+  if (!GetMonitorInfo(mon, &mi)) return false;
+  return wr.left == mi.rcMonitor.left && wr.top == mi.rcMonitor.top &&
+         wr.right == mi.rcMonitor.right && wr.bottom == mi.rcMonitor.bottom;
+}
+
 static LRESULT CALLBACK WindowSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
   if (uMsg == WM_NCCALCSIZE) {
     if (wParam == TRUE) {
       NCCALCSIZE_PARAMS* sz = reinterpret_cast<NCCALCSIZE_PARAMS*>(lParam);
-      
-      // Check if window is in fullscreen mode (no titlebar and no thick resize borders)
-      DWORD style = GetWindowLong(hwnd, GWL_STYLE);
-      bool is_fullscreen = !(style & WS_CAPTION) && !(style & WS_THICKFRAME);
-      if (is_fullscreen) {
-        return 0; // Return 0 with no offsets to let client area cover the entire screen
+
+      // Use the PROPOSED new rect (sz->rgrc[0]) — not GetWindowRect — to avoid a
+      // timing race where GetWindowRect still holds the old position during SetWindowPos.
+      // ponytail: MonitorFromRect resolves multi-monitor correctly on the proposed bounds.
+      HMONITOR mon = MonitorFromRect(&sz->rgrc[0], MONITOR_DEFAULTTONEAREST);
+      if (mon) {
+        MONITORINFO mi;
+        mi.cbSize = sizeof(MONITORINFO);
+        if (GetMonitorInfo(mon, &mi)) {
+          if (sz->rgrc[0].left   == mi.rcMonitor.left   &&
+              sz->rgrc[0].top    == mi.rcMonitor.top    &&
+              sz->rgrc[0].right  == mi.rcMonitor.right  &&
+              sz->rgrc[0].bottom == mi.rcMonitor.bottom) {
+            return 0; // Proposed rect fills monitor exactly — bypass all border offsets.
+          }
+        }
       }
-      
+
       // If maximized, adjust rect to the monitor's work area so content is not cut off at screen edges
       WINDOWPLACEMENT wp;
       wp.length = sizeof(WINDOWPLACEMENT);
@@ -87,10 +111,10 @@ static LRESULT CALLBACK WindowSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, 
           }
         }
       }
-      
-      // If not maximized and not fullscreen, let client area cover the whole window but preserve resize borders (8px)
-      sz->rgrc[0].left += 8;
-      sz->rgrc[0].right -= 8;
+
+      // Normal window: preserve 8px resize border shadow on left/right/bottom.
+      sz->rgrc[0].left   += 8;
+      sz->rgrc[0].right  -= 8;
       sz->rgrc[0].bottom -= 8;
       return 0;
     }
@@ -101,36 +125,42 @@ static LRESULT CALLBACK WindowSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, 
     UpdateHoverState(hwnd, false);
   }
 
-  if (uMsg == WM_NCLBUTTONDOWN && wParam == HTMAXBUTTON) {
-    WINDOWPLACEMENT wp;
-    wp.length = sizeof(WINDOWPLACEMENT);
-    if (GetWindowPlacement(hwnd, &wp)) {
-      if (wp.showCmd == SW_SHOWMAXIMIZED) {
-        PostMessage(hwnd, WM_SYSCOMMAND, SC_RESTORE, 0);
-      } else {
-        PostMessage(hwnd, WM_SYSCOMMAND, SC_MAXIMIZE, 0);
+  // Guard: only intercept maximize-button zone when NOT in fullscreen.
+  // In fullscreen the title bar is hidden — clicks in that coordinate would otherwise
+  // trigger SC_RESTORE/SC_MAXIMIZE and corrupt the window state machine.
+  if (!IsWindowFullscreen(hwnd)) {
+    if (uMsg == WM_NCLBUTTONDOWN && wParam == HTMAXBUTTON) {
+      WINDOWPLACEMENT wp;
+      wp.length = sizeof(WINDOWPLACEMENT);
+      if (GetWindowPlacement(hwnd, &wp)) {
+        if (wp.showCmd == SW_SHOWMAXIMIZED) {
+          PostMessage(hwnd, WM_SYSCOMMAND, SC_RESTORE, 0);
+        } else {
+          PostMessage(hwnd, WM_SYSCOMMAND, SC_MAXIMIZE, 0);
+        }
       }
+      return 0;
     }
-    return 0;
-  }
 
-  if (uMsg == WM_NCHITTEST) {
-    POINT pt = { (int)(short)LOWORD(lParam), (int)(short)HIWORD(lParam) };
-    ScreenToClient(hwnd, &pt);
-    RECT rect;
-    GetClientRect(hwnd, &rect);
-    
-    UINT dpi = GetDpiForWindow(hwnd);
-    double dpi_scale = dpi / 96.0;
-    
-    double title_bar_height = 32.0 * dpi_scale;
-    double button_width = 46.0 * dpi_scale;
-    
-    double max_btn_left = rect.right - (button_width * 2);
-    double max_btn_right = rect.right - button_width;
+    if (uMsg == WM_NCHITTEST) {
+      POINT pt = { (int)(short)LOWORD(lParam), (int)(short)HIWORD(lParam) };
+      ScreenToClient(hwnd, &pt);
+      RECT rect;
+      GetClientRect(hwnd, &rect);
 
-    if (pt.y >= 0 && pt.y <= title_bar_height && pt.x >= max_btn_left && pt.x <= max_btn_right) {
-      return HTMAXBUTTON;
+      UINT dpi = GetDpiForWindow(hwnd);
+      double dpi_scale = dpi / 96.0;
+
+      double title_bar_height = 32.0 * dpi_scale;
+      double button_width = 46.0 * dpi_scale;
+
+      double max_btn_left  = rect.right - (button_width * 2);
+      double max_btn_right = rect.right - button_width;
+
+      if (pt.y >= 0 && pt.y <= title_bar_height &&
+          pt.x >= max_btn_left && pt.x <= max_btn_right) {
+        return HTMAXBUTTON;
+      }
     }
   }
   return DefSubclassProc(hwnd, uMsg, wParam, lParam);

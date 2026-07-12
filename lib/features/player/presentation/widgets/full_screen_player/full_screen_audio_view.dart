@@ -9,9 +9,9 @@ import 'package:resonance/features/player/presentation/widgets/mini_player/share
 import 'package:resonance/features/player/presentation/widgets/player_cards.dart';
 
 /// [FullScreenAudioView]
-/// Bertanggung jawab HANYA untuk layout mode Audio:
+/// Responsible ONLY for Audio mode layout:
 /// - SliverAppBar (Title + Actions)
-/// - Album Artwork dengan shadow & Hero animation
+/// - Album Artwork with shadow & Hero animation
 /// - Metadata Cards (MetadataCard + NextInQueueCard + MiniLyricsCard)
 class FullScreenAudioView extends ConsumerWidget {
   final dynamic displayTrack;
@@ -124,17 +124,10 @@ class FullScreenAudioView extends ConsumerWidget {
           icon: UIcons.regular.menu_dots,
           color: Colors.white70,
           tooltip: 'Audio Settings',
-          // [DRY PRINCIPLE] Memanfaatkan kembali AudioSettingsSheet yang sudah
-          // ada dan reusable, menghindari duplikasi kode slider Speed/Pitch.
+          // [DRY PRINCIPLE] Reuses the existing, reusable AudioSettingsSheet
+          // to avoid duplicating Speed/Pitch slider code.
           onTap: () => AudioSettingsSheet.show(context),
         ),
-        ReusableHoverIconButton(
-          icon: UIcons.regular.compress,
-          color: Colors.white70,
-          tooltip: 'Exit',
-          onTap: () => Navigator.pop(context),
-        ),
-        const SizedBox(width: 24),
       ],
     );
   }

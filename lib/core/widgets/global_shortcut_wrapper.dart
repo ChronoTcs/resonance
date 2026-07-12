@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance/features/player/application/providers/audio_provider.dart';
-import 'package:resonance/features/player/application/providers/video_player_notifier.dart';
-import 'package:resonance/features/player/application/providers/active_media_focus_provider.dart';
 
 class GlobalShortcutWrapper extends ConsumerStatefulWidget {
   final Widget child;
@@ -36,21 +34,17 @@ class _GlobalShortcutWrapperState extends ConsumerState<GlobalShortcutWrapper> {
 
     bool isTextInput = false;
 
-    // 1. Cek langsung widgetnya (berjaga-jaga)
     final widget = focusNode.context!.widget;
-    if (widget is EditableText || widget is TextField || widget is TextFormField) {
+    if (widget is EditableText) {
       return true;
     }
 
-    // 2. Teknik Tree Traversal: Memanjat pohon widget ke atas untuk mencari induknya
     focusNode.context!.visitAncestorElements((element) {
-      if (element.widget is EditableText || 
-          element.widget is TextField || 
-          element.widget is TextFormField) {
+      if (element.widget is EditableText) {
         isTextInput = true;
-        return false; // Berhenti memanjat, kita sudah menemukannya!
+        return false;
       }
-      return true; // Terus memanjat ke atas
+      return true;
     });
 
     return isTextInput;
@@ -63,31 +57,25 @@ class _GlobalShortcutWrapperState extends ConsumerState<GlobalShortcutWrapper> {
     final isControl = HardwareKeyboard.instance.isControlPressed;
     final isShift = HardwareKeyboard.instance.isShiftPressed;
 
-    final focus = ref.read(mediaFocusProvider);
     final audioNotifier = ref.read(audioProvider.notifier);
-    final videoNotifier = ref.read(videoPlayerProvider.notifier);
 
     // 1. Space Logic (Play/Pause)
     if (key == LogicalKeyboardKey.space) {
       if (_isInputFocused()) {
         return false;
       }
-      if (focus == MediaFocus.video) {
-        videoNotifier.togglePlayPause();
-      } else {
-        audioNotifier.togglePlayPause();
-      }
+      audioNotifier.togglePlayPause();
       return true;
     }
 
     // 2. Ctrl + ArrowRight/Left (Next/Prev)
     if (isControl) {
       if (key == LogicalKeyboardKey.arrowRight) {
-        if (focus == MediaFocus.audio) audioNotifier.skipToNext();
+        audioNotifier.skipToNext();
         return true;
       }
       if (key == LogicalKeyboardKey.arrowLeft) {
-        if (focus == MediaFocus.audio) audioNotifier.skipToPrevious();
+        audioNotifier.skipToPrevious();
         return true;
       }
     }
@@ -107,15 +95,11 @@ class _GlobalShortcutWrapperState extends ConsumerState<GlobalShortcutWrapper> {
     // 4. Shift + ArrowRight/Left (Seek)
     if (isShift) {
       if (key == LogicalKeyboardKey.arrowRight) {
-        if (focus == MediaFocus.audio) {
-          audioNotifier.adjustPosition(const Duration(seconds: 10));
-        }
+        audioNotifier.adjustPosition(const Duration(seconds: 10));
         return true;
       }
       if (key == LogicalKeyboardKey.arrowLeft) {
-        if (focus == MediaFocus.audio) {
-          audioNotifier.adjustPosition(const Duration(seconds: -10));
-        }
+        audioNotifier.adjustPosition(const Duration(seconds: -10));
         return true;
       }
     }

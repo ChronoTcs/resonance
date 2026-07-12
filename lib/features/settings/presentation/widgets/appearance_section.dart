@@ -1,28 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance/core/utils/uicons.dart';
+import 'package:resonance/core/widgets/resonance_selector.dart';
+import 'package:resonance/core/widgets/resonance_slider.dart';
 import '../../../../core/theme/theme_provider.dart';
-import 'settings_widgets.dart';
 
 class AppearanceSection extends ConsumerWidget {
   const AppearanceSection({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'App & Appearance',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey),
-        ),
-        const SizedBox(height: 16),
-        _buildThemeSetting(context, ref),
-        const SizedBox(height: 12),
-        _buildAccentSetting(context, ref),
-      ],
-    );
-  }
 
   static const Map<String, List<Color>> _paletteGradients = {
     'palette1': [Color(0xFFDBCDC2), Color(0xFFA89689)],
@@ -35,80 +19,57 @@ class AppearanceSection extends ConsumerWidget {
     'palette8': [Color(0xFFAE8C50), Color(0xFFBB6B4C)],
   };
 
-  Widget _buildThemeSetting(BuildContext context, WidgetRef ref) {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeProvider);
-    final theme = Theme.of(context);
-    
-    return SettingsItemTile(
-      icon: UIcons.regular.palette,
-      title: 'App Theme',
-      subtitle: 'Select visual mode',
-      trailing: HoverDropdownWrapper(
-        child: DropdownButtonHideUnderline(
-          child: DropdownButton<AppThemeMode>(
-            value: themeMode,
-            dropdownColor: theme.colorScheme.surface,
-            borderRadius: BorderRadius.circular(16),
-            focusColor: Colors.transparent,
-            icon: Padding(
-              padding: const EdgeInsets.only(right: 12, left: 4),
-              child: Icon(UIcons.regular.angle_small_down, size: 16),
-            ),
-            items: const [
-              DropdownMenuItem(
-                value: AppThemeMode.system, 
-                child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16),
-                  child: Text('System Default', style: TextStyle(fontSize: 14)),
-                ),
-              ),
-              DropdownMenuItem(
-                value: AppThemeMode.light, 
-                child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16),
-                  child: Text('Modern Glass (Light)', style: TextStyle(fontSize: 14)),
-                ),
-              ),
-              DropdownMenuItem(
-                value: AppThemeMode.dark, 
-                child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16),
-                  child: Text('Deep Opulence (Dark)', style: TextStyle(fontSize: 14)),
-                ),
-              ),
-              DropdownMenuItem(
-                value: AppThemeMode.onyx, 
-                child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16),
-                  child: Text('Onyx (Pure Dark)', style: TextStyle(fontSize: 14)),
-                ),
-              ),
-            ],
-            onChanged: (mode) {
-              if (mode != null) ref.read(themeProvider.notifier).setTheme(mode);
-            },
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAccentSetting(BuildContext context, WidgetRef ref) {
     final accentMode = ref.watch(accentColorProvider);
-    final theme = Theme.of(context);
+    final activeOpacity = ref.watch(lyricsActiveOpacityProvider);
+    final inactiveOpacity = ref.watch(lyricsInactiveOpacityProvider);
 
-    DropdownMenuItem<String?> buildItem(String? value, String text, [List<Color>? colors]) {
-      return DropdownMenuItem<String?>(
-        value: value,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(text, style: const TextStyle(fontSize: 14)),
-              if (colors != null) ...[
-                const SizedBox(width: 12),
-                Container(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'App & Appearance',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey),
+        ),
+        const SizedBox(height: 16),
+
+        // Theme selector
+        ResonanceSelector<AppThemeMode>(
+          icon: UIcons.regular.palette,
+          title: 'App Theme',
+          subtitle: 'Select visual mode',
+          value: themeMode,
+          onChanged: (v) => ref.read(themeProvider.notifier).setTheme(v),
+          items: const [
+            ResonanceSelectorItem(value: AppThemeMode.system, label: 'System Default'),
+            ResonanceSelectorItem(value: AppThemeMode.light,  label: 'Gilded Ivory (Light)'),
+            ResonanceSelectorItem(value: AppThemeMode.dark,   label: 'Deep Opulence (Dark)'),
+            ResonanceSelectorItem(value: AppThemeMode.onyx,   label: 'Onyx (Pure Dark)'),
+          ],
+        ),
+
+        const SizedBox(height: 12),
+
+        // Accent selector
+        ResonanceSelector<String?>(
+          icon: UIcons.regular.paint_brush,
+          title: 'Accent Colour',
+          subtitle: 'Select primary accent',
+          value: accentMode,
+          onChanged: (v) => ref.read(accentColorProvider.notifier).setAccentColor(v),
+          items: [
+            const ResonanceSelectorItem(value: null,      label: 'Default Accent'),
+            const ResonanceSelectorItem(value: 'windows', label: 'Windows Accent'),
+            ..._paletteGradients.entries.indexed.map((e) {
+              final idx = e.$1 + 1;
+              final key = e.$2.key;
+              final colors = e.$2.value;
+              return ResonanceSelectorItem<String?>(
+                value: key,
+                label: 'Palette $idx',
+                leading: Container(
                   width: 32,
                   height: 12,
                   decoration: BoxDecoration(
@@ -120,85 +81,41 @@ class AppearanceSection extends ConsumerWidget {
                     ),
                   ),
                 ),
-              ],
-            ],
-          ),
+              );
+            }),
+          ],
         ),
-      );
-    }
-
-    return SettingsItemTile(
-      icon: UIcons.regular.paint_brush,
-      title: 'Accent colour',
-      subtitle: 'Select primary accent',
-      trailing: HoverDropdownWrapper(
-        child: DropdownButtonHideUnderline(
-          child: DropdownButton<String?>(
-            value: accentMode,
-            dropdownColor: theme.colorScheme.surface,
-            borderRadius: BorderRadius.circular(16),
-            focusColor: Colors.transparent,
-            icon: Padding(
-              padding: const EdgeInsets.only(right: 12, left: 4),
-              child: Icon(UIcons.regular.angle_small_down, size: 16),
-            ),
-            items: [
-              buildItem(null, 'Default Accent'),
-              buildItem('windows', 'Windows Accent'),
-              buildItem('palette1', 'Palette 1', _paletteGradients['palette1']),
-              buildItem('palette2', 'Palette 2', _paletteGradients['palette2']),
-              buildItem('palette3', 'Palette 3', _paletteGradients['palette3']),
-              buildItem('palette4', 'Palette 4', _paletteGradients['palette4']),
-              buildItem('palette5', 'Palette 5', _paletteGradients['palette5']),
-              buildItem('palette6', 'Palette 6', _paletteGradients['palette6']),
-              buildItem('palette7', 'Palette 7', _paletteGradients['palette7']),
-              buildItem('palette8', 'Palette 8', _paletteGradients['palette8']),
-            ],
-            onChanged: (mode) => ref.read(accentColorProvider.notifier).setAccentColor(mode),
-          ),
+        const SizedBox(height: 24),
+        const Text(
+          'Lyrics Opacity',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey),
         ),
-      ),
-    );
-  }
-}
+        const SizedBox(height: 12),
 
-class HoverDropdownWrapper extends StatefulWidget {
-  final Widget child;
-  const HoverDropdownWrapper({super.key, required this.child});
-
-  @override
-  State<HoverDropdownWrapper> createState() => _HoverDropdownWrapperState();
-}
-
-class _HoverDropdownWrapperState extends State<HoverDropdownWrapper> {
-  bool _isHovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final activeColor = theme.primaryColor;
-    
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        height: 38,
-        decoration: BoxDecoration(
-          color: _isHovered 
-              ? activeColor.withValues(alpha: 0.12) 
-              : theme.colorScheme.surface.withValues(alpha: 0.6),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: _isHovered 
-                ? activeColor.withValues(alpha: 0.4) 
-                : theme.dividerColor.withValues(alpha: 0.1),
-            width: 1,
-          ),
+        // Highlighted Line Opacity
+        ResonanceSlider(
+          title: 'Highlighted Line Opacity (${(activeOpacity * 100).toInt()}%)',
+          value: activeOpacity,
+          min: 0.1,
+          max: 1.0,
+          divisions: 9,
+          onChanged: (val) => ref.read(lyricsActiveOpacityProvider.notifier).setOpacity(val),
         ),
-        child: widget.child,
-      ),
+
+        const SizedBox(height: 12),
+
+        // Inactive Lines Opacity
+        ResonanceSlider(
+          title: 'Non-highlighted Lines Opacity (${(inactiveOpacity * 100).toInt()}%)',
+          value: inactiveOpacity,
+          min: 0.1,
+          max: 1.0,
+          divisions: 9,
+          onChanged: (val) => ref.read(lyricsInactiveOpacityProvider.notifier).setOpacity(val),
+        ),
+
+        const SizedBox(height: 32),
+      ],
     );
   }
 }

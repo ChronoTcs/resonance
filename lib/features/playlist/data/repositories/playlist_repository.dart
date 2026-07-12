@@ -5,29 +5,27 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:resonance/features/playlist/data/models/playlist_model.dart';
 import 'package:resonance/core/data/services/storage_service.dart';
 
-/// Key penyimpanan untuk SharedPreferences
+/// Storage key for SharedPreferences
 const _playlistsKey = 'user_playlists';
 
-/// [PlaylistRepository]
-/// Tanggung jawab: Menangani persistensi data playlist ke penyimpanan lokal.
-/// Memisahkan I/O SharedPreferences dari logika bisnis (PlaylistNotifier).
+/// Handles persistence of playlist data to local storage.
+/// Separates SharedPreferences I/O from business logic (PlaylistNotifier).
 class PlaylistRepository {
   final SharedPreferences _prefs;
 
   PlaylistRepository(this._prefs);
 
-  /// Mengambil daftar playlist dari penyimpanan
+  /// Retrieves the list of playlists from storage
   Future<List<Playlist>> fetchPlaylists() async {
     final jsonString = _prefs.getString(_playlistsKey);
     if (jsonString == null || jsonString.isEmpty) {
       return [];
     }
 
-    // [SOTA] Gunakan compute untuk parsing JSON agar UI tetap responsif
     return await compute(_parsePlaylistJson, jsonString);
   }
 
-  /// Menyimpan daftar playlist ke penyimpanan
+  /// Persists the list of playlists to storage
   Future<void> persistPlaylists(List<Playlist> playlists) async {
     try {
       final jsonString = jsonEncode(playlists.map((p) => p.toJson()).toList());
@@ -38,7 +36,7 @@ class PlaylistRepository {
     }
   }
 
-  /// Logic internal untuk parsing JSON di Isolate terpisah
+  /// Internal logic for JSON parsing in a separate Isolate
   static List<Playlist> _parsePlaylistJson(String jsonString) {
     try {
       final List<dynamic> jsonList = jsonDecode(jsonString);
@@ -50,12 +48,8 @@ class PlaylistRepository {
   }
 }
 
-/// Provider untuk mengakses Repository
-/// Menggunakan sharedPreferencesProvider (asumsi sudah ada di core)
-/// Jika belum ada, pastikan inisialisasi dilakukan di main.dart
+/// Provider to access the Repository
 final playlistRepositoryProvider = Provider<PlaylistRepository>((ref) {
-  // Mengambil SharedPreferences dari provider global
   final prefs = ref.watch(sharedPreferencesProvider);
   return PlaylistRepository(prefs);
 });
-

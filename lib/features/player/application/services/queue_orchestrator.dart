@@ -2,7 +2,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../library/data/models/media_item.dart';
 import '../providers/audio_provider.dart';
 
-/// Orchestrator for complex queue-related business logic (V17.5 Micro-Domain).
 /// 
 /// Handles logic that determines "what array of tracks" should be sent to
 /// the AudioNotifier based on specialized contexts (Sequential playback, Radio fallback).
@@ -11,7 +10,6 @@ class QueueOrchestrator {
 
   QueueOrchestrator(this._ref);
 
-  /// [V15.2 SOTA] Sequential Path: For "Your Library"
   /// Turns shuffle OFF and plays from a specific index in the given context.
   void playSequentialContext(MediaItem track, List<MediaItem> contextQueue) {
     final notifier = _ref.read(audioProvider.notifier);
@@ -30,7 +28,6 @@ class QueueOrchestrator {
     }
   }
 
-  /// [V15.2 SOTA] Radio Fallback Path: For curated/online lists
   /// Turns shuffle ON, places chosen track first, and fills the rest with random local tracks.
   void playWithLocalRadioFallback(MediaItem track, List<MediaItem> allLocalTracks) {
     final notifier = _ref.read(audioProvider.notifier);

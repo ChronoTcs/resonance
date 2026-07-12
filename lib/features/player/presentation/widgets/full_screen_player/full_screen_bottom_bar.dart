@@ -109,7 +109,7 @@ class FullScreenBottomBar extends StatelessWidget {
                           iconSize: 20,
                           color: Colors.white70,
                           tooltip: 'Exit',
-                          onTap: () => Navigator.pop(context),
+                          onTap: () => Navigator.maybePop(context),
                         ),
                       ],
                     ),
@@ -135,7 +135,7 @@ class FullScreenProgress extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final s = ref.watch(audioProvider);
     return SizedBox(
-      height: 32, // SOTA V3.4: Augmented hit-test area
+      height: 32,
       child: ReusableSeekSlider(
         value: s.position.inMilliseconds.toDouble(),
         max: s.duration.inMilliseconds.toDouble() > 0
@@ -212,7 +212,7 @@ class FullScreenControls extends ConsumerWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FULLSCREEN VOLUME SLIDER (dengan toggle Mute)
+// FULLSCREEN VOLUME SLIDER (with toggle Mute)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class FullScreenVolumeSlider extends ConsumerStatefulWidget {
@@ -301,8 +301,8 @@ class _FullScreenVolumeSliderState extends ConsumerState<FullScreenVolumeSlider>
 // ─────────────────────────────────────────────────────────────────────────────
 
 class FullScreenUtilityButtons extends ConsumerWidget {
-  /// context diperlukan untuk memanggil AudioSettingsSheet.show() yang
-  /// membutuhkan BuildContext dari luar Consumer.
+  /// context is required to show the AudioSettingsSheet,
+  /// needing a BuildContext from outside the Consumer.
   final BuildContext context;
   const FullScreenUtilityButtons({super.key, required this.context});
 
@@ -322,8 +322,7 @@ class FullScreenUtilityButtons extends ConsumerWidget {
           iconSize: 20,
           color: Colors.white70,
           tooltip: 'Audio Settings',
-          // [DRY PRINCIPLE] Panggil AudioSettingsSheet.show() yang sudah
-          // decoupled dan reusable – tidak ada duplikasi slider Speed/Pitch.
+          // Call AudioSettingsSheet.show() which is decoupled and reusable.
           onTap: () => AudioSettingsSheet.show(context),
         ),
       ],

@@ -9,6 +9,7 @@ import '../../features/playlist/application/playlist_provider.dart';
 import '../../features/download/application/providers/download_provider.dart';
 import '../../features/download/data/models/download_item.dart';
 import '../../core/providers/navigation_provider.dart';
+import 'package:resonance/core/widgets/resonance_button.dart';
 
 class MediaActionsBottomSheet extends ConsumerWidget {
   const MediaActionsBottomSheet({
@@ -27,7 +28,7 @@ class MediaActionsBottomSheet extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final isOnline = item.id != null;
+    final isOnline = item.isStreaming;
 
     return SafeArea(
       child: Column(
@@ -156,56 +157,62 @@ class MediaActionsBottomSheet extends ConsumerWidget {
         builder: (context, ref, _) {
           final theme = Theme.of(context);
           final playlistsAsync = ref.watch(playlistProvider);
+          final showOnline = item.isStreaming;
+
           return playlistsAsync.when(
-            data: (state) => Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                AppBar(
-                  title: const Text('Select Playlist'),
-                  automaticallyImplyLeading: false,
-                  actions: [
-                    IconButton(onPressed: () => Navigator.pop(context), icon: Icon(AppIcons.close))
-                  ],
-                ),
-                // Action: Create New Playlist
-                ListTile(
-                  leading: Icon(AppIcons.add, color: theme.colorScheme.primary),
-                  title: Text('Create New Playlist', style: TextStyle(color: theme.colorScheme.primary, fontWeight: FontWeight.bold)),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _showCreatePlaylistDialog(context);
-                  },
-                ),
-                const Divider(height: 1),
-                if (state.local.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.all(24.0),
-                    child: Text('No local playlists found.'),
-                  )
-                else
-                  Flexible(
-                    child: ListView.builder(
-                      shrinkWrap: true,
-                      itemCount: state.local.length,
-                      itemBuilder: (ctx, i) {
-                        final pl = state.local[i];
-                        return ListTile(
-                          leading: Icon(AppIcons.playlist),
-                          title: Text(pl.name),
-                          onTap: () {
-                            final messenger = ScaffoldMessenger.of(ctx);
-                            ref.read(playlistProvider.notifier).addTrackToPlaylist(pl.id, item);
-                            Navigator.pop(ctx);
-                            messenger.showSnackBar(
-                              SnackBar(content: Text('Added to ${pl.name}')),
-                            );
-                          },
-                        );
-                      },
-                    ),
+            data: (state) {
+              final targetList = showOnline ? state.online : state.local;
+              final emptyMsg = showOnline ? 'No stream playlists found.' : 'No local playlists found.';
+
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AppBar(
+                    title: const Text('Select Playlist'),
+                    automaticallyImplyLeading: false,
+                    actions: [
+                      IconButton(onPressed: () => Navigator.pop(context), icon: Icon(AppIcons.close))
+                    ],
                   ),
-              ],
-            ),
+                  ListTile(
+                    leading: Icon(AppIcons.add, color: theme.colorScheme.primary),
+                    title: Text('Create New Playlist', style: TextStyle(color: theme.colorScheme.primary, fontWeight: FontWeight.bold)),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _showCreatePlaylistDialog(context);
+                    },
+                  ),
+                  const Divider(height: 1),
+                  if (targetList.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.all(24.0),
+                      child: Text(emptyMsg),
+                    )
+                  else
+                    Flexible(
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: targetList.length,
+                        itemBuilder: (ctx, i) {
+                          final pl = targetList[i];
+                          return ListTile(
+                            leading: Icon(AppIcons.playlist),
+                            title: Text(pl.name),
+                            onTap: () {
+                              final messenger = ScaffoldMessenger.of(ctx);
+                              ref.read(playlistProvider.notifier).addTrackToPlaylist(pl.id, item);
+                              Navigator.pop(ctx);
+                              messenger.showSnackBar(
+                                SnackBar(content: Text('Added to ${pl.name}')),
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              );
+            },
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (e, _) => Center(child: Text('Error: $e')),
           );
@@ -219,45 +226,112 @@ class MediaActionsBottomSheet extends ConsumerWidget {
     showDialog(
       context: context,
       builder: (ctx) => Consumer(
-        builder: (ctx, ref, _) => AlertDialog(
-          title: const Text('New Playlist'),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            decoration: const InputDecoration(
-              hintText: 'Enter playlist name',
-              border: OutlineInputBorder(),
+        builder: (ctx, ref, _) {
+          final theme = Theme.of(ctx);
+          final isStream = item.isStreaming;
+
+          return Dialog(
+            backgroundColor: Colors.transparent,
+            child: Container(
+              width: 360,
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surface.withValues(alpha: 0.95),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: theme.primaryColor.withValues(alpha: 0.2),
+                  width: 1,
+                ),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    isStream ? 'New Stream Playlist' : 'New Local Playlist',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: controller,
+                    autofocus: true,
+                    style: theme.textTheme.bodyMedium?.copyWith(fontSize: 14),
+                    decoration: InputDecoration(
+                      hintText: 'Playlist name',
+                      hintStyle: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.hintColor.withValues(alpha: 0.6),
+                        fontSize: 14,
+                      ),
+                      filled: true,
+                      fillColor: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide.none,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(
+                          color: theme.dividerColor.withValues(alpha: 0.08),
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(
+                          color: theme.colorScheme.primary.withValues(alpha: 0.5),
+                          width: 1.5,
+                        ),
+                      ),
+                    ),
+                    textCapitalization: TextCapitalization.sentences,
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      ResonanceButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        label: 'Cancel',
+                        style: ResonanceButtonStyle.secondary,
+                      ),
+                      const SizedBox(width: 12),
+                      ResonanceButton(
+                        onPressed: () async {
+                          final name = controller.text.trim();
+                          if (name.isNotEmpty) {
+                            final messenger = ScaffoldMessenger.of(ctx);
+                            // 1. Create the playlist
+                            await ref.read(playlistProvider.notifier).createPlaylist(name, isStream: isStream);
+                            
+                            // 2. Get the new playlist ID from correct list
+                            final stateObj = await ref.read(playlistProvider.future);
+                            final targetList = isStream ? stateObj.online : stateObj.local;
+                            final newPl = targetList.firstWhere((p) => p.name == name);
+                            
+                            // 3. Add the track to it
+                            await ref.read(playlistProvider.notifier).addTrackToPlaylist(newPl.id, item);
+                            
+                            if (ctx.mounted) {
+                              Navigator.pop(ctx);
+                              messenger.showSnackBar(
+                                SnackBar(content: Text('Created "$name" and added song.')),
+                              );
+                            }
+                          }
+                        },
+                        label: 'Create',
+                        style: ResonanceButtonStyle.primary,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-            FilledButton(
-              onPressed: () async {
-                final name = controller.text.trim();
-                if (name.isNotEmpty) {
-                  final messenger = ScaffoldMessenger.of(ctx);
-                  // 1. Create the playlist
-                  await ref.read(playlistProvider.notifier).createPlaylist(name);
-                  
-                  // 2. Get the new playlist ID from local list
-                  final stateObj = await ref.read(playlistProvider.future);
-                  final newPl = stateObj.local.firstWhere((p) => p.name == name);
-                  
-                  // 3. Add the track to it
-                  await ref.read(playlistProvider.notifier).addTrackToPlaylist(newPl.id, item);
-                  
-                  if (ctx.mounted) {
-                    Navigator.pop(ctx);
-                    messenger.showSnackBar(
-                      SnackBar(content: Text('Created "$name" and added song.')),
-                    );
-                  }
-                }
-              },
-              child: const Text('Create'),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }

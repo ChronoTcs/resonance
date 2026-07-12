@@ -8,7 +8,6 @@ import 'playback_sync_service.dart';
 import 'playback_tracking_service.dart';
 import 'gapless_prefetch_service.dart';
 
-/// The AudioOrchestrator acts as a "Bootstrapper" or "Glue" (V17.0 SOTA).
 /// It decouples orthogonal logic (Sync, Tracking, Maintenance) from the core 
 /// AudioNotifier using the Riverpod pattern.
 ///

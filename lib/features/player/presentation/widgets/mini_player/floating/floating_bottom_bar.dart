@@ -25,7 +25,6 @@ class FloatingBottomBar extends ConsumerWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // 1. Interactive Progress Bar (ReusableSeekSlider SOTA V13.14)
           ReusableSeekSlider(
             value: audioState.position.inMilliseconds.toDouble(),
             max: audioState.duration.inMilliseconds > 0 
@@ -34,14 +33,14 @@ class FloatingBottomBar extends ConsumerWidget {
             onChanged: (v) => audioNotifier.seek(Duration(milliseconds: v.toInt())),
             trackHeight: 2,
             height: 4,
-            thumbRadius: 0, // Sempit untuk miniplayer, thumb muncul saat hover/drag (Slider default)
+            thumbRadius: 0, // Narrow for miniplayer, thumb appears on hover/drag
           ),
 
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
             child: Row(
               children: [
-                // Info Lagu (Marquee Title)
+                // Song Info (Marquee Title)
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -111,7 +110,6 @@ class FloatingBottomBar extends ConsumerWidget {
   }
 }
 
-/// SOTA Marquee Implementation (No External Packages)
 class _MarqueeText extends StatefulWidget {
   final String text;
   final TextStyle style;

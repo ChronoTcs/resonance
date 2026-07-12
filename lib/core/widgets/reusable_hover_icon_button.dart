@@ -1,11 +1,10 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 
-/// Sebuah widget tombol ikon "Dumb Component" yang reusable dengan animasi hover halus.
-/// Mendukung adaptasi lintas platform (Windows Desktop vs Android Mobile).
+/// Hover animation
 class ReusableHoverIconButton extends StatefulWidget {
   final IconData? icon;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final String tooltip;
   final Color? color;
   final Color? iconColor;
@@ -25,7 +24,7 @@ class ReusableHoverIconButton extends StatefulWidget {
   const ReusableHoverIconButton({
     super.key,
     this.icon,
-    required this.onTap,
+    this.onTap,
     required this.tooltip,
     this.color,
     this.iconColor,
@@ -47,30 +46,97 @@ class ReusableHoverIconButton extends StatefulWidget {
   State<ReusableHoverIconButton> createState() => _ReusableHoverIconButtonState();
 }
 
-class _ReusableHoverIconButtonState extends State<ReusableHoverIconButton> {
+class _ReusableHoverIconButtonState extends State<ReusableHoverIconButton> with SingleTickerProviderStateMixin {
   bool _isHovered = false;
+  AnimationController? _controller;
 
   bool get _isWindows => Platform.isWindows;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.isSelected) {
+      _initController();
+    }
+  }
+
+  void _initController() {
+    _controller ??= AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 3),
+    );
+    _controller!.repeat();
+  }
+
+  @override
+  void didUpdateWidget(ReusableHoverIconButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isSelected) {
+      _initController();
+    } else {
+      _controller?.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  Widget _buildIcon(Color finalIconColor, Color activeColor) {
+    final iconWidget = Icon(
+      widget.icon,
+      size: widget.iconSize,
+      color: widget.isSelected ? Colors.white : finalIconColor,
+    );
+
+    if (widget.isSelected && _controller != null) {
+      return AnimatedBuilder(
+        animation: _controller!,
+        builder: (context, child) {
+          return ShaderMask(
+            shaderCallback: (bounds) {
+              final double offset = 2.0 - (_controller!.value * 4.0);
+              return LinearGradient(
+                colors: [
+                  activeColor,
+                  Colors.white.withValues(alpha: 0.85),
+                  activeColor,
+                ],
+                stops: const [0.0, 0.5, 1.0],
+                begin: Alignment(1.5 + offset, 1.5 + offset),
+                end: Alignment(-1.5 + offset, -1.5 + offset),
+              ).createShader(bounds);
+            },
+            blendMode: BlendMode.srcIn,
+            child: child,
+          );
+        },
+        child: iconWidget,
+      );
+    }
+
+    return iconWidget;
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final activeColor = widget.hoverColor ?? theme.primaryColor;
 
-    // Warna dasar mengikuti status isDisabled dan isSelected
+    // Base color based on isDisabled and isSelected status
     final baseColor = widget.isDisabled 
         ? (widget.iconColor ?? widget.color ?? theme.colorScheme.onSurface).withValues(alpha: 0.38)
         : (widget.isSelected 
             ? activeColor 
             : (widget.iconColor ?? widget.color ?? theme.colorScheme.onSurface));
 
-    // ATURAN SOTA V2.3: Jika ada backgroundColor (Mode Filled), 
-    // iconColor tidak boleh berubah jadi activeColor saat hover agar tidak 'tenggelam'.
+    // iconColor shouldn't change to activeColor on hover to prevent blending in.
     final finalIconColor = (widget.backgroundColor != null && _isHovered && !widget.isDisabled)
         ? (widget.iconColor ?? Colors.white)
         : (_isHovered && !widget.isDisabled && _isWindows ? activeColor : baseColor);
 
-    // SOTA V6.0: Dynamic layout logic
     Widget content;
     if (widget.icon == null && widget.label != null) {
       // 1. Label-only mode (Example: Translation Button TRN/ROM)
@@ -95,11 +161,7 @@ class _ReusableHoverIconButtonState extends State<ReusableHoverIconButton> {
               width: widget.iconSize,
               height: widget.iconSize,
               child: Center(
-                child: Icon(
-                  widget.icon,
-                  size: widget.iconSize,
-                  color: finalIconColor,
-                ),
+                child: _buildIcon(finalIconColor, activeColor),
               ),
             ),
           ),
@@ -128,7 +190,7 @@ class _ReusableHoverIconButtonState extends State<ReusableHoverIconButton> {
       // 3. Icon-only mode (Default behavior)
       content = widget.child ??
           (widget.icon != null
-              ? Icon(widget.icon, size: widget.iconSize, color: finalIconColor)
+              ? _buildIcon(finalIconColor, activeColor)
               : const SizedBox.shrink());
     }
 
@@ -141,7 +203,7 @@ class _ReusableHoverIconButtonState extends State<ReusableHoverIconButton> {
         duration: const Duration(milliseconds: 200),
         scale: _isHovered && !widget.isDisabled ? widget.scaleOnHover : 1.0,
         curve: Curves.easeOutBack,
-        child: ClipRect( // SOTA V3.6: Clip at the button level for the "reveal" effect
+        child: ClipRect(
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
             padding: EdgeInsets.all(widget.padding),
@@ -155,11 +217,9 @@ class _ReusableHoverIconButtonState extends State<ReusableHoverIconButton> {
                       : (widget.backgroundColor ?? Colors.transparent)),
               borderRadius: borderRadius,
               shape: BoxShape.rectangle,
-              border: widget.isSelected && !widget.isDisabled
-                  ? Border.all(color: activeColor.withValues(alpha: 0.5), width: 1) 
-                  : (widget.backgroundColor != null && _isHovered && !widget.isDisabled
-                      ? Border.all(color: Colors.white.withValues(alpha: 0.3), width: 1) 
-                      : null),
+              border: widget.backgroundColor != null && _isHovered && !widget.isDisabled
+                  ? Border.all(color: Colors.white.withValues(alpha: 0.3), width: 1) 
+                  : null,
             ),
             child: !_isWindows && !widget.isDisabled
                 ? Material(

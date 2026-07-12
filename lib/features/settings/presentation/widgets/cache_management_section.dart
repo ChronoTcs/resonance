@@ -22,11 +22,12 @@ class CacheManagementSection extends ConsumerWidget {
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey),
         ),
         const SizedBox(height: 16),
-        Container(
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surface,
+        Material(
+          color: theme.colorScheme.surface,
+          clipBehavior: Clip.antiAlias,
+          shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: theme.dividerColor.withValues(alpha: 0.05)),
+            side: BorderSide(color: theme.dividerColor.withValues(alpha: 0.05)),
           ),
           child: Theme(
             data: theme.copyWith(dividerColor: Colors.transparent),

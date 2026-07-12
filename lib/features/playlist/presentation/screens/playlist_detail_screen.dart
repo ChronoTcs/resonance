@@ -58,6 +58,7 @@ class PlaylistDetailScreen extends ConsumerWidget {
                   ReusableHoverIconButton(
                     icon: UIcons.regular.refresh,
                     tooltip: 'Repair Playlist',
+                    iconSize: 18,
                     onTap: () async {
                       final libraryItems = ref.read(libraryProvider).allMedia;
                       final count = await ref
@@ -79,6 +80,7 @@ class PlaylistDetailScreen extends ConsumerWidget {
                   ReusableHoverIconButton(
                     icon: UIcons.regular.add,
                     tooltip: 'Add Music',
+                    iconSize: 18,
                     onTap: () {
                       showModalBottomSheet(
                         context: context,
@@ -128,7 +130,7 @@ class PlaylistDetailScreen extends ConsumerWidget {
                                   end: Alignment.bottomRight,
                                   colors: [
                                     theme.colorScheme.primary.withValues(alpha: 0.8),
-                                    theme.colorScheme.secondary.withValues(alpha: 0.6),
+                                    theme.colorScheme.tertiary.withValues(alpha: 0.6),
                                   ],
                                 ),
                               ),
@@ -159,11 +161,8 @@ class PlaylistDetailScreen extends ConsumerWidget {
                       if (tracks.isNotEmpty)
                         ReusableHoverIconButton(
                           icon: UIcons.regular.play,
-                          label: 'Play All',
                           tooltip: 'Play all tracks',
-                          backgroundColor: theme.colorScheme.primary,
-                          iconColor: theme.colorScheme.onPrimary,
-                          labelStyle: TextStyle(color: theme.colorScheme.onPrimary, fontWeight: FontWeight.bold),
+                          iconSize: 22,
                           onTap: () {
                             ref
                                 .read(audioProvider.notifier)
@@ -187,7 +186,7 @@ class PlaylistDetailScreen extends ConsumerWidget {
                   itemCount: tracks.length,
                   itemBuilder: (ctx, i) {
                     final track = tracks[i];
-                    final isOnline = track.id != null;
+                    final isOnline = track.isStreaming;
 
                     return ListTile(
                       contentPadding: const EdgeInsets.symmetric(
@@ -233,6 +232,8 @@ class PlaylistDetailScreen extends ConsumerWidget {
                       trailing: ReusableHoverIconButton(
                         icon: UIcons.regular.minus,
                         tooltip: 'Remove from playlist',
+                        iconSize: 16,
+                        padding: 4,
                         onTap: () {
                           ref
                               .read(playlistProvider.notifier)
@@ -274,9 +275,15 @@ class _MusicPickerSheetState extends ConsumerState<_MusicPickerSheet> {
     final libraryState = ref.watch(libraryProvider);
     final theme = Theme.of(context);
     
-    // Only show music for adding to playlists
+    final playlistsAsync = ref.watch(playlistProvider);
+    final playlistStateObj = playlistsAsync.value;
+    final isStreamPlaylist = playlistStateObj != null &&
+        playlistStateObj.online.any((p) => p.id == widget.playlistId);
+
+    // Only show music for adding to playlists (filtering stream vs local tracks)
     final music = libraryState.allMedia
-        .where((m) => m.type == 'audio' && 
+        .where((m) => m.type == 'audio' &&
+            (isStreamPlaylist ? m.isStreaming : m.isLocal) &&
             (m.title.toLowerCase().contains(_searchQuery.toLowerCase()) || 
              (m.artist?.toLowerCase().contains(_searchQuery.toLowerCase()) ?? false)))
         .toList();

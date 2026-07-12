@@ -2,6 +2,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance/core/utils/formatters.dart';
+import 'package:resonance/core/widgets/blur_fade_page_route.dart';
+import 'package:resonance/core/widgets/blur_transition_overlay.dart';
 import 'package:resonance/core/widgets/reusable_hover_icon_button.dart';
 import 'package:resonance/features/library/data/models/media_item.dart';
 import 'package:resonance/features/player/application/providers/audio_provider.dart';
@@ -95,7 +97,6 @@ class AudioExtraActions extends ConsumerWidget {
                     context: context,
                     buttonOffset: offset,
                     buttonSize: buttonSize,
-                    isVideo: false,
                   );
                 },
               );
@@ -113,7 +114,10 @@ class AudioExtraActions extends ConsumerWidget {
                 return ReusableHoverIconButton(
                   icon: isPopped ? UIcons.regular.window_restore : UIcons.regular.window_alt,
                   tooltip: isPopped ? 'Close Miniplayer' : 'Open Miniplayer',
-                  onTap: () => ref.read(miniPlayerPopProvider.notifier).togglePop(),
+                  onTap: () => BlurTransitionOverlay.run(
+                    ref,
+                    () async => ref.read(miniPlayerPopProvider.notifier).togglePop(),
+                  ),
                   iconSize: 20,
                 );
               },
@@ -122,26 +126,17 @@ class AudioExtraActions extends ConsumerWidget {
             icon: UIcons.regular.expand,
             tooltip: 'Full Screen',
             onTap: () {
-              // Menambahkan validasi overlay PiP: jika PiP (Window) terbuka, kembalikan ke normal dulu sebelum full screen (mencegah tumpang tindih visual)
+              // Close PiP before fullscreen to prevent visual overlap
               final isPopped = ref.read(miniPlayerPopProvider).isPopped;
               if (isPopped) {
                 ref.read(miniPlayerPopProvider.notifier).togglePop();
               }
-              
+              // Blur appears immediately; FullScreenPlayer.initState() calls complete()
+              BlurTransitionOverlay.start(ref);
               Navigator.of(context, rootNavigator: true).push(
-                PageRouteBuilder(
+                InstantPageRoute(
                   settings: const RouteSettings(name: '/fullscreen_player'),
-                  pageBuilder: (context, animation, secondaryAnimation) => const FullScreenPlayer(),
-                  transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                    var begin = const Offset(0.0, 1.0);
-                    var end = Offset.zero;
-                    var curve = Curves.easeInOut;
-                    var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
-                    return SlideTransition(
-                      position: animation.drive(tween),
-                      child: child,
-                    );
-                  },
+                  child: const FullScreenPlayer(),
                 ),
               );
             },

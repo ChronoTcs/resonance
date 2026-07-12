@@ -33,7 +33,6 @@ class AudioDockedPlayer extends ConsumerWidget {
         child: Stack(
           clipBehavior: Clip.none,
           children: [
-            // SOTA V5.1 Layer 1: Background & Controls (Inside ClipRRect)
             Positioned.fill(
               child: ClipRRect(
                 child: BackdropFilter(
@@ -92,7 +91,6 @@ class AudioDockedPlayer extends ConsumerWidget {
                 ),
               ),
             ),
-            // SOTA V5.1 Layer 2: Floating Seeker (Bebas Melayang di luar 72px boundaries)
             Positioned(
               top: -14, // Sets exactly 16px below and 16px above for maximum hit-area comfort
               left: 0,

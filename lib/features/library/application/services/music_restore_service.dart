@@ -14,7 +14,6 @@ class MusicRestoreService {
 
   MusicRestoreService(this._ref);
 
-  /// Performs the Ultimate Restore Protocol (V13.6)
   /// If [manualPath] is provided (Windows), it uses that.
   /// If null and on Android, it attempts to auto-detect a connected source.
   Future<void> restoreFromSource(String? manualPath) async {
@@ -31,10 +30,16 @@ class MusicRestoreService {
       }
     }
 
-    // 2. Permission Redundancy Guard
-    if (Platform.isAndroid && !(await Permission.manageExternalStorage.isGranted)) {
-      debugPrint('MusicRestoreService: Permission denied. Aborting.');
-      return;
+    // 2. SDK-aware Permission Guard (no MANAGE_EXTERNAL_STORAGE needed for public folders)
+    if (Platform.isAndroid) {
+      final sdkInt = await _getSdkInt();
+      final bool hasPermission = sdkInt >= 33
+          ? await Permission.audio.isGranted
+          : await Permission.storage.isGranted;
+      if (!hasPermission) {
+        debugPrint('MusicRestoreService: Storage permission denied. Aborting.');
+        return;
+      }
     }
 
     final sourceDir = Directory(sourcePath);
@@ -59,10 +64,8 @@ class MusicRestoreService {
     if (!await targetLyricsDir.exists()) await targetLyricsDir.create(recursive: true);
     if (!await targetImagesDir.exists()) await targetImagesDir.create(recursive: true);
 
-    // 4. SOTA V13.11: Instant Awakening - Metadata Borrowing & Path Re-mapping
     await _restoreAndRemapLibraryJson(sourcePath, targetMusicPath, targetImagesDir.path, manualPath: manualPath);
 
-    // 5. Identify Source Cache Location (SOTA V13.12 Enhanced Discovery)
     // We search for the 'images' folder in both common and custom locations.
     Directory? sourceImagesDir;
     final sourceParent = sourceDir.parent;
@@ -100,13 +103,13 @@ class MusicRestoreService {
         final targetFilePath = p.join(targetMusicPath, fileName);
         final targetFile = File(targetFilePath);
 
-        // A. Cek apakah .mp3 ada di lokal
+        // A. Check if .mp3 exists locally
         if (!await targetFile.exists()) {
-          // Salin .mp3
+          // Copy .mp3
           await entity.copy(targetFilePath);
           debugPrint('MusicRestoreService: Restored local file -> $fileName');
         } else {
-          // Jika SUDAH ADA, periksa ukuran file untuk memastikan integritas (Matching Strategy Basename + Size)
+          // If ALREADY EXISTS, check file size to ensure integrity (Matching Strategy Basename + Size)
           final sourceSize = await entity.length();
           final targetSize = await targetFile.length();
           if (sourceSize != targetSize) {
@@ -117,9 +120,13 @@ class MusicRestoreService {
         // B. THE SUPPORT DATA RECOVERY (Partial & Full)
         
         // 1. Recover Lyrics (.lrc)
-        final sourceLrcPath = p.join(p.dirname(entity.path), '$baseName.lrc');
-        final targetLrcPath = p.join(targetLyricsPath, '$baseName.lrc');
+        final sourceLrcPath = p.join(sourcePath, 'Lyrics', '$baseName.lrc');
+        final targetLrcPath = p.join(targetLyricsPath, 'Lyrics', '$baseName.lrc');
         if (await File(sourceLrcPath).exists()) {
+          final targetLrcDir = Directory(p.dirname(targetLrcPath));
+          if (!await targetLrcDir.exists()) {
+            await targetLrcDir.create(recursive: true);
+          }
           if (!await File(targetLrcPath).exists()) {
             await File(sourceLrcPath).copy(targetLrcPath);
             debugPrint('MusicRestoreService: Restored lyrics -> $baseName.lrc');
@@ -132,11 +139,11 @@ class MusicRestoreService {
           String? targetArtFileName;
 
           if (baseName.startsWith('loc_')) {
-            // JIKA FILE DOWNLOAD: ID adalah nama filenya
+            // IF DOWNLOADED FILE: ID is the filename
             sourceArtFileName = 'art_$baseName.jpg';
             targetArtFileName = sourceArtFileName;
           } else {
-            // JIKA FILE LOKAL BIASA: ID bergantung pada Parent Folder
+            // IF NORMAL LOCAL FILE: ID depends on the Parent Folder
             final sourceLocId = PathUtils.generateLocId(entity.path);
             final targetLocId = PathUtils.generateLocId(targetFilePath);
             
@@ -172,11 +179,15 @@ class MusicRestoreService {
       final cacheManager = _ref.read(cacheManagerProvider);
       final metadataDir = await cacheManager.getMetadataDir();
 
-      // SOTA V13.11: Strict Discovery Logic
+      final baseCacheDir = await cacheManager.getBaseCacheDir();
+
+      // Strict Discovery Logic
       final possibleJsonPaths = [
+        p.join(sourcePath, 'resonance_cache', 'resonance_library.json'),
+        p.join(sourcePath, 'cache', 'resonance_library.json'),
+        p.join(sourcePath, 'resonance_library.json'),
         p.join(sourcePath, 'resonance_cache', 'metadata', 'resonance_library.json'),
         p.join(sourcePath, 'metadata', 'resonance_library.json'),
-        p.join(sourcePath, 'resonance_library.json'),
         p.join(sourcePath, 'cache', 'metadata', 'resonance_library.json'),
       ];
 
@@ -184,6 +195,7 @@ class MusicRestoreService {
       // ONLY allow this if we are doing automatic discovery (no manual path provided)
       bool isManualSelection = sourcePath == manualPath && manualPath != null;
       if (!isManualSelection) {
+        possibleJsonPaths.add(p.join(baseCacheDir.path, 'resonance_library.json'));
         possibleJsonPaths.add(p.join(metadataDir.path, 'resonance_library.json'));
       }
 
@@ -191,6 +203,8 @@ class MusicRestoreService {
       bool isAndroidInternal = Platform.isAndroid && sourcePath.startsWith('/storage/emulated/0');
       if (!isAndroidInternal) {
         possibleJsonPaths.addAll([
+          p.join(sourceParent.path, 'resonance_cache', 'resonance_library.json'),
+          p.join(sourceParent.path, 'cache', 'resonance_library.json'),
           p.join(sourceParent.path, 'resonance_cache', 'metadata', 'resonance_library.json'),
           p.join(sourceParent.path, 'cache', 'metadata', 'resonance_library.json'),
         ]);
@@ -206,7 +220,6 @@ class MusicRestoreService {
         }
       }
 
-      // Fallback: Aggressive Discovery in Source (V13.10)
       // Skip scanning Parent on Android Internal root to avoid /Android/data crash logs
       if (sourceJsonFile == null) {
         debugPrint('MusicRestoreService: Standard paths failed. Performing discovery in $sourcePath...');
@@ -218,7 +231,6 @@ class MusicRestoreService {
 
         for (var dir in searchDirs) {
           try {
-            // SOTA V13.9: Bulletproof Stream Scanner
             final stream = dir.list(recursive: true, followLinks: false).handleError((e) {
               // Silently skip permission errors to keep logs clean
               if (!e.toString().contains('Permission denied')) {
@@ -249,14 +261,13 @@ class MusicRestoreService {
 
       final String content = await sourceJsonFile.readAsString();
       
-      // Perform Path Re-mapping in Isolate (V13.8)
       final String remappedContent = await compute(_remapJsonIsolate, {
         'content': content,
         'targetMusicPath': targetMusicPath,
         'targetImagesPath': targetImagesPath,
       });
 
-      final targetJsonFile = File(p.join(metadataDir.path, 'resonance_library.json'));
+      final targetJsonFile = File(p.join(baseCacheDir.path, 'resonance_library.json'));
 
       await cacheManager.synchronizedWrite(targetJsonFile, remappedContent);
       debugPrint('MusicRestoreService: Metadata successfully re-mapped and restored.');
@@ -268,9 +279,16 @@ class MusicRestoreService {
     }
   }
 
+  Future<int> _getSdkInt() async {
+    try {
+      final match = RegExp(r'SDK\s+(\d+)').firstMatch(Platform.operatingSystemVersion);
+      if (match != null) return int.parse(match.group(1)!);
+    } catch (_) {}
+    return 33; // fallback: assume modern
+  }
+
   Future<String?> _detectAndroidSourcePath() async {
     try {
-      // SOTA V13.4: Safe Volume Detection using path_provider
       final List<Directory>? dirs = await getExternalStorageDirectories(type: StorageDirectory.music);
       if (dirs == null || dirs.isEmpty) return null;
 
@@ -304,7 +322,6 @@ class MusicRestoreService {
   }
 }
 
-/// Isolate function for JSON Surgery (V13.7)
 /// Robust enough to handle cross-platform paths (Windows \ and Unix /)
 String _remapJsonIsolate(Map<String, dynamic> args) {
   final String content = args['content'];

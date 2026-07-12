@@ -19,7 +19,7 @@ class AudioTrackInfo extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return Row(
       children: [
-        // Album Art dengan Hero Animation
+        // Album Art with Hero Animation
         Padding(
           padding: const EdgeInsets.only(left: 16),
           child: Hero(

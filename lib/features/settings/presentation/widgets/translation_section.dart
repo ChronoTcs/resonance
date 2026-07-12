@@ -1,35 +1,36 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance/core/utils/uicons.dart';
+import 'package:resonance/core/widgets/resonance_selector.dart';
+import 'package:resonance/core/widgets/resonance_switch.dart';
 import '../../../lyrics/application/lyrics_translation_provider.dart';
-import 'settings_widgets.dart';
 
 class TranslationSection extends ConsumerWidget {
   const TranslationSection({super.key});
+
+  static const Map<String, String> _languages = {
+    'id': 'Indonesian',
+    'en': 'English',
+    'ja': 'Japanese',
+    'ko': 'Korean',
+    'zh-cn': 'Chinese (Simplified)',
+    'zh-tw': 'Chinese (Traditional)',
+    'es': 'Spanish',
+    'fr': 'French',
+    'de': 'German',
+    'ru': 'Russian',
+    'ar': 'Arabic',
+    'pt': 'Portuguese',
+    'it': 'Italian',
+    'vi': 'Vietnamese',
+    'th': 'Thai',
+  };
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final translationState = ref.watch(lyricsTranslationProvider);
     final translationNotifier = ref.read(lyricsTranslationProvider.notifier);
     final theme = Theme.of(context);
-
-    final Map<String, String> languages = {
-      'id': 'Indonesian',
-      'en': 'English',
-      'ja': 'Japanese',
-      'ko': 'Korean',
-      'zh-cn': 'Chinese (Simplified)',
-      'zh-tw': 'Chinese (Traditional)',
-      'es': 'Spanish',
-      'fr': 'French',
-      'de': 'German',
-      'ru': 'Russian',
-      'ar': 'Arabic',
-      'pt': 'Portuguese',
-      'it': 'Italian',
-      'vi': 'Vietnamese',
-      'th': 'Thai',
-    };
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -39,38 +40,41 @@ class TranslationSection extends ConsumerWidget {
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey),
         ),
         const SizedBox(height: 16),
-        
-        ListTile(
-          leading: Icon(UIcons.regular.language),
-          title: const Text('Show Translation Button'),
-          subtitle: const Text('Show a button to translate lyrics in the player'),
-          trailing: Switch(
-            value: translationState.isSystemEnabled,
-            onChanged: (val) => translationNotifier.toggleSystemEnabled(),
-            activeThumbColor: theme.primaryColor,
+
+        // Enable/disable toggle
+         Material(
+          color: theme.colorScheme.surface,
+          clipBehavior: Clip.antiAlias,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(color: theme.dividerColor.withValues(alpha: 0.08)),
           ),
-          tileColor: theme.colorScheme.surface,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          child: ListTile(
+            leading: Icon(UIcons.regular.language, size: 18, color: theme.primaryColor),
+            title: const Text('Show Translation Button', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+            subtitle: Text(
+              'Show a button to translate lyrics in the player',
+              style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+            ),
+            trailing: ResonanceSwitch(
+              value: translationState.isSystemEnabled,
+              onChanged: (_) => translationNotifier.toggleSystemEnabled(),
+            ),
+          ),
         ),
-        
+
         const SizedBox(height: 12),
-        
-        SettingsItemTile(
+
+        // Target language selector
+        ResonanceSelector<String>(
           icon: UIcons.regular.language,
           title: 'Target Language',
-          subtitle: 'Select language to translate to',
-          trailing: DropdownButton<String>(
-            value: translationState.targetLanguage,
-            dropdownColor: theme.colorScheme.surface,
-            borderRadius: BorderRadius.circular(12),
-            underline: const SizedBox(),
-            items: languages.entries.map((e) {
-              return DropdownMenuItem(value: e.key, child: Text(e.value));
-            }).toList(),
-            onChanged: (lang) {
-              if (lang != null) translationNotifier.setTargetLanguage(lang);
-            },
-          ),
+          subtitle: 'Language to translate lyrics into',
+          value: translationState.targetLanguage,
+          onChanged: (lang) => translationNotifier.setTargetLanguage(lang),
+          items: _languages.entries
+              .map((e) => ResonanceSelectorItem(value: e.key, label: e.value))
+              .toList(),
         ),
       ],
     );

@@ -4,12 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:silky_scroll/silky_scroll.dart';
 import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/core/utils/app_icons.dart';
+import 'package:resonance/core/widgets/resonance_button.dart';
+import 'package:resonance/core/widgets/resonance_selector.dart';
 import 'package:resonance/features/download/data/models/download_item.dart';
 import 'package:resonance/features/download/application/providers/download_provider.dart';
 import 'package:resonance/features/download/application/providers/download_settings_provider.dart';
-import 'package:resonance/features/download/presentation/screens/download_settings_screen.dart';
 import 'package:resonance/core/widgets/top_navigation_header.dart';
-import 'package:resonance/core/widgets/reusable_hover_icon_button.dart';
 
 class DownloadScreen extends ConsumerStatefulWidget {
   const DownloadScreen({super.key});
@@ -91,13 +91,16 @@ class _DownloadScreenState extends ConsumerState<DownloadScreen>
               left: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Text(
-                    'Download Manager',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
+                  SizedBox(
+                    width: 180,
+                    child: Text(
+                      'Download Manager',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 32),
                   Text(
                     '$activeCount active · $queuedCount queued · $doneCount done',
                     style: theme.textTheme.bodySmall?.copyWith(
@@ -106,37 +109,20 @@ class _DownloadScreenState extends ConsumerState<DownloadScreen>
                   ),
                 ],
               ),
-              right: ReusableHoverIconButton(
-                icon: UIcons.regular.settings,
-                tooltip: 'Download Settings',
-                iconSize: 18,
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const DownloadSettingsScreen(),
-                  ),
-                ),
-              ),
+              right: const SizedBox(),
             ),
           ] else ...[
             TopNavigationHeader(
-              left: Text(
-                'Download Manager',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              right: ReusableHoverIconButton(
-                icon: UIcons.regular.settings,
-                tooltip: 'Download Settings',
-                iconSize: 18,
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const DownloadSettingsScreen(),
+              left: SizedBox(
+                width: 180,
+                child: Text(
+                  'Download Manager',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
               ),
+              right: const SizedBox(),
             ),
             Container(
               height: 28,
@@ -177,180 +163,103 @@ class _DownloadScreenState extends ConsumerState<DownloadScreen>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // URL input
+                      // URL input — modern filled style
                       TextField(
                         controller: _urlController,
                         maxLines: 4,
                         minLines: 2,
+                        style: theme.textTheme.bodyMedium,
                         decoration: InputDecoration(
-                          hintText:
-                              'Paste URL(s) or type a song name…\n(One per line for batch download)',
-                          border: const OutlineInputBorder(),
+                          hintText: 'Paste URL(s) or song name…\nOne per line for batch',
+                          hintStyle: TextStyle(
+                            color: theme.hintColor.withValues(alpha: 0.6),
+                            fontSize: 13,
+                          ),
+                          filled: true,
+                          fillColor: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide.none,
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(
+                              color: theme.dividerColor.withValues(alpha: 0.08),
+                            ),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(
+                              color: theme.colorScheme.primary.withValues(alpha: 0.5),
+                              width: 1.5,
+                            ),
+                          ),
                           suffixIcon: IconButton(
-                            icon: Icon(AppIcons.close),
+                            icon: Icon(AppIcons.close, size: 16),
                             onPressed: () => _urlController.clear(),
+                            tooltip: 'Clear',
                           ),
                         ),
                       ),
                       const SizedBox(height: 12),
 
-                      // Type + Source selectors
-                      LayoutBuilder(
-                        builder: (context, constraints) {
-                          final useStack = constraints.maxWidth < 450;
-
-                          final typeSelector = Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Type',
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: theme.hintColor,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              SizedBox(
-                                width: double.infinity,
-                                child: SegmentedButton<DownloadType>(
-                                  segments: [
-                                    ButtonSegment(
-                                      value: DownloadType.audio,
-                                      label: const Text('Audio'),
-                                      icon: Icon(AppIcons.music, size: 16),
-                                    ),
-                                    ButtonSegment(
-                                      value: DownloadType.video,
-                                      label: const Text('Video'),
-                                      icon: Icon(AppIcons.video, size: 16),
-                                    ),
-                                  ],
-                                  selected: {_selectedType},
-                                  onSelectionChanged: (s) {
-                                    setState(() {
-                                      _selectedType = s.first;
-                                      if (_selectedType == DownloadType.video && 
-                                          _selectedSource == DownloadSource.ytmusic) {
-                                        _selectedSource = DownloadSource.youtube;
-                                      }
-                                    });
-                                  },
-                                ),
-                              ),
-                            ],
-                          );
-
-                          final sourceSelector = Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Source',
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: theme.hintColor,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              DropdownButtonFormField<DownloadSource>(
-                                initialValue: _selectedSource,
-                                isExpanded: true,
-                                decoration: const InputDecoration(
-                                  border: OutlineInputBorder(),
-                                  isDense: true,
-                                  contentPadding: EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 10,
-                                  ),
-                                ),
-                                items: const [
-                                  DropdownMenuItem(
-                                    value: DownloadSource.ytmusic,
-                                    child: Text('YouTube Music'),
-                                  ),
-                                  DropdownMenuItem(
-                                    value: DownloadSource.youtube,
-                                    child: Text('YouTube'),
-                                  ),
-                                  DropdownMenuItem(
-                                    value: DownloadSource.auto,
-                                    child: Text('Auto-detect'),
-                                  ),
-                                ],
-                                onChanged: (v) =>
-                                    setState(() => _selectedSource = v!),
-                              ),
-                            ],
-                          );
-
-                          if (Platform.isAndroid) {
-                            return sourceSelector;
-                          }
-
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              if (useStack) ...[
-                                typeSelector,
-                                const SizedBox(height: 12),
-                                sourceSelector,
-                              ] else 
-                                Row(
-                                  children: [
-                                    Expanded(child: typeSelector),
-                                    const SizedBox(width: 16),
-                                    Expanded(child: sourceSelector),
-                                  ],
-                                ),
-                              if (_selectedType == DownloadType.video)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 8, left: 4),
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                        UIcons.regular.info,
-                                        size: 14,
-                                        color: theme.colorScheme.primary.withValues(alpha: 0.8),
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Expanded(
-                                        child: Text(
-                                          'YouTube source is recommended for HD video content.',
-                                          style: theme.textTheme.labelSmall?.copyWith(
-                                            color: theme.colorScheme.primary.withValues(alpha: 0.8),
-                                            fontStyle: FontStyle.italic,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                            ],
-                          );
-                        },
+                      // Source selector
+                      ResonanceSelector<DownloadSource>(
+                        icon: AppIcons.download,
+                        title: 'Source',
+                        subtitle: 'Where to fetch from',
+                        value: _selectedSource,
+                        onChanged: (v) => setState(() => _selectedSource = v),
+                        items: const [
+                          ResonanceSelectorItem(
+                            value: DownloadSource.ytmusic,
+                            label: 'YouTube Music',
+                          ),
+                          ResonanceSelectorItem(
+                            value: DownloadSource.youtube,
+                            label: 'YouTube',
+                          ),
+                          ResonanceSelectorItem(
+                            value: DownloadSource.auto,
+                            label: 'Auto-detect',
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 12),
 
                       // Output path info
                       if (settings != null)
-                        Text(
-                          _selectedType == DownloadType.audio
-                              ? '📁 ${settings.musicOutputPath}'
-                              : '📁 ${settings.videoOutputPath}',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.hintColor,
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Row(
+                            children: [
+                              Icon(Icons.folder_outlined, size: 13, color: theme.hintColor),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  _selectedType == DownloadType.audio
+                                      ? settings.musicOutputPath
+                                      : settings.videoOutputPath,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.hintColor,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
 
                       const SizedBox(height: 12),
 
                       // Add button
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton.icon(
-                          onPressed: _addToQueue,
-                          icon: Icon(AppIcons.add),
-                          label: const Text('Add to Queue'),
-                        ),
+                      ResonanceButton(
+                        onPressed: _addToQueue,
+                        icon: AppIcons.add,
+                        label: 'Add to Queue',
+                        isFullWidth: true,
                       ),
                     ],
                   ),

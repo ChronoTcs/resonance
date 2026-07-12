@@ -72,7 +72,7 @@ class LibraryNotifier extends Notifier<LibraryState> {
 
   Future<void> _loadSavedPaths(SharedPreferences prefs) async {
     final musicPath = prefs.getString('music_folder') ?? await PathUtils.getMusicDefault();
-    final videoPath = prefs.getString('video_folder') ?? await PathUtils.getVideoDefault();
+    final videoPath = prefs.getString('video_folder') ?? '';
     final lyricsPath = prefs.getString('lyrics_folder') ?? await PathUtils.getLyricsDefault();
     final cachePath = prefs.getString('cache_folder') ?? await PathUtils.getCacheDefault();
 
@@ -166,13 +166,36 @@ class LibraryNotifier extends Notifier<LibraryState> {
     state = state.copyWith(cacheFolderPath: path);
   }
 
+  Future<void> resetToDefaults() async {
+    final prefs = ref.read(sharedPreferencesProvider);
+    await prefs.remove('music_folder');
+    await prefs.remove('video_folder');
+    await prefs.remove('lyrics_folder');
+    await prefs.remove('cache_folder');
+
+    final musicPath = await PathUtils.getMusicDefault();
+    final lyricsPath = await PathUtils.getLyricsDefault();
+
+    state = LibraryState(
+      allMedia: state.allMedia,
+      isLoading: state.isLoading,
+      musicFolderPath: musicPath,
+      videoFolderPath: '',
+      lyricsFolderPath: lyricsPath,
+      cacheFolderPath: null,
+    );
+
+    _syncToDownloadSettings(musicPath, '', lyricsPath);
+    scanLibrary();
+  }
+
   Future<void> scanLibrary({bool isBackground = false}) async {
     if (!isBackground) state = state.copyWith(isLoading: true);
     final repo = ref.read(libraryRepositoryProvider);
     
     final mediaList = await repo.scanLibrary(
       musicFolderPath: state.musicFolderPath,
-      videoFolderPath: state.videoFolderPath,
+      videoFolderPath: null,
       existingItems: state.allMedia, // Provide existing items for differential scan
     );
  
@@ -261,7 +284,6 @@ class LibraryNotifier extends Notifier<LibraryState> {
     _scheduleSave();
   }
 
-  /// SOTA V13.6: Instant Awakening - Reload library from JSON cache
   Future<void> loadMetadataFromCache() async {
     final repo = ref.read(libraryRepositoryProvider);
     final cachedMedia = await repo.loadLibraryCache();

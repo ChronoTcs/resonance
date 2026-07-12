@@ -24,7 +24,6 @@ class YoutubeSearchRepository {
   /// Tier-2: Explode fallback if Tier-1 returns nothing.
   Future<List<ExploreItem>> search(String query) async {
     try {
-      // [SOTA] Explicit webRemix profile → hits music.youtube.com InnerTube
       final data = await _client.post(
         'search',
         {
@@ -162,7 +161,6 @@ class YoutubeSearchRepository {
     }
   }
 
-  /// [V20.7 SOTA Patch] Robust Metadata Parser
   /// Extracts Artist, Album, and Duration from flexColumns[1]
   ({String author, String duration}) _parseMetadataLine(Map<String, dynamic> renderer) {
     final runs = renderer['flexColumns']?[1]?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'] as List?;

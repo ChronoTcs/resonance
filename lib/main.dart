@@ -13,10 +13,10 @@ import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:system_theme/system_theme.dart';
 import 'dart:convert';
+import 'core/widgets/blur_transition_overlay.dart';
 import 'core/widgets/global_shortcut_wrapper.dart';
 import 'core/data/services/storage_service.dart';
 import 'core/configs/provider_observer.dart';
-import 'features/player/presentation/widgets/floating_sniffer_bubble.dart';
 import 'core/data/services/data_usage_service.dart';
 import 'core/routing/route_provider.dart';
 import 'package:audio_service/audio_service.dart';
@@ -27,6 +27,8 @@ import 'core/data/services/po_token_provider_service.dart';
 
 import 'package:resonance/features/player/presentation/widgets/mini_player/floating/floating_window.dart';
 import 'package:resonance/features/player/presentation/notifiers/mini_player_view_notifier.dart';
+import 'package:resonance/features/settings/application/notification_provider.dart';
+import 'package:resonance/features/settings/application/update_provider.dart';
 
 Future<void> _cleanSharedPreferences() async {
   try {
@@ -59,8 +61,7 @@ Future<void> _cleanSharedPreferences() async {
     }
 
     if (Platform.isAndroid) {
-      // SOTA V11.0: Enhanced Database Resilience & Path Standard
-      // Membantu mengatasi 'SQLITE_READONLY_DBMOVED' dengan mencari di folder sistem yang benar.
+      // Helps resolve 'SQLITE_READONLY_DBMOVED' by locating the correct system folder.
       final docDir = await getApplicationDocumentsDirectory();
       final androidBase = docDir.parent.path; // /data/user/0/<pkg>/
 
@@ -76,7 +77,7 @@ Future<void> _cleanSharedPreferences() async {
           if (await dbFile.exists()) {
             try {
               await dbFile.delete();
-              // Hapus file jurnal SQLite agar tidak ada lock tersisa
+              // Delete SQLite journal files to clear residual locks
               await File('$path-wal').delete().catchError((_) => File(''));
               await File('$path-shm').delete().catchError((_) => File(''));
               debugPrint('Cleanup: Deleted legacy cache DB at $path');
@@ -222,7 +223,6 @@ void main() async {
       if (x != null && y != null) {
         await windowManager.setPosition(Offset(x, y));
       }
-      // [SOTA V14.1] Mencegah aplikasi mati saat tombol close (X) ditekan
       await windowManager.setPreventClose(true);
       await windowManager.show();
       await windowManager.focus();
@@ -268,6 +268,26 @@ class _ResonanceAppState extends ConsumerState<ResonanceApp>
         }
       },
     );
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // Lazy initialization of notification provider
+      ref.read(notificationProvider);
+
+      // Auto update check on startup
+      try {
+        final updateNotifier = ref.read(updateProvider.notifier);
+        await updateNotifier.checkForUpdate();
+        final updateState = ref.read(updateProvider);
+        if (updateState.updateAvailable) {
+          ref.read(notificationProvider.notifier).showNotification(
+            'Update Available',
+            'A new version (${updateState.latestVersion}) is available. Click to download.',
+          );
+        }
+      } catch (e) {
+        debugPrint('Startup update check failed: $e');
+      }
+    });
   }
 
   @override
@@ -302,7 +322,6 @@ class _ResonanceAppState extends ConsumerState<ResonanceApp>
 
   @override
   void onWindowClose() async {
-    // [SOTA V14.1] Sembunyikan ke tray alih-alih menutup aplikasi
     if (Platform.isWindows) {
       await windowManager.hide();
     } else {
@@ -378,9 +397,6 @@ class _ResonanceAppState extends ConsumerState<ResonanceApp>
                             type: MaterialType.transparency,
                             child: Stack(
                               children: [
-                                if (!Platform.isAndroid)
-                                  const FloatingSnifferBubble(),
-
                                 if (isPopped && Platform.isWindows)
                                   const FloatingWindow(),
                               ],
@@ -392,6 +408,9 @@ class _ResonanceAppState extends ConsumerState<ResonanceApp>
                   ],
                 ),
               ),
+
+              // Layer 3: Global blur flash — covers all layers during non-nav transitions
+              const BlurTransitionLayer(),
             ],
           ),
         );

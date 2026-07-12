@@ -17,11 +17,11 @@ class StreamCacheTrackerService {
   StreamCacheTrackerService(this._cacheManager);
 
   Future<File> get _dbFile async {
-    final metaDir = await _cacheManager.getMetadataDir();
+    final metaDir = await _cacheManager.getBaseCacheDir();
     return File(p.join(metaDir.path, _dbName));
   }
 
-  /// Memperbarui waktu putar terakhir untuk ID tertentu.
+  /// Updates the last played timestamp for a specific ID.
   Future<void> updateLastPlayed(String id) async {
     try {
       final file = await _dbFile;
@@ -42,7 +42,7 @@ class StreamCacheTrackerService {
     }
   }
 
-  /// Mendapatkan daftar ID yang sudah kedaluwarsa (misal > 30 hari).
+  /// Gets list of expired IDs (e.g., > 30 days).
   Future<List<String>> getExpiredIds(Duration threshold) async {
     try {
       final file = await _dbFile;

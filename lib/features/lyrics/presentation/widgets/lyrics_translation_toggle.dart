@@ -19,20 +19,19 @@ class LyricsTranslationToggle extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(lyricsTranslationProvider);
     
-    // SOTA V12.5: Centralized Label Logic
     String label = 'OFF';
-    String tooltipMessage = 'Aktifkan Terjemahan';
+    String tooltipMessage = 'Enable Translation';
     
     if (state.mode == LyricsTranslationMode.romanized) {
       label = 'ROM';
-      tooltipMessage = 'Ganti ke Lirik Asli';
+      tooltipMessage = 'Switch to Original Lyrics';
     } else if (state.mode == LyricsTranslationMode.translated) {
       label = 'TRN';
-      tooltipMessage = 'Ganti ke Mode Romanisasi';
+      tooltipMessage = 'Switch to Romanization Mode';
     } else {
       // mode == original
       label = 'OFF';
-      tooltipMessage = 'Aktifkan Terjemahan';
+      tooltipMessage = 'Enable Translation';
     }
 
     return ReusableHoverIconButton(

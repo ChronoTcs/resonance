@@ -77,3 +77,53 @@ class AccentColorProvider extends Notifier<String?> {
 final accentColorProvider = NotifierProvider<AccentColorProvider, String?>(() {
   return AccentColorProvider();
 });
+
+class LyricsActiveOpacityProvider extends Notifier<double> {
+  static const String _key = 'lyrics_active_opacity';
+
+  @override
+  double build() {
+    _load();
+    return 1.0;
+  }
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    state = prefs.getDouble(_key) ?? 1.0;
+  }
+
+  Future<void> setOpacity(double value) async {
+    state = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_key, value);
+  }
+}
+
+final lyricsActiveOpacityProvider = NotifierProvider<LyricsActiveOpacityProvider, double>(() {
+  return LyricsActiveOpacityProvider();
+});
+
+class LyricsInactiveOpacityProvider extends Notifier<double> {
+  static const String _key = 'lyrics_inactive_opacity';
+
+  @override
+  double build() {
+    _load();
+    return 0.38;
+  }
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    state = prefs.getDouble(_key) ?? 0.38;
+  }
+
+  Future<void> setOpacity(double value) async {
+    state = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_key, value);
+  }
+}
+
+final lyricsInactiveOpacityProvider = NotifierProvider<LyricsInactiveOpacityProvider, double>(() {
+  return LyricsInactiveOpacityProvider();
+});

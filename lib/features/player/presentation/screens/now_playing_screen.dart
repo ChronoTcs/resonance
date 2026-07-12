@@ -7,7 +7,6 @@ import 'package:resonance/features/player/application/providers/audio_provider.d
 import 'package:resonance/features/lyrics/presentation/providers/lyrics_ui_provider.dart';
 import 'package:resonance/core/widgets/media_artwork_widget.dart';
 import 'package:resonance/core/widgets/media_actions_bottom_sheet.dart';
-import 'package:resonance/features/player/application/providers/video_player_notifier.dart' as v;
 import '../widgets/player_cards.dart';
 import '../widgets/equalizer_sheet.dart';
 import 'package:resonance/core/widgets/reusable_hover_icon_button.dart';
@@ -131,9 +130,7 @@ class NowPlayingScreen extends ConsumerWidget {
     // OPTIMIZATION: Only watch properties that affect the general layout.
     // Watching the full audioProvider causes rebuilds every second (position change).
     final currentTrack = ref.watch(audioProvider.select((s) => s.currentTrack));
-    final videoState = ref.watch(v.videoPlayerProvider);
-    final isVideo = videoState.currentVideo != null;
-    final track = isVideo ? videoState.currentVideo : currentTrack;
+    final track = currentTrack;
 
     final isAndroid = Platform.isAndroid;
     final blurSigma = isAndroid ? 40.0 : 80.0;
@@ -187,7 +184,7 @@ class NowPlayingScreen extends ConsumerWidget {
                 child: Row(
                   children: [
                     CollapseButton(
-                      tooltip: 'Tutup',
+                      tooltip: 'Close',
                       iconSize: 32,
                       color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
                       onTap: () => ref.read(nowPlayingOverlayProvider.notifier).setVisible(false),

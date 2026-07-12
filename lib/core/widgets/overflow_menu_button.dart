@@ -7,7 +7,7 @@ class OverflowMenuButton extends StatelessWidget {
     super.key,
     required this.onTap,
     this.tooltip = 'Actions',
-    this.iconSize = 24.0,
+    this.iconSize = 16.0,
     this.color,
   });
 

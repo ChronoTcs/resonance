@@ -70,8 +70,8 @@ class WindowsSystemMediaService with WindowListener {
   String? _lastSMTCArtist;
   String? _lastSMTCThumb;
   bool? _lastTaskbarPlayingState;
-  DateTime? _lastSyncRequestTime; // [V18.8] Anti-Spam Guard
-  bool _wasHiddenToTray = false; // [V19.4] Minimize vs Hidden differentiator
+  DateTime? _lastSyncRequestTime;
+  bool _wasHiddenToTray = false;
 
   Future<void> updateMetadata(
     MediaItem? track,
@@ -139,7 +139,6 @@ class WindowsSystemMediaService with WindowListener {
     }
   }
 
-  /// [V18.4 SOTA] Public Force Sync for Taskbar.
   /// Bypasses caches to rebuild the native thumbnail toolbar.
   Future<void> forceSyncTaskbar(MediaItem track, bool isPlaying) async {
     if (!Platform.isWindows) return;
@@ -152,7 +151,6 @@ class WindowsSystemMediaService with WindowListener {
 
     try {
       if (duration.inMilliseconds > 0) {
-        // [V18.1] GUARD: Only set progress if taskbar button is visible
         if (await windowManager.isVisible()) {
           await WindowsTaskbar.setProgress(
             position.inMilliseconds,
@@ -161,29 +159,28 @@ class WindowsSystemMediaService with WindowListener {
         }
       }
     } catch (e) {
-      // [V18.1 SOTA] Suppress -1 errors when minimized/hidden
       if (e is! PlatformException) {
         debugPrint("Taskbar timeline update error: $e");
       }
     }
   }
 
-  // [V18.1 SOTA] WINDOW LIFECYCLE HANDLERS
+  // WINDOW LIFECYCLE HANDLERS
   void onWindowHide() {
-    // [V19.4] Windows menghancurkan Taskbar Button saat window di-hide (Close to Tray)
+    // Windows destroys the Taskbar Button when the window is hidden (Close to Tray)
     _wasHiddenToTray = true;
   }
 
   @override
   void onWindowMinimize() {
-    // [V19.4] Windows tetap menyimpan Taskbar Button saat di-minimize.
-    // Kita set false agar tidak melakukan re-sync yang tidak perlu.
+    // Windows retains the Taskbar Button when minimized.
+    // Set to false to prevent redundant re-syncing.
     _wasHiddenToTray = false;
   }
 
   @override
   void onWindowRestore() {
-    // [V19.4 SOTA] Hanya lakukan sinkronisasi paksa jika window berasal dari mode 'Hidden'
+    // Force sync only if the window is restored from 'Hidden' mode
     if (_wasHiddenToTray) {
       _syncTaskbarOnVisible();
       _wasHiddenToTray = false;
@@ -192,29 +189,25 @@ class WindowsSystemMediaService with WindowListener {
 
   @override
   void onWindowFocus() {
-    // Jangan lakukan apa pun pada Focus event jika tidak berasal dari 'Hidden'.
-    // Ini menghentikan spam log saat Anda meminimize/restore aplikasi secara normal.
+    // Ignore Focus event if not restored from 'Hidden'.
+    // Stops log spam during normal minimize/restore events.
   }
 
   Future<void> _syncTaskbarOnVisible() async {
-    // [V18.8 SOTA] THE DEBOUNCE GUARD (Anti-Spam)
-    // OS Windows sering menembakkan event Restore & Focus bersamaan (<100ms).
+    // Windows OS often fires Restore & Focus events concurrently (<100ms).
     final now = DateTime.now();
     if (_lastSyncRequestTime != null &&
         now.difference(_lastSyncRequestTime!).inMilliseconds < 500) {
-      return; // Batalkan eksekusi ganda dalam 500ms
+      return; // Prevent duplicate execution within 500ms
     }
     _lastSyncRequestTime = now;
 
-    // [V19.2 SOTA] THE STABILITY DELAY
-    // Berikan jeda bagi Windows Desktop Window Manager (DWM) untuk mendaftarkan ulang
-    // HWND di Taskbar SEBELUM kita menyuntikkan Thumbnail Toolbar.
-    // [V19.3] Ditingkatkan menjadi 600ms untuk stabilitas ekstra.
+    // Give Windows Desktop Window Manager (DWM) time to re-register
+    // HWND in the Taskbar BEFORE we inject the Thumbnail Toolbar.
     await Future.delayed(const Duration(milliseconds: 600));
 
-    // [V19.3 SOTA] THE READINESS WAIT
-    // Jika sistem belum siap (misal: baru start langsung di-hide), kita tunggu
-    // hingga timer inisialisasi selesai daripada membatalkan sinkronisasi.
+    // If the system is not ready yet (e.g. hidden right after start), wait
+    // until the initialization timer finishes instead of canceling sync.
     if (!_isTaskbarReady) {
       debugPrint(
         '[WindowsTaskbar] System not ready yet. Waiting for stabilization...',
@@ -238,9 +231,7 @@ class WindowsSystemMediaService with WindowListener {
     // Reset the internal cache to force the native SetThumbnailToolbar call
     _lastTaskbarPlayingState = null;
 
-    // [V18.8 SOTA] THE FORCE OVERRIDE
-    // Kita HARUS memaksa update agar menembus guard visibilitas yang tidak stabil
-    // saat window sedang dalam fase transisi animasi restore.
+    // Force update to bypass visibility guards during window restore transition.
     await _updateTaskbarThumbnail(wasPlaying, force: true);
   }
 
@@ -250,21 +241,17 @@ class WindowsSystemMediaService with WindowListener {
   }) async {
     if (!Platform.isWindows) return;
 
-    // 1. [V17.9] Check Readiness Guard
     if (!_isTaskbarReady) return;
 
-    // 2. [V18.1] Check Visibility Guard
-    // [V18.4] Buka pengecekan jika force=true (saat baru saja windowManager.show())
     if (!force && !(await windowManager.isVisible())) return;
 
-    // 3. CEGAH UPDATE BERULANG Taskbar (Bypass if forced)
+    // 3. Prevent redundant taskbar updates (Bypass if forced)
     if (!force && _lastTaskbarPlayingState == isPlaying) return;
     _lastTaskbarPlayingState = isPlaying;
 
     try {
-      // [V19.3 SOTA] THE NUKE STRATEGY
-      // Jika dipaksa (restored dari hidden), hapus toolbar lama terlebih dahulu
-      // untuk membersihkan 'Ghost State' di memori Windows.
+      // If forced (restored from hidden), clear the previous toolbar first
+      // to clean up 'Ghost State' in Windows memory.
       if (force) {
         await WindowsTaskbar.resetThumbnailToolbar();
       }
@@ -289,7 +276,6 @@ class WindowsSystemMediaService with WindowListener {
         ),
       ]);
     } catch (e) {
-      // [V17.9 SOTA] Silent Fail for non-critical native UI
       debugPrint('Taskbar update suppressed: $e');
     }
   }

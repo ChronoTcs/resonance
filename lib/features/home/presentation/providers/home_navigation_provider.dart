@@ -46,8 +46,25 @@ final groupedArtistsProvider = Provider<Map<String, List<MediaItem>>>((ref) {
 
   final Map<String, List<MediaItem>> artistGroup = {};
   for (var track in audioTracks) {
-    final name = track.artist ?? 'Unknown Artist';
-    artistGroup.putIfAbsent(name, () => []).add(track);
+    final rawArtist = track.artist;
+    if (rawArtist == null || rawArtist.isEmpty) {
+      artistGroup.putIfAbsent('Unknown Artist', () => []).add(track);
+      continue;
+    }
+
+    final parts = rawArtist.split(RegExp(r'[,;]|\s+&\s+|\s+feat\.?\s+|\s+ft\.?\s+', caseSensitive: false));
+    final addedArtists = <String>{};
+    for (var part in parts) {
+      final name = part.trim();
+      if (name.isNotEmpty) {
+        if (addedArtists.add(name)) {
+          artistGroup.putIfAbsent(name, () => []).add(track);
+        }
+      }
+    }
+    if (addedArtists.isEmpty) {
+      artistGroup.putIfAbsent('Unknown Artist', () => []).add(track);
+    }
   }
   return artistGroup;
 });

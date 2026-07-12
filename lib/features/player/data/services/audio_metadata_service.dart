@@ -18,6 +18,7 @@ import '../../application/services/windows_system_media_service.dart';
 /// playback status updates. This service does NOT hold player state.
 class AudioMetadataService {
   final Ref _ref;
+  String? _lastUpgradedArtworkUrl;
 
   AudioMetadataService(this._ref) {
     // Auto-initialize Discord RPC asinkron
@@ -29,6 +30,7 @@ class AudioMetadataService {
   /// Called once when a new track starts playing.
   /// Synchronizes metadata to all applicable external surfaces.
   Future<void> onTrackChanged(MediaItem track, {required bool isPlaying}) async {
+    _lastUpgradedArtworkUrl = null;
     await Future.wait([
       _syncAudioServiceMediaItem(track),
       _syncWindowsSmtc(track, isPlaying: isPlaying),
@@ -134,7 +136,8 @@ class AudioMetadataService {
       );
 
       // If Discord RPC found a better artwork URL (e.g. iTunes), upgrade SMTC too
-      if (artworkUrl != null && Platform.isWindows) {
+      if (artworkUrl != null && Platform.isWindows && artworkUrl != _lastUpgradedArtworkUrl) {
+        _lastUpgradedArtworkUrl = artworkUrl;
         await _ref.read(windowsSystemMediaServiceProvider).updateMetadata(
           track,
           isPlaying,

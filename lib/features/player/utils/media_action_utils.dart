@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance/features/library/data/models/media_item.dart';
 import 'package:resonance/core/widgets/media_actions_bottom_sheet.dart';
+import 'package:resonance/features/library/application/library_provider.dart';
+import 'package:resonance/features/player/application/providers/audio_provider.dart';
 
 
 class MediaActionUtils {
@@ -31,7 +33,11 @@ class MediaActionUtils {
             style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
             onPressed: () {
               Navigator.pop(dlg);
-              // ref.read(audioProvider.notifier).deleteCurrentTrack(); // TODO: Recheck the correct delete method
+              ref.read(libraryProvider.notifier).deleteTrack(item);
+              final audioState = ref.read(audioProvider);
+              if (audioState.currentTrack?.path == item.path) {
+                ref.read(audioProvider.notifier).next();
+              }
             },
             child: const Text('Delete'),
           ),

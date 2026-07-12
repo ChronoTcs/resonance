@@ -16,7 +16,7 @@ class LibraryRepository {
   LibraryRepository(this._cacheManager);
 
   Future<File> _getCacheFile() async {
-    final dir = await _cacheManager.getMetadataDir();
+    final dir = await _cacheManager.getBaseCacheDir();
     return File(p.join(dir.path, 'resonance_library.json'));
   }
 

@@ -4,8 +4,8 @@ import 'package:system_theme/system_theme.dart';
 
 class AppTheme {
   // Palette 7 (Modern Glass - Light Mode Default) & Palette 8 (Deep Opulence - Dark Mode Default)
-  static const Color creamBackground = Color(0xFFF7F3E3); // Gilded Ivory
-  static const Color creamSurface = Color(0xFFEFEFEF); // Warm Pearl Glass base
+  static const Color creamBackground = Color(0xFFFFFFFF); // White background
+  static const Color creamSurface = Color(0xFFF7F3E3); // Gilded Ivory surface / cards
   static const Color textDark = Color(0xFF2E2A27); // Obsidian Brown
 
   static const Color darkBackground = Color(0xFF232D35); // Dark Slate Gold Glass
@@ -54,14 +54,18 @@ class AppTheme {
   }
 
   static ThemeData getLightTheme(String? accentMode) {
-    final accentColor = _resolveAccent(accentMode, Brightness.light);
-    final primary = accentColor ?? textDark;
+    final accentColor = _resolveAccent(accentMode, Brightness.light) ?? const Color(0xFFE9AD71);
+    final baseScheme = ColorScheme.fromSeed(
+      seedColor: accentColor,
+      brightness: Brightness.light,
+    );
+    final primary = baseScheme.primary;
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
       primaryColor: primary, // Black/Dark grey or custom primary
       scaffoldBackgroundColor: creamBackground,
-      colorScheme: ColorScheme.light(
+      colorScheme: baseScheme.copyWith(
         primary: primary,
         secondary: accentGrey,
         surface: creamSurface,
@@ -141,8 +145,12 @@ class AppTheme {
 
   static ThemeData getDarkTheme(String? accentMode, {bool isOnyx = false}) {
     final defaultAccent = isOnyx ? const Color(0xFFE2B35B) : const Color(0xFFAE8C50);
-    final accentColor = _resolveAccent(accentMode, Brightness.dark);
-    final primary = accentColor ?? defaultAccent;
+    final accentColor = _resolveAccent(accentMode, Brightness.dark) ?? defaultAccent;
+    final baseScheme = ColorScheme.fromSeed(
+      seedColor: accentColor,
+      brightness: Brightness.dark,
+    );
+    final primary = baseScheme.primary;
     final bg = isOnyx ? const Color(0xFF090C0E) : darkBackground;
     final surf = isOnyx ? const Color(0xFF12161A) : darkSurface;
     return ThemeData(
@@ -150,7 +158,7 @@ class AppTheme {
       brightness: Brightness.dark,
       primaryColor: primary, // Cream or custom primary in dark mode
       scaffoldBackgroundColor: bg,
-      colorScheme: ColorScheme.dark(
+      colorScheme: baseScheme.copyWith(
         primary: primary,
         secondary: accentSoft,
         surface: surf,

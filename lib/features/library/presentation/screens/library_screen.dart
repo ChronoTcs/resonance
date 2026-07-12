@@ -1,15 +1,11 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:silky_scroll/silky_scroll.dart';
 import '../../application/library_provider.dart';
 import '../../data/models/media_item.dart';
 import '../../../player/application/services/queue_orchestrator.dart';
-import '../../../player/presentation/screens/dedicated_video_player.dart';
 import '../../../../core/widgets/media_actions_bottom_sheet.dart';
 import '../../../../core/widgets/media_artwork_widget.dart';
-import '../../../player/presentation/screens/web_video_sniffer_screen.dart';
-import '../../../player/application/providers/video_player_notifier.dart';
 import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/core/widgets/reusable_hover_icon_button.dart';
 import 'package:resonance/core/widgets/overflow_menu_button.dart';
@@ -48,7 +44,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
     final theme = Theme.of(context);
     final libraryState = ref.watch(libraryProvider);
 
-    final bool hasPaths = libraryState.musicFolderPath != null || libraryState.videoFolderPath != null;
+    final bool hasPaths = libraryState.musicFolderPath != null;
     
     // Define the main content based on state
     Widget content;
@@ -83,29 +79,14 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
               (m.title.toLowerCase().contains(_searchQuery.toLowerCase()) || 
                (m.artist?.toLowerCase().contains(_searchQuery.toLowerCase()) ?? false)))
           .toList();
-      final videoList = libraryState.allMedia
-          .where((m) => m.type == 'video' && 
-              (m.path.toLowerCase().contains(_searchQuery.toLowerCase()) || 
-               m.title.toLowerCase().contains(_searchQuery.toLowerCase())))
-          .toList();
 
-      if (Platform.isAndroid) {
-        content = TabBarView(
-          controller: _tabController,
-          children: [
-            _buildMediaList(audioList, ref),
-            const PlaylistScreen(),
-          ],
-        );
-      } else {
-        content = TabBarView(
-          controller: _tabController,
-          children: [
-            _buildMediaList(audioList, ref),
-            _buildVideoTab(videoList, ref),
-          ],
-        );
-      }
+      content = TabBarView(
+        controller: _tabController,
+        children: [
+          _buildMediaList(audioList, ref),
+          const PlaylistScreen(isLocalOnly: true),
+        ],
+      );
     }
 
     return Scaffold(
@@ -114,24 +95,71 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
         children: [
           TopNavigationHeader(
             left: _isSearching
-                ? TextField(
-                    controller: _searchController,
-                    autofocus: true,
-                    decoration: const InputDecoration(
-                      hintText: 'Search in library...',
-                      border: InputBorder.none,
+                ? Expanded(
+                    child: TextField(
+                      controller: _searchController,
+                      autofocus: true,
+                      decoration: const InputDecoration(
+                        hintText: 'Search in library...',
+                        border: InputBorder.none,
+                      ),
+                      onChanged: (value) {
+                        setState(() {
+                          _searchQuery = value;
+                        });
+                      },
                     ),
-                    onChanged: (value) {
-                      setState(() {
-                        _searchQuery = value;
-                      });
-                    },
                   )
-                : Text(
-                    'Local Library',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                : Row(
+                    children: [
+                      SizedBox(
+                        width: 120,
+                        child: Text(
+                          'Local Library',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 32),
+                      SizedBox(
+                        height: 50,
+                        width: 260,
+                        child: TabBar(
+                          controller: _tabController,
+                          dividerColor: Colors.transparent,
+                          indicatorSize: TabBarIndicatorSize.label,
+                          overlayColor: WidgetStateProperty.resolveWith<Color?>((states) {
+                            if (states.contains(WidgetState.hovered)) {
+                              return theme.primaryColor.withValues(alpha: 0.08);
+                            }
+                            return null;
+                          }),
+                          tabs: [
+                            Tab(
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(UIcons.regular.music, size: 14),
+                                  const SizedBox(width: 6),
+                                  const Text('Music'),
+                                ],
+                              ),
+                            ),
+                            Tab(
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(UIcons.regular.list_music, size: 14),
+                                  const SizedBox(width: 6),
+                                  const Text('Playlists'),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
             right: Row(
               mainAxisSize: MainAxisSize.min,
@@ -178,68 +206,6 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
               ],
             ),
           ),
-          Container(
-            height: 38,
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surface,
-              border: Border(
-                bottom: BorderSide(
-                  color: theme.dividerColor.withValues(alpha: 0.05),
-                  width: 1,
-                ),
-              ),
-            ),
-            child: TabBar(
-              controller: _tabController,
-              dividerColor: Colors.transparent,
-              indicatorSize: TabBarIndicatorSize.label,
-              tabs: Platform.isAndroid
-                  ? [
-                      Tab(
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(UIcons.regular.folder_open, size: 14),
-                            const SizedBox(width: 6),
-                            const Text('Local'),
-                          ],
-                        ),
-                      ),
-                      Tab(
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(UIcons.regular.list_music, size: 14),
-                            const SizedBox(width: 6),
-                            const Text('Playlists'),
-                          ],
-                        ),
-                      ),
-                    ]
-                  : [
-                      Tab(
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(UIcons.regular.music, size: 14),
-                            const SizedBox(width: 6),
-                            const Text('Music'),
-                          ],
-                        ),
-                      ),
-                      Tab(
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(UIcons.regular.video_camera, size: 14),
-                            const SizedBox(width: 6),
-                            const Text('Video'),
-                          ],
-                        ),
-                      ),
-                    ],
-            ),
-          ),
           Expanded(
             child: content,
           ),
@@ -263,8 +229,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
       padding: const EdgeInsets.only(bottom: 80),
       itemBuilder: (context, index) {
         final item = mediaList[index];
-        final isAudio = item.type == 'audio';
-        
+
         return TweenAnimationBuilder<double>(
           duration: Duration(milliseconds: 300 + (index % 10 * 100)),
           tween: Tween(begin: 0.0, end: 1.0),
@@ -279,29 +244,16 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
             );
           },
           child: ListTile(
-          leading: (isAudio || item.thumbnailUrl != null)
-              ? MediaArtworkWidget(
-                  item: item,
-                  width: 48,
-                  height: 48,
-                  borderRadius: 4,
-                  placeholderIcon: isAudio ? UIcons.regular.music : UIcons.regular.video_camera,
-                )
-              : Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                  color: Colors.blueAccent.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Icon(
-                    UIcons.regular.video_camera,
-                    color: Colors.blueAccent,
-                  ),
-                ),
+          leading: MediaArtworkWidget(
+            item: item,
+            width: 48,
+            height: 48,
+            borderRadius: 4,
+            placeholderIcon: UIcons.regular.music,
+          ),
           title: Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis),
           subtitle: Text(
-            isAudio ? (item.artist ?? 'Unknown Artist') : item.path,
+            item.artist ?? 'Unknown Artist',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -318,16 +270,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
             },
           ),
           onTap: () {
-            if (isAudio) {
-              ref.read(queueOrchestratorProvider).playSequentialContext(item, mediaList);
-            } else {
-              ref.read(videoPlayerProvider.notifier).playVideo(item);
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => const DedicatedVideoPlayer(),
-                ),
-              );
-            }
+            ref.read(queueOrchestratorProvider).playSequentialContext(item, mediaList);
           },
           onLongPress: () {
             showModalBottomSheet(
@@ -344,91 +287,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
     );
   }
 
-  Widget _buildVideoTab(List<MediaItem> videoList, WidgetRef ref) {
-    return Column(
-      children: [
-        // Selection Options
-        Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Row(
-            children: [
-              Expanded(
-                child: _buildChoiceCard(
-                  title: 'Local Videos',
-                  icon: UIcons.regular.folder,
-                  subtitle: '${videoList.length} files found',
-                  onTap: () {
-                    // Just stay in the list view
-                  },
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildChoiceCard(
-                  title: 'Online Video',
-                  icon: UIcons.regular.globe,
-                  subtitle: 'Web Sniffer',
-                  color: Colors.blueAccent,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const WebVideoSnifferScreen(
-                          initialUrl: 'https://www.google.com',
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-        const Divider(height: 1),
-        // List restricted to Local Videos
-        Expanded(child: _buildMediaList(videoList, ref)),
-      ],
-    );
-  }
 
-  Widget _buildChoiceCard({
-    required String title,
-    required IconData icon,
-    required String subtitle,
-    required VoidCallback onTap,
-    Color? color,
-  }) {
-    return ReusableHoverIconButton(
-      onTap: onTap,
-      tooltip: title,
-      padding: 0,
-      scaleOnHover: 1.05,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: (color ?? Theme.of(context).primaryColor).withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: (color ?? Theme.of(context).primaryColor).withValues(alpha: 0.2),
-          ),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: color ?? Theme.of(context).primaryColor, size: 32),
-            const SizedBox(height: 8),
-            Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-            Text(
-              subtitle,
-              style: TextStyle(
-                fontSize: 12,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   void _confirmDelete(BuildContext context, WidgetRef ref, MediaItem item) {
     showDialog(

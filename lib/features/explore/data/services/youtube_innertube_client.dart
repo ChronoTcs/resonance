@@ -12,7 +12,7 @@ final youtubeInnerTubeClientProvider = Provider<YoutubeInnerTubeClient>((ref) {
 
 enum YoutubeClientProfile {
   webRemix,      // YouTube Music Web
-  web,           // YouTube Main Desktop (New V20.25 SOTA)
+  web,
   androidMusic,  // YouTube Music Android
   android,       // YouTube Main Android
 }
@@ -35,7 +35,6 @@ class YoutubeInnerTubeClient {
   }) async {
     const apiKey = _apiKey;
     
-    // [V20.16 SOTA Patch & V20.25 Fix] Dynamic API Routing (Trap #3 Compliance)
     String targetBaseUrl = 'https://youtubei.googleapis.com/youtubei/v1';
     if (profile == YoutubeClientProfile.webRemix) {
       targetBaseUrl = 'https://music.youtube.com/youtubei/v1';
@@ -45,10 +44,8 @@ class YoutubeInnerTubeClient {
 
     final url = '$targetBaseUrl/$endpoint?key=$apiKey';
 
-    // [V20.15 SOTA] Explicit Typing Guard
     payload['context'] = _buildContext(profile, useAuth);
 
-    // [V20.17 SOTA & V20.25] PoToken Isolation Guard
     // Send poToken for WEB_REMIX or WEB. Prevents Platform Mismatch (400) on Android.
     if (poToken != null && (profile == YoutubeClientProfile.webRemix || profile == YoutubeClientProfile.web)) {
       payload['serviceIntegrityDimensions'] = <String, dynamic>{
@@ -56,7 +53,6 @@ class YoutubeInnerTubeClient {
       };
     }
 
-    // [V20.12 SOTA] Safe STS Injection
     if (signatureTimestamp != null) {
       payload['playbackContext'] ??= <String, dynamic>{};
       payload['playbackContext']['contentPlaybackContext'] ??= <String, dynamic>{};
@@ -88,7 +84,6 @@ class YoutubeInnerTubeClient {
       headers.addAll(_authService.getAuthenticatedHeaders());
     }
 
-    // [V20.19 SOTA] Inject Numeric Protocol Headers to avoid Error 400
     int clientNameInt = 67; // Default Web Remix
     String clientVersion = "1.20260121.03.00";
 
@@ -121,7 +116,6 @@ class YoutubeInnerTubeClient {
     headers['X-YouTube-Client-Name'] = clientNameInt.toString();
     headers['X-YouTube-Client-Version'] = clientVersion;
     
-    // [V20.25 SOTA] Trap #2 Fix: Persistent Visitor ID Guard MUST respect useAuth
     if (useAuth && _authService.visitorData != null) {
       headers['X-Goog-Visitor-Id'] = _authService.visitorData!;
     }
@@ -129,7 +123,6 @@ class YoutubeInnerTubeClient {
     return headers;
   }
 
-  // [V20.16 SOTA Patch] Identity Stripping Guard
   Map<String, dynamic> _buildContext(YoutubeClientProfile profile, bool useAuth) {
     String clientName = "WEB_REMIX";
     String clientVersion = "1.20260121.03.00";

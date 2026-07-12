@@ -7,7 +7,7 @@ class ExploreItem {
   final String duration;
   final String thumbnailUrl;
   final String url;
-  final String? setVideoId; // [V20.7] For playlist removal
+  final String? setVideoId;
   final yt.Video? originalVideo; // Reusable metadata
 
   const ExploreItem({

@@ -17,6 +17,8 @@ class CacheManager {
 
   void setCustomPath(String? path) => _customCachePath = path;
 
+  Future<Directory> getBaseCacheDir() async => _baseCacheDir;
+
   // ---------------- Directories ---------------- 
 
   Future<Directory> get _baseCacheDir async {
@@ -110,10 +112,10 @@ class CacheManager {
   // ---------------- Filename Utility ---------------- 
 
   String getSafeFilename(String id) {
-    // 1. Bersihkan karakter non-alphanumeric (Persis seperti Android Downloader)
+    // 1. Clean non-alphanumeric characters (consistent with Android Downloader)
     String sanitized = id.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
     
-    // 2. Batasi panjang dan tambahkan hash jika terlalu panjang (mencegah Windows Path Limit)
+    // 2. Limit length and add hash if too long (prevents Windows Path Limit)
     if (sanitized.length > 64) {
       int hash = 0;
       for (var i = 0; i < id.length; i++) {

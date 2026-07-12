@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
+import 'package:resonance/core/theme/theme_provider.dart';
 import 'package:resonance/features/lyrics/application/lyrics_provider.dart';
 import 'package:resonance/features/lyrics/application/lyrics_translation_provider.dart';
 
@@ -17,7 +18,6 @@ class _FloatingLyricsViewState extends ConsumerState<FloatingLyricsView> {
   void _scrollToActiveLyric(int index) {
     if (!mounted) return;
 
-    // ATURAN SOTA: Gunakan PostFrameCallback untuk mencegah crash saat list belum siap
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_itemScrollController.isAttached) return;
       if (index < 0) return;
@@ -35,6 +35,8 @@ class _FloatingLyricsViewState extends ConsumerState<FloatingLyricsView> {
   Widget build(BuildContext context) {
     final lyrics = ref.watch(displayLyricsProvider);
     final activeIndex = ref.watch(activeLyricIndexProvider);
+    final activeOpacity = ref.watch(lyricsActiveOpacityProvider);
+    final inactiveOpacity = ref.watch(lyricsInactiveOpacityProvider);
 
     // Auto-scroll logic
     ref.listen<int>(activeLyricIndexProvider, (prev, next) {
@@ -44,15 +46,14 @@ class _FloatingLyricsViewState extends ConsumerState<FloatingLyricsView> {
     });
 
     return PageStorage(
-      bucket: PageStorageBucket(), // ATURAN SOTA: Fix PageStorage.of() crash
+      bucket: PageStorageBucket(),
       child: Container(
         color: Colors.black.withValues(alpha: 0.85),
         child: Column(
           children: [
-            // List Lirik (Fullscreen Area V2.5)
             Expanded(
               child: lyrics.isEmpty
-                  ? const Center(child: Text('Lirik tidak tersedia', style: TextStyle(color: Colors.white54)))
+                  ? const Center(child: Text('Lyrics unavailable', style: TextStyle(color: Colors.white54)))
                   : ScrollablePositionedList.builder(
                       itemScrollController: _itemScrollController,
                       itemCount: lyrics.length,
@@ -69,7 +70,9 @@ class _FloatingLyricsViewState extends ConsumerState<FloatingLyricsView> {
                             style: TextStyle(
                               fontSize: isActive ? 16 : 13,
                               fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-                              color: isActive ? Colors.white : Colors.white24,
+                              color: isActive
+                                  ? Colors.white.withValues(alpha: activeOpacity)
+                                  : Colors.white.withValues(alpha: inactiveOpacity),
                             ),
                           ),
                         );

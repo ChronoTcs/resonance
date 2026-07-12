@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
@@ -18,6 +19,8 @@ final youtubeStreamRepositoryProvider = Provider<YoutubeStreamRepository>((ref) 
   
   final repo = YoutubeStreamRepository(ref, client, cacheService, prefs);
   ref.onDispose(() => repo.dispose());
+  // ponytail: warm-up only needed on Android (no native cookie sync like Windows)
+  if (Platform.isAndroid) repo.warmUpSession();
   return repo;
 });
 
@@ -56,7 +59,6 @@ class YoutubeStreamRepository {
       }
       debugPrint('YoutubeStreamRepository: Windows IPC resolution failed. Escalating to Explode Fail-Safe.');
     } else {
-      // [V20.26 SOTA] Synchronous Binary PoToken retrieval (Cold-Start)
       // Instantly generate token based on fresh visitorData. No WebView wait!
       final visitorData = _ref.read(youtubeAuthServiceProvider).visitorData;
       String? poToken;
@@ -66,13 +68,10 @@ class YoutubeStreamRepository {
 
       final engine = _getEngineSetting();
       if (engine == YoutubeEngine.innerTube) {
-        // [V20.18 SOTA] The Indestructible Pipeline
         final result = await _getInnerTubeAudioWithProfile(videoId, poToken: poToken);
         if (result != null && result.streamUrl != null) {
-          // [V20.20 SOTA] UA Consistency Handshake
           final userAgent = _client.getUserAgent(result.profile);
           debugPrint('YoutubeStreamRepository: Using UA from ${result.profile.name} for download...');
-          // [V20.23 SOTA] PRE-FLIGHT PROBER
           // Memeriksa nyawa URL sebelum percaya buta
           debugPrint('YoutubeStreamRepository: Probing stream health...');
           final isAlive = await _isStreamAlive(result.streamUrl!, userAgent);
@@ -95,18 +94,16 @@ class YoutubeStreamRepository {
     // Final Fallback (Explode Dart)
     final explodeUrl = await _searchExplodeStream(videoId);
     if (explodeUrl != null) {
-      // [V20.25 SOTA] Pastikan Cacher menggunakan User-Agent iOS agar terhindar dari pemblokiran Cross-Platform
-      // Karena explode menggunakan ytClients [androidVr, ios].
+      // Since explode uses ytClients [androidVr, ios].
       final explodeUa = 'com.google.ios.youtube/19.29.1 (iPhone14,3; U; CPU iOS 15_6_1 like Mac OS X)';
       return await _cacheService.getAudioPath(videoId, explodeUrl, userAgent: explodeUa);
     }
     return null;
   }
 
-  // [V20.25 SOTA] URL Validator (Anti False-Positive & Trap 403)
   Future<bool> _isStreamAlive(String url, String userAgent) async {
     try {
-      // Gunakan HEAD tanpa batasan Range() agar Prober merasakan penolakan 403 yang sesungguhnya!
+      // Use HEAD request without Range constraints to verify authentic HTTP 403 status
       final request = http.Request('HEAD', Uri.parse(url));
       request.headers['User-Agent'] = userAgent;
       final response = await http.Client().send(request).timeout(const Duration(seconds: 4));
@@ -134,7 +131,6 @@ class YoutubeStreamRepository {
       return audioInfo.url.toString();
     } catch (e) {
       debugPrint('YoutubeStreamRepository: [ERROR] Explode extraction failed: $e');
-      // [V20.26 SOTA] Forward Cold-Start poToken to last resort IF engine wasn't InnerTube before
       final visitorData = _ref.read(youtubeAuthServiceProvider).visitorData;
       String? poToken;
       if (visitorData != null && visitorData.isNotEmpty) {
@@ -159,9 +155,8 @@ class YoutubeStreamRepository {
       return (streamUrl: firstResult.streamUrl, profile: YoutubeClientProfile.webRemix);
     }
 
-    // [V20.25 SOTA] Opsi Emas: Profil WEB Main!
-    // Klien ini menggunakan Domain Utama www.youtube.com & DIZINKAN memanfaatkan poToken untuk seluruh stream (bahkan non-musik)!
-    debugPrint('YoutubeStreamRepository: Rotating to WEB (Main App SOTA)...');
+    // Client uses main www.youtube.com domain and utilizes poToken for all streams
+    debugPrint('YoutubeStreamRepository: Rotating to WEB...');
     final webResult = await _fetchFromInnerTube(
       videoId,
       YoutubeClientProfile.web,
@@ -229,6 +224,12 @@ class YoutubeStreamRepository {
       final String? jsPath = data['assets']?['js'];
       final String? baseJsUrl = jsPath != null ? 'https://www.youtube.com$jsPath' : null;
       
+      // Capture real visitorData from every response so next songs always have a valid token
+      final String? responseVisitorData = data['responseContext']?['visitorData'] as String?;
+      if (responseVisitorData != null && responseVisitorData.isNotEmpty) {
+        unawaited(_ref.read(youtubeAuthServiceProvider).cacheVisitorData(responseVisitorData));
+      }
+      
       final streamingData = data['streamingData'];
       if (streamingData == null) {
         debugPrint('YoutubeStreamRepository: No streaming data for ${profile.name}');
@@ -244,7 +245,6 @@ class YoutubeStreamRepository {
         orElse: () => formats.firstWhere((f) => f['mimeType']?.contains('audio') ?? false, orElse: () => formats.first),
       );
 
-      // [V20.19 SOTA] Signature Cipher Mastery
       String? streamUrl;
       if (audioFormat.containsKey('url')) {
         streamUrl = audioFormat['url'] as String;
@@ -292,6 +292,26 @@ class YoutubeStreamRepository {
   YoutubeEngine _getEngineSetting() {
     final val = _prefs.getString('yt_engine') ?? 'innertube';
     return val == 'explode' ? YoutubeEngine.explodeDart : YoutubeEngine.innerTube;
+  }
+
+  /// [Android Cold-Start Warm-Up] Fires a cheap InnerTube browse call in the background
+  /// so responseContext.visitorData is cached before the user plays the first song.
+  Future<void> warmUpSession() async {
+    // Skip if visitorData already cached from a previous session
+    if (_ref.read(youtubeAuthServiceProvider).visitorData != null) return;
+    try {
+      debugPrint('YoutubeStreamRepository: [WARM-UP] Fetching real visitorData from YouTube...');
+      final data = await _client.post('browse', <String, dynamic>{
+        'browseId': 'FEmusic_home',
+      }, profile: YoutubeClientProfile.webRemix, useAuth: false);
+      final String? vd = data['responseContext']?['visitorData'] as String?;
+      if (vd != null && vd.isNotEmpty) {
+        await _ref.read(youtubeAuthServiceProvider).cacheVisitorData(vd);
+        debugPrint('YoutubeStreamRepository: [WARM-UP] visitorData cached: ${vd.substring(0, 10)}...');
+      }
+    } catch (e) {
+      debugPrint('YoutubeStreamRepository: [WARM-UP] Failed (non-critical): $e');
+    }
   }
 
   void dispose() {

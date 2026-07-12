@@ -38,7 +38,6 @@ class PlaybackSyncService {
     return _syncPersistentMetadata(track);
   }
 
-  /// [V18.4 SOTA] Force Taskbar Synchronization.
   /// Used after window restoration from tray to rebuild the Thumbnail Toolbar.
   void forceSyncTaskbar(MediaItem? track, bool isPlaying) {
     if (track == null || !Platform.isWindows) return;

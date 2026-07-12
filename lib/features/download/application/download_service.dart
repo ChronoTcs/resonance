@@ -16,6 +16,7 @@ import '../../../../core/utils/path_utils.dart';
 import '../../library/application/library_provider.dart';
 import '../../library/data/models/media_item.dart';
 import 'providers/download_settings_provider.dart';
+import '../../settings/application/notification_provider.dart';
 
 /// Event emitted by DownloadService to update the UI State in DownloadNotifier.
 class DownloadUpdate {
@@ -64,7 +65,24 @@ class DownloadService {
 
   void _emitUpdate(String id, DownloadItem Function(DownloadItem) updater) {
     if (!_updateController.isClosed) {
-      _updateController.add(DownloadUpdate(id, updater));
+      _updateController.add(DownloadUpdate(id, (item) {
+        final updated = updater(item);
+        if (updated.status != item.status) {
+          if (updated.status == DownloadStatus.done) {
+            _ref.read(notificationProvider.notifier).showNotification(
+              'Download Complete',
+              '${updated.displayTitle} has been downloaded successfully.',
+            );
+          } else if (updated.status == DownloadStatus.error) {
+            _ref.read(notificationProvider.notifier).showNotification(
+              'Download Failed',
+              'Failed to download ${updated.displayTitle}: ${updated.errorMessage ?? "Unknown error"}',
+              isError: true,
+            );
+          }
+        }
+        return updated;
+      }));
     }
   }
 
@@ -235,7 +253,7 @@ class DownloadService {
 
     final activeFuture = cacheService.getActiveDownload(songId);
     if (activeFuture != null) {
-      _emitUpdate(item.id, (i) => i.copyWith(statusMessage: 'Menunggu prefetch selesai...'));
+      _emitUpdate(item.id, (i) => i.copyWith(statusMessage: 'Waiting for prefetch...'));
       await activeFuture;
     }
 
@@ -245,14 +263,14 @@ class DownloadService {
       return _startDownload(item);
     }
 
-    _emitUpdate(item.id, (i) => i.copyWith(statusMessage: 'Menyalin dari cache...'));
+    _emitUpdate(item.id, (i) => i.copyWith(statusMessage: 'Copying from cache...'));
 
     final settings = await _ref.read(downloadSettingsProvider.future);
-    String downloadDir;
+     String downloadDir;
     if (item.type == DownloadType.audio) {
       downloadDir = settings.musicOutputPath.isNotEmpty ? settings.musicOutputPath : (Platform.isAndroid ? await PathUtils.getMusicDefault() : '');
     } else {
-      downloadDir = settings.videoOutputPath.isNotEmpty ? settings.videoOutputPath : (Platform.isAndroid ? await PathUtils.getVideoDefault() : '');
+      downloadDir = settings.videoOutputPath.isNotEmpty ? settings.videoOutputPath : '';
     }
 
     if (downloadDir.isEmpty && !Platform.isAndroid) {
@@ -271,7 +289,7 @@ class DownloadService {
 
     try {
       if (await File(targetPath).exists()) {
-         _emitUpdate(item.id, (i) => i.copyWith(status: DownloadStatus.done, statusMessage: 'Sudah ada di library.'));
+         _emitUpdate(item.id, (i) => i.copyWith(status: DownloadStatus.done, statusMessage: 'Already in library.'));
          return;
       }
 
@@ -301,15 +319,15 @@ class DownloadService {
 
       if (item.type == DownloadType.audio) {
         await _writeTags(targetPath, cachedMedia?.title ?? item.displayTitle, cachedMedia?.artist ?? 'Unknown Artist', cachedMedia?.album ?? 'Resonance Downloads', artBytes != null ? artBytes.toList() : []);
-        _emitUpdate(item.id, (i) => i.copyWith(logs: [...i.logs, '🎵 Metadata berhasil ditanam.']));
+        _emitUpdate(item.id, (i) => i.copyWith(logs: [...i.logs, '🎵 Metadata embedded successfully.']));
       }
 
-      _emitUpdate(item.id, (i) => i.copyWith(status: DownloadStatus.done, progress: 100.0, outputPath: targetPath, resolvedTitle: cachedMedia?.title ?? item.displayTitle, statusMessage: 'Selesai (Salinan instan dari cache)', songId: locId));
+      _emitUpdate(item.id, (i) => i.copyWith(status: DownloadStatus.done, progress: 100.0, outputPath: targetPath, resolvedTitle: cachedMedia?.title ?? item.displayTitle, statusMessage: 'Done (Instant copy from cache)', songId: locId));
 
       _ref.read(libraryProvider.notifier).addMediaItem(MediaItem(id: locId, path: targetPath, title: cachedMedia?.title ?? item.displayTitle, artist: cachedMedia?.artist ?? 'Unknown Artist', album: cachedMedia?.album ?? 'Resonance Downloads', thumbnailUrl: targetArtPath, type: item.type == DownloadType.audio ? 'audio' : 'video'));
       
     } catch (e) {
-      _emitUpdate(item.id, (i) => i.copyWith(status: DownloadStatus.error, errorMessage: 'Gagal penyalinan instan: $e'));
+      _emitUpdate(item.id, (i) => i.copyWith(status: DownloadStatus.error, errorMessage: 'Instant copy failed: $e'));
     }
   }
 
@@ -379,7 +397,7 @@ class DownloadService {
           streamInfo = muxed.last;
         }
 
-        String downloadDir = item.type == DownloadType.audio ? (settings.musicOutputPath.isNotEmpty ? settings.musicOutputPath : await PathUtils.getMusicDefault()) : (settings.videoOutputPath.isNotEmpty ? settings.videoOutputPath : await PathUtils.getVideoDefault());
+        String downloadDir = item.type == DownloadType.audio ? (settings.musicOutputPath.isNotEmpty ? settings.musicOutputPath : await PathUtils.getMusicDefault()) : settings.videoOutputPath;
         final dir = Directory(downloadDir);
         if (!await dir.exists()) await dir.create(recursive: true);
 

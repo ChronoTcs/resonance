@@ -5,7 +5,6 @@ import '../providers/audio_provider.dart';
 import '../services/queue_service.dart';
 import '../services/stream_resolution_service.dart';
 
-/// Service responsible for proactive pre-fetching of the next track (V17.5).
 /// 
 /// Triggered reactively by AudioOrchestrator when current track duration is near end.
 class GaplessPrefetchService {
@@ -17,7 +16,6 @@ class GaplessPrefetchService {
   GaplessPrefetchService(this._ref);
 
   /// Proactively fetches the next track and appends it to the MediaKit playlist.
-  /// [V20.7 SOTA] Uses JIT (Just-In-Time) prefetching to ensure URL validity.
   Future<void> proactiveFetch() async {
     if (_isFetching) return;
 

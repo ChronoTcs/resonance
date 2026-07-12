@@ -42,7 +42,6 @@ class _AboutCardState extends ConsumerState<AboutCard> {
   }
 
   Future<void> _handleRestore() async {
-    // SOTA V13.11: Source Selection Dialog
     final source = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
@@ -98,11 +97,11 @@ class _AboutCardState extends ConsumerState<AboutCard> {
     );
 
     try {
-      // Pada Android, jika memilih 'android', selectedDirectory akan null dan memicu Auto-Detection
+      // On Android, passing null triggers Auto-Detection
       await ref.read(musicRestoreServiceProvider).restoreFromSource(selectedDirectory);
       
       if (!mounted) return;
-      Navigator.pop(context); // Tutup dialog
+      Navigator.pop(context); // Close dialog
       
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -113,9 +112,9 @@ class _AboutCardState extends ConsumerState<AboutCard> {
       );
     } catch (e) {
       if (!mounted) return;
-      Navigator.pop(context); // Tutup dialog
+      Navigator.pop(context); // Close dialog
       
-      // Notifikasi Kegagalan
+      // Failure Notification
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Protocol Failed: ${e.toString().replaceAll('Exception: ', '')}'),

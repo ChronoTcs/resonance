@@ -12,27 +12,27 @@ class MediaItem {
   final Duration? duration;
   final String? date;
   final String type; // 'audio' or 'video'
-  final String? setVideoId; // [V20.7 SOTA] For YouTube Playlist Operations
+  final String? setVideoId;
   
   bool get isLocal {
-    // 1. Identitas Mutlak: Jika ID diawali 'loc_', ini pasti file lokal
+    // 1. Absolute Identity: If ID starts with 'loc_', it is local
     if (id != null && id!.startsWith('loc_')) return true;
     
-    // 2. Identitas Mutlak: Jika Path adalah URL http/https
+    // 2. Absolute Identity: If Path is an http/https URL
     if (path.startsWith('http')) return false;
 
-    // 3. Cek apakah path mengandung pemisah folder (Slashing)
-    // Jika TIDAK ada slash sama sekali (hanya ID murni), maka ini adalah streaming ID
+    // 3. Check if path contains folder separators (slashes)
+    // If there are no slashes at all (pure ID), it is a streaming ID
     final hasSlash = path.contains('/') || path.contains('\\');
     if (!hasSlash) return false;
 
-    // 4. Jika ada slash, cek apakah ini berada di folder cache/stream
+    // 4. If slashes exist, check if in cache/stream folder
     final normalizedPath = path.replaceAll('\\', '/');
     if (normalizedPath.contains('/cache/stream/') || normalizedPath.contains('/stream/audio/')) {
       return false;
     }
 
-    // 5. Jika ada slash dan bukan di folder stream, anggap sebagai file lokal fisik
+    // 5. If slashes exist and not in stream folder, treat as physical local file
     return true;
   }
 

@@ -1,11 +1,10 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance/features/playlist/data/models/playlist_model.dart';
 import 'package:resonance/features/library/data/models/media_item.dart';
 import 'package:resonance/features/playlist/data/repositories/playlist_repository.dart';
-import 'package:resonance/features/explore/data/repositories/youtube_playlist_repository.dart';
-import 'package:resonance/features/explore/application/services/youtube_auth_service.dart';
 
 final playlistProvider = AsyncNotifierProvider<PlaylistNotifier, PlaylistState>(() {
   return PlaylistNotifier();
@@ -13,7 +12,7 @@ final playlistProvider = AsyncNotifierProvider<PlaylistNotifier, PlaylistState>(
 
 class PlaylistState {
   final List<Playlist> local;
-  final List<Playlist> online;
+  final List<Playlist> online; // Renamed conceptually to "Stream" in UI, model uses online
   final bool isLoadingOnline;
 
   PlaylistState({
@@ -52,62 +51,88 @@ class PlaylistNotifier extends AsyncNotifier<PlaylistState> {
   @override
   Future<PlaylistState> build() async {
     final repo = ref.watch(playlistRepositoryProvider);
-    final local = await repo.fetchPlaylists();
+    final allPlaylists = await repo.fetchPlaylists();
     
-    // Auto-fetch online playlists if logged in (non-blocking)
-    if (ref.read(youtubeAuthServiceProvider).isLoggedIn) {
-      Future.delayed(const Duration(milliseconds: 500), () => refreshOnlinePlaylists());
-    }
+    final local = allPlaylists.where((p) => p.id.startsWith('loc_')).toList();
+    final online = allPlaylists.where((p) => p.id.startsWith('str_')).toList();
     
-    return PlaylistState(local: local);
+    return PlaylistState(
+      local: local,
+      online: online,
+    );
   }
 
   Future<void> _saveState() async {
     if (state.value == null) return;
-    // [GUARDRAIL 2] Persistent Guard: Only save local playlists
     final repo = ref.read(playlistRepositoryProvider);
-    await repo.persistPlaylists(state.value!.local);
+    final allPlaylists = [...state.value!.local, ...state.value!.online];
+    await repo.persistPlaylists(allPlaylists);
   }
 
-  Future<void> createPlaylist(String name, {String description = ''}) async {
+  Future<void> createPlaylist(String name, {String description = '', bool isStream = false}) async {
     if (state.value == null) return;
     final newPlaylist = Playlist(
-      id: 'loc_${DateTime.now().millisecondsSinceEpoch}',
+      id: '${isStream ? 'str_' : 'loc_'}${DateTime.now().millisecondsSinceEpoch}',
       name: name,
       description: description,
       tracks: [],
     );
 
-    state = AsyncValue.data(state.value!.copyWith(
-      local: [...state.value!.local, newPlaylist],
-    ));
+    if (isStream) {
+      state = AsyncValue.data(state.value!.copyWith(
+        online: [...state.value!.online, newPlaylist],
+      ));
+    } else {
+      state = AsyncValue.data(state.value!.copyWith(
+        local: [...state.value!.local, newPlaylist],
+      ));
+    }
     await _saveState();
   }
 
   Future<void> deletePlaylist(String playlistId) async {
     if (state.value == null) return;
 
-    // Check if it's an online playlist delete (unsupported directly for now, or add implementation)
-    if (!playlistId.startsWith('loc_')) {
-      debugPrint('PlaylistNotifier: Direct online playlist deletion not yet implemented.');
+    if (playlistId.startsWith('str_')) {
+      final online = List<Playlist>.from(state.value!.online);
+      online.removeWhere((p) => p.id == playlistId);
+      state = AsyncValue.data(state.value!.copyWith(online: online));
+      await _saveState();
       return;
     }
 
-    final local = List<Playlist>.from(state.value!.local);
-    local.removeWhere((p) => p.id == playlistId);
-    
-    state = AsyncValue.data(state.value!.copyWith(local: local));
-    await _saveState();
+    if (playlistId.startsWith('loc_')) {
+      final local = List<Playlist>.from(state.value!.local);
+      local.removeWhere((p) => p.id == playlistId);
+      state = AsyncValue.data(state.value!.copyWith(local: local));
+      await _saveState();
+      return;
+    }
   }
   
   Future<void> renamePlaylist(String playlistId, String newName) async {
     if (state.value == null) return;
-    final local = List<Playlist>.from(state.value!.local);
-    final index = local.indexWhere((p) => p.id == playlistId);
-    if (index != -1) {
-      local[index] = local[index].copyWith(name: newName);
-      state = AsyncValue.data(state.value!.copyWith(local: local));
-      await _saveState();
+
+    if (playlistId.startsWith('str_')) {
+      final online = List<Playlist>.from(state.value!.online);
+      final index = online.indexWhere((p) => p.id == playlistId);
+      if (index != -1) {
+        online[index] = online[index].copyWith(name: newName);
+        state = AsyncValue.data(state.value!.copyWith(online: online));
+        await _saveState();
+      }
+      return;
+    }
+
+    if (playlistId.startsWith('loc_')) {
+      final local = List<Playlist>.from(state.value!.local);
+      final index = local.indexWhere((p) => p.id == playlistId);
+      if (index != -1) {
+        local[index] = local[index].copyWith(name: newName);
+        state = AsyncValue.data(state.value!.copyWith(local: local));
+        await _saveState();
+      }
+      return;
     }
   }
 
@@ -118,44 +143,52 @@ class PlaylistNotifier extends AsyncNotifier<PlaylistState> {
   Future<void> addTracksToPlaylist(String playlistId, List<MediaItem> tracks) async {
     if (state.value == null) return;
 
-    // --- CASE 1: Online Sync ---
-    if (!playlistId.startsWith('loc_')) {
-      final repo = ref.read(youtubePlaylistRepositoryProvider);
-      for (final track in tracks) {
-        if (track.id != null) {
-          await repo.editYouTubePlaylist(
-            playlistId,
-            track.id!,
-            isAdd: true,
-          );
+    if (playlistId.startsWith('str_')) {
+      final online = List<Playlist>.from(state.value!.online);
+      final index = online.indexWhere((p) => p.id == playlistId);
+      if (index != -1) {
+        final playlist = online[index];
+        final List<MediaItem> newTracks = [];
+        
+        for (final track in tracks) {
+          final trackId = track.id ?? track.path;
+          if (!playlist.tracks.any((t) => (t.id ?? t.path) == trackId)) {
+            newTracks.add(track);
+          }
+        }
+
+        if (newTracks.isNotEmpty) {
+          final updatedTracks = [...playlist.tracks, ...newTracks];
+          online[index] = playlist.copyWith(tracks: updatedTracks);
+          state = AsyncValue.data(state.value!.copyWith(online: online));
+          await _saveState();
         }
       }
-      refreshOnlinePlaylists(); // Refresh memory state
       return;
     }
 
-    // --- CASE 2: Local Persistence ---
-    final local = List<Playlist>.from(state.value!.local);
-    final index = local.indexWhere((p) => p.id == playlistId);
+    if (playlistId.startsWith('loc_')) {
+      final local = List<Playlist>.from(state.value!.local);
+      final index = local.indexWhere((p) => p.id == playlistId);
+      if (index != -1) {
+        final playlist = local[index];
+        final List<MediaItem> newTracks = [];
+        
+        for (final track in tracks) {
+          final trackId = track.id ?? track.path;
+          if (!playlist.tracks.any((t) => (t.id ?? t.path) == trackId)) {
+            newTracks.add(track);
+          }
+        }
 
-    if (index != -1) {
-      final playlist = local[index];
-      final List<MediaItem> newTracks = [];
-      
-      for (final track in tracks) {
-        final trackId = track.id ?? track.path;
-        if (!playlist.tracks.any((t) => (t.id ?? t.path) == trackId)) {
-          newTracks.add(track);
+        if (newTracks.isNotEmpty) {
+          final updatedTracks = [...playlist.tracks, ...newTracks];
+          local[index] = playlist.copyWith(tracks: updatedTracks);
+          state = AsyncValue.data(state.value!.copyWith(local: local));
+          await _saveState();
         }
       }
-
-      if (newTracks.isNotEmpty) {
-        final updatedTracks = [...playlist.tracks, ...newTracks];
-        local[index] = playlist.copyWith(tracks: updatedTracks);
-        
-        state = AsyncValue.data(state.value!.copyWith(local: local));
-        await _saveState();
-      }
+      return;
     }
   }
 
@@ -175,105 +208,67 @@ class PlaylistNotifier extends AsyncNotifier<PlaylistState> {
   Future<void> removeTrackFromPlaylist(String playlistId, String trackPathOrId) async {
     if (state.value == null) return;
 
-    // --- CASE 1: Online Sync (Requires setVideoId) ---
-    if (!playlistId.startsWith('loc_')) {
-      final playlist = state.value!.online.firstWhere((p) => p.id == playlistId);
-      final track = playlist.tracks.firstWhere((t) => (t.id ?? t.path) == trackPathOrId);
-      
-      if (track.setVideoId != null) {
-        final repo = ref.read(youtubePlaylistRepositoryProvider);
-        await repo.editYouTubePlaylist(
-          playlistId,
-          trackPathOrId,
-          isAdd: false,
-          setVideoId: track.setVideoId,
-        );
-        refreshOnlinePlaylists();
+    if (playlistId.startsWith('str_')) {
+      final online = List<Playlist>.from(state.value!.online);
+      final index = online.indexWhere((p) => p.id == playlistId);
+      if (index != -1) {
+        final playlist = online[index];
+        final updatedTracks = List<MediaItem>.from(playlist.tracks)
+          ..removeWhere((t) => (t.id ?? t.path) == trackPathOrId);
+        online[index] = playlist.copyWith(tracks: updatedTracks);
+        state = AsyncValue.data(state.value!.copyWith(online: online));
+        await _saveState();
       }
       return;
     }
 
-    // --- CASE 2: Local Persistence ---
-    final local = List<Playlist>.from(state.value!.local);
-    final index = local.indexWhere((p) => p.id == playlistId);
-    
-    if (index != -1) {
-      final playlist = local[index];
-      final updatedTracks = List<MediaItem>.from(playlist.tracks)
-        ..removeWhere((t) => (t.id ?? t.path) == trackPathOrId);
-      local[index] = playlist.copyWith(tracks: updatedTracks);
-      
-      state = AsyncValue.data(state.value!.copyWith(local: local));
-      await _saveState();
+    if (playlistId.startsWith('loc_')) {
+      final local = List<Playlist>.from(state.value!.local);
+      final index = local.indexWhere((p) => p.id == playlistId);
+      if (index != -1) {
+        final playlist = local[index];
+        final updatedTracks = List<MediaItem>.from(playlist.tracks)
+          ..removeWhere((t) => (t.id ?? t.path) == trackPathOrId);
+        local[index] = playlist.copyWith(tracks: updatedTracks);
+        state = AsyncValue.data(state.value!.copyWith(local: local));
+        await _saveState();
+      }
+      return;
     }
   }
 
-  // --- [V20.7 SOTA] ONLINE OPERATIONS ---
-
-  Future<void> refreshOnlinePlaylists() async {
-    if (state.value == null) return;
-    state = AsyncValue.data(state.value!.copyWith(isLoadingOnline: true));
-
-    try {
-      final repo = ref.read(youtubePlaylistRepositoryProvider);
-      final explorePlaylists = await repo.fetchMyPlaylists();
-
-      final List<Playlist> online = explorePlaylists.map((ep) => Playlist(
-        id: ep.id,
-        name: ep.title,
-        description: 'YouTube Music Playlist by ${ep.author}',
-        tracks: [], // Initially empty, load on demand
-      )).toList();
-
-      state = AsyncValue.data(state.value!.copyWith(online: online, isLoadingOnline: false));
-    } catch (e) {
-      debugPrint('PlaylistNotifier: Online refresh failed: $e');
-      state = AsyncValue.data(state.value!.copyWith(isLoadingOnline: false));
-    }
-  }
-
-  Future<void> loadOnlinePlaylistTracks(String playlistId) async {
-    if (state.value == null) return;
-    
-    final index = state.value!.online.indexWhere((p) => p.id == playlistId);
-    if (index == -1) return;
-
-    try {
-      final repo = ref.read(youtubePlaylistRepositoryProvider);
-      final items = await repo.fetchFullPlaylistContents(playlistId);
-
-      final List<MediaItem> tracks = items.map((item) => MediaItem(
-        id: item.id,
-        path: item.url,
-        title: item.title,
-        artist: item.author,
-        thumbnailUrl: item.thumbnailUrl,
-        type: 'audio',
-        setVideoId: item.setVideoId, // [V20.7 SOTA] Propagate for removals
-      )).toList();
-
-      final online = List<Playlist>.from(state.value!.online);
-      online[index] = online[index].copyWith(tracks: tracks);
-
-      state = AsyncValue.data(state.value!.copyWith(online: online));
-    } catch (e) {
-      debugPrint('PlaylistNotifier: Failed to load online tracks: $e');
-    }
-  }
-
-  Future<void> convertOnlineToLocal(Playlist onlinePlaylist) async {
-    if (state.value == null) return;
-    
-    final newLocalId = 'loc_${DateTime.now().millisecondsSinceEpoch}';
-    final localCopy = onlinePlaylist.copyWith(
-      id: newLocalId,
-      name: '${onlinePlaylist.name} (Imported)',
+  Future<String?> exportPlaylist(String playlistId) async {
+    if (state.value == null) return null;
+    final playlist = state.value!.online.firstWhere(
+      (p) => p.id == playlistId,
+      orElse: () => throw Exception('Playlist not found'),
     );
+    return jsonEncode(playlist.toJson());
+  }
 
-    state = AsyncValue.data(state.value!.copyWith(
-      local: [...state.value!.local, localCopy],
-    ));
-    await _saveState();
+  Future<void> importPlaylist(String jsonString) async {
+    if (state.value == null) return;
+    try {
+      final Map<String, dynamic> data = jsonDecode(jsonString);
+      final imported = Playlist.fromJson(data);
+      
+      // Force "str_" prefix to indicate stream playlist type
+      String newId = imported.id;
+      if (!newId.startsWith('str_')) {
+        newId = 'str_${DateTime.now().millisecondsSinceEpoch}';
+      } else {
+        newId = 'str_${DateTime.now().millisecondsSinceEpoch}_${imported.id.split('_').last}';
+      }
+
+      final playlistCopy = imported.copyWith(id: newId);
+      state = AsyncValue.data(state.value!.copyWith(
+        online: [...state.value!.online, playlistCopy],
+      ));
+      await _saveState();
+    } catch (e) {
+      debugPrint('PlaylistNotifier: Failed to import playlist: $e');
+      rethrow;
+    }
   }
 
   /// Auto-repair legacy tracks that changed IDs/Paths
@@ -325,12 +320,10 @@ class PlaylistNotifier extends AsyncNotifier<PlaylistState> {
     int count = 0;
 
     for (final track in playlist.tracks) {
-      // If it's an online track or the local file still exists, keep it
       if (!track.path.startsWith('http') && track.title != 'Unknown Title') {
         final file = File(track.path);
         if (!file.existsSync()) {
           try {
-            // Heuristic match: Title + Artist (normalized)
             final trackTitleLower = track.title.trim().toLowerCase();
             final trackArtistLower = (track.artist ?? 'Unknown Artist').trim().toLowerCase();
 
@@ -355,3 +348,4 @@ class PlaylistNotifier extends AsyncNotifier<PlaylistState> {
     return (playlist: playlist.copyWith(tracks: updatedTracks), repairedCount: count);
   }
 }
+

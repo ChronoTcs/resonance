@@ -66,13 +66,11 @@ class _FloatingOverlayControlsState extends ConsumerState<FloatingOverlayControl
                         onTap: audioNotifier.cycleLoopMode,
                         tooltip: 'Repeat Mode',
                         color: audioState.loopMode != LoopMode.off ? Theme.of(context).primaryColor : Colors.white,
-                        // SOTA V3.1: Consistent selection style (no background box)
                         isSelected: false, 
                       ),
                     ],
                   ),
                   
-                  // SOTA V3.1: Calibrated Ergonomic Spacing (Baris 1-2)
                   const SizedBox(height: 16),
 
                   // BARIS 2: VOLUME CONTROL (Interactive Mute & Percentage)
@@ -106,7 +104,6 @@ class _FloatingOverlayControlsState extends ConsumerState<FloatingOverlayControl
                             ),
                           ),
                         ),
-                        // SOTA V3.1: Real-time Volume Indicator (Fixed Width Jitter Prevention)
                         const SizedBox(width: 8),
                         SizedBox(
                           width: 32,
@@ -120,7 +117,6 @@ class _FloatingOverlayControlsState extends ConsumerState<FloatingOverlayControl
                     ),
                   ),
 
-                  // SOTA V3.1: Calibrated Ergonomic Spacing (Baris 2-3)
                   const SizedBox(height: 12),
 
                   // BARIS 3: AUDIO SETTINGS (Speed Tooltip & Pitch Indicator)
@@ -148,7 +144,6 @@ class _FloatingOverlayControlsState extends ConsumerState<FloatingOverlayControl
                             ),
                           ),
                         ),
-                        // SOTA V3.1: Real-time Pitch Indicator
                         const SizedBox(width: 8),
                         SizedBox(
                           width: 32,

@@ -3,25 +3,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/features/player/application/providers/audio_provider.dart';
-import 'package:resonance/features/player/application/providers/video_player_notifier.dart' as v;
 
 class VolumePopupDialog extends ConsumerWidget {
   final Offset buttonOffset;
   final Size buttonSize;
-  final bool isVideo;
 
   const VolumePopupDialog({
     super.key,
     required this.buttonOffset,
     required this.buttonSize,
-    required this.isVideo,
   });
 
   static void show({
     required BuildContext context,
     required Offset buttonOffset,
     required Size buttonSize,
-    required bool isVideo,
   }) {
     showDialog(
       context: context,
@@ -29,7 +25,6 @@ class VolumePopupDialog extends ConsumerWidget {
       builder: (context) => VolumePopupDialog(
         buttonOffset: buttonOffset,
         buttonSize: buttonSize,
-        isVideo: isVideo,
       ),
     );
   }
@@ -49,10 +44,7 @@ class VolumePopupDialog extends ConsumerWidget {
 
     double top = buttonOffset.dy - dialogHeight - 16;
 
-    // Menarik value sesuai domain yang memanggilnya
-    final double currentVolume = isVideo
-        ? ref.watch(v.videoPlayerProvider.select((s) => s.volume))
-        : ref.watch(audioProvider.select((s) => s.volume));
+    final double currentVolume = ref.watch(audioProvider.select((s) => s.volume));
 
     return Stack(
       children: [
@@ -82,7 +74,7 @@ class VolumePopupDialog extends ConsumerWidget {
                         Icon(
                           currentVolume == 0
                               ? UIcons.regular.volume_off
-                              : currentVolume < (isVideo ? 0.5 : 50)
+                              : currentVolume < 50
                                   ? UIcons.regular.volume_down
                                   : UIcons.regular.volume,
                           color: theme.colorScheme.onSurfaceVariant,
@@ -102,13 +94,9 @@ class VolumePopupDialog extends ConsumerWidget {
                             child: Slider(
                               value: currentVolume,
                               min: 0.0,
-                              max: isVideo ? 1.0 : 100.0,
+                              max: 100.0,
                               onChanged: (val) {
-                                if (isVideo) {
-                                  ref.read(v.videoPlayerProvider.notifier).setVolume(val);
-                                } else {
-                                  ref.read(audioProvider.notifier).setVolume(val);
-                                }
+                                ref.read(audioProvider.notifier).setVolume(val);
                               },
                             ),
                           ),
@@ -117,9 +105,7 @@ class VolumePopupDialog extends ConsumerWidget {
                         SizedBox(
                           width: 44,
                           child: Text(
-                            isVideo
-                                ? "${(currentVolume * 100).toInt()}%"
-                                : "${currentVolume.toInt()}%",
+                            "${currentVolume.toInt()}%",
                             softWrap: false,
                             style: TextStyle(
                               color: theme.colorScheme.onSurface,

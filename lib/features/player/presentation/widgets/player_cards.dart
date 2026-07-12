@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:resonance/features/player/application/providers/audio_provider.dart';
+import 'package:resonance/core/theme/theme_provider.dart';
 import 'package:resonance/features/lyrics/application/lyrics_provider.dart';
 import 'package:resonance/features/lyrics/application/lyrics_translation_provider.dart';
 import 'package:resonance/features/lyrics/presentation/providers/lyrics_ui_provider.dart';
@@ -147,6 +148,8 @@ class _MiniLyricsCardState extends ConsumerState<MiniLyricsCard> {
     final translationState = ref.watch(lyricsTranslationProvider);
     final lyrics = ref.watch(displayLyricsProvider);
     final activeIndex = ref.watch(activeLyricIndexProvider);
+    final activeOpacity = ref.watch(lyricsActiveOpacityProvider);
+    final inactiveOpacity = ref.watch(lyricsInactiveOpacityProvider);
 
     ref.listen<int>(activeLyricIndexProvider, (prev, next) {
       if (next != -1 && next != prev) {
@@ -209,8 +212,8 @@ class _MiniLyricsCardState extends ConsumerState<MiniLyricsCard> {
                             modeLabel:
                                 translationState.mode ==
                                     LyricsTranslationMode.translated
-                                ? 'Terjemahan'
-                                : 'Romanisasi',
+                                ? 'Translation'
+                                : 'Romanization',
                           ),
                         ],
                       ],
@@ -218,7 +221,7 @@ class _MiniLyricsCardState extends ConsumerState<MiniLyricsCard> {
                   ),
                   ReusableHoverIconButton(
                     icon: UIcons.regular.expand,
-                    tooltip: 'Tampilkan Lirik Penuh',
+                    tooltip: 'Show Full Lyrics',
                     iconSize: 16,
                     onTap: () =>
                         ref.read(lyricsOverlayProvider.notifier).toggle(),
@@ -245,7 +248,7 @@ class _MiniLyricsCardState extends ConsumerState<MiniLyricsCard> {
                   child: lyricsState.error != null && lyrics.isEmpty
                       ? Center(
                           child: Text(
-                            'Gagal memuat lirik',
+                            'Failed to load lyrics',
                             style: TextStyle(
                               color: Theme.of(context).colorScheme.error,
                               fontSize: 12,
@@ -255,7 +258,7 @@ class _MiniLyricsCardState extends ConsumerState<MiniLyricsCard> {
                       : lyrics.isEmpty && !lyricsState.isLoading
                       ? const Center(
                           child: Text(
-                            'Lirik tidak ditemukan',
+                            'No lyrics found',
                             style: TextStyle(
                               color: Colors.white38,
                               fontSize: 12,
@@ -292,9 +295,8 @@ class _MiniLyricsCardState extends ConsumerState<MiniLyricsCard> {
                                       ? FontWeight.bold
                                       : FontWeight.normal,
                                   color: isActive
-                                      ? Theme.of(context).colorScheme.onSurface
-                                      : Theme.of(context).colorScheme.onSurface
-                                            .withValues(alpha: 0.32),
+                                      ? Theme.of(context).colorScheme.onSurface.withValues(alpha: activeOpacity)
+                                      : Theme.of(context).colorScheme.onSurface.withValues(alpha: inactiveOpacity),
                                 ),
                                 child: Text(line.text),
                               ),
@@ -393,7 +395,6 @@ class NextInQueueCard extends ConsumerWidget {
                           color: Theme.of(context).colorScheme.onSurface,
                           fontWeight: FontWeight.bold,
                         ),
-                        // SOTA V13.13: Removed maxLines to allow vertical expansion
                       ),
                       Text(
                         next.artist ?? 'Artist',
@@ -403,7 +404,6 @@ class NextInQueueCard extends ConsumerWidget {
                           ).colorScheme.onSurface.withValues(alpha: 0.7),
                           fontSize: 12,
                         ),
-                        // SOTA V13.13: Removed maxLines to allow vertical expansion
                       ),
                     ],
                   ),
@@ -460,7 +460,6 @@ class _NavigationControlCardState extends ConsumerState<NavigationControlCard> {
                       ReusableHoverIconButton(
                         tooltip: 'Shuffle',
                         icon: UIcons.regular.shuffle,
-                        // SOTA V3.2: Disabled selection background box
                         isSelected: false,
                         color: audioState.isShuffleEnabled
                             ? Theme.of(context).primaryColor
@@ -502,7 +501,6 @@ class _NavigationControlCardState extends ConsumerState<NavigationControlCard> {
                         icon: audioState.loopMode == LoopMode.one
                             ? UIcons.regular.arrows_repeat_1
                             : UIcons.regular.arrows_repeat,
-                        // SOTA V3.2: Disabled selection background box
                         isSelected: false,
                         color: audioState.loopMode != LoopMode.off
                             ? Theme.of(context).primaryColor

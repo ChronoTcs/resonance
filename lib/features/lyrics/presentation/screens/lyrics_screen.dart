@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../application/lyrics_provider.dart';
+import 'package:resonance/core/theme/theme_provider.dart';
 import '../../../player/application/providers/audio_provider.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:resonance/core/widgets/media_artwork_widget.dart';
@@ -48,6 +49,8 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
     final lyrics = ref.watch(displayLyricsProvider);
     final audioState = ref.watch(audioProvider);
     final track = audioState.currentTrack;
+    final activeOpacity = ref.watch(lyricsActiveOpacityProvider);
+    final inactiveOpacity = ref.watch(lyricsInactiveOpacityProvider);
 
     // 1. Determine Content based on state
     Widget content;
@@ -124,8 +127,8 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
                       fontSize: isActive ? 26 : 18,
                       fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
                       color: isActive
-                          ? Theme.of(context).colorScheme.onSurface
-                          : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38),
+                          ? Theme.of(context).colorScheme.onSurface.withValues(alpha: activeOpacity)
+                          : Theme.of(context).colorScheme.onSurface.withValues(alpha: inactiveOpacity),
                       height: 1.4,
                     ),
                   ),
@@ -217,7 +220,7 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
                             if (translationState.error != null) ...[
                               LyricsRetryButton(
                                 modeLabel: translationState.mode == LyricsTranslationMode.translated 
-                                    ? 'Terjemahan' : 'Romanisasi',
+                                    ? 'Translation' : 'Romanization',
                               ),
                               const SizedBox(width: 8),
                             ],
@@ -252,7 +255,7 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
               child: SafeArea(
                 child: CollapseButton(
                   iconSize: 32,
-                  tooltip: 'Tutup Lirik',
+                  tooltip: 'Close Lyrics',
                   color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.8),
                   onTap: () => ref.read(lyricsOverlayProvider.notifier).toggle(),
                 ),
@@ -271,7 +274,7 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
                     if (translationState.error != null) ...[
                       LyricsRetryButton(
                         modeLabel: translationState.mode == LyricsTranslationMode.translated 
-                            ? 'Terjemahan' : 'Romanisasi',
+                            ? 'Translation' : 'Romanization',
                       ),
                       const SizedBox(width: 8),
                     ],

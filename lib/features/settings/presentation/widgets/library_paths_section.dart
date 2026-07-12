@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:resonance/core/utils/uicons.dart';
+import 'package:resonance/core/widgets/resonance_button.dart';
 import '../../../library/application/library_provider.dart';
 import '../../../../core/application/services/permission_service.dart';
 import 'package:resonance/core/widgets/reusable_hover_icon_button.dart';
@@ -18,9 +19,22 @@ class LibraryPathsSection extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Library Paths',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Library Paths',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey),
+            ),
+            ResonanceButton(
+              onPressed: () async {
+                await ref.read(libraryProvider.notifier).resetToDefaults();
+              },
+              icon: UIcons.regular.undo_alt,
+              label: 'Reset to Defaults',
+              style: ResonanceButtonStyle.secondary,
+            ),
+          ],
         ),
         const SizedBox(height: 16),
         _buildPathTile(
@@ -32,19 +46,6 @@ class LibraryPathsSection extends ConsumerWidget {
             if (await PermissionService.requestStoragePermission()) {
               String? selected = await FilePicker.platform.getDirectoryPath();
               if (selected != null) libraryLogic.setMusicFolder(selected);
-            }
-          },
-        ),
-        const SizedBox(height: 12),
-        _buildPathTile(
-          context,
-          icon: UIcons.regular.video_camera,
-          title: 'Video Library',
-          path: libraryState.videoFolderPath,
-          onEdit: () async {
-            if (await PermissionService.requestStoragePermission()) {
-              String? selected = await FilePicker.platform.getDirectoryPath();
-              if (selected != null) libraryLogic.setVideoFolder(selected);
             }
           },
         ),
@@ -67,7 +68,7 @@ class LibraryPathsSection extends ConsumerWidget {
           icon: UIcons.regular.refresh,
           title: 'Cache Directory',
           path: libraryState.cacheFolderPath ?? 
-                (Platform.isWindows ? 'Default (%USERPROFILE%\\resonance_cache)' : 'Default (Internal App Storage)'),
+                (Platform.isWindows ? 'Default (%LocalAppData%\\ChronoTech\\Resonance\\cache)' : 'Default (Internal App Storage)'),
           trailingIcon: UIcons.regular.pencil,
           onEdit: () async {
             if (await PermissionService.requestStoragePermission()) {

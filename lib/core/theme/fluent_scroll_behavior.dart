@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
 /// [FluentScrollBehavior]
-/// Mengatur perilaku scroll global agar menyerupai Fluent Design (Windows):
-/// - Menggunakan [ClampingScrollPhysics] (tanpa efek bounce).
-/// - Menghilangkan indikator overscroll (efek cahaya saat mentok).
+/// Configures global scroll behavior to match Windows Fluent Design:
+/// - Uses [ClampingScrollPhysics] (no bounce effect).
+/// - Removes overscroll indicator glow effect.
 class FluentScrollBehavior extends MaterialScrollBehavior {
   @override
   ScrollPhysics getScrollPhysics(BuildContext context) {

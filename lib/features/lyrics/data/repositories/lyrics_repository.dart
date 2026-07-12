@@ -17,7 +17,6 @@ class LyricsRepository {
   String? _lastTrackId;
   List<LyricLine>? _lastLyrics;
 
-  // [V20.27 SOTA] In-Flight Mutex Tracker (DDoS Prevention)
   final Map<String, Future<List<LyricLine>>> _inFlightRequests = {};
 
   LyricsRepository(this._ref);
@@ -35,7 +34,6 @@ class LyricsRepository {
       return _lastLyrics!;
     }
     
-    // [V20.27 SOTA] Race Condition / In-Flight Mutex Check
     if (!forceSync && _inFlightRequests.containsKey(trackId)) {
       debugPrint('LyricsRepository: [MUTEX] Joining existing in-flight request for $trackId');
       return await _inFlightRequests[trackId]!;
@@ -46,7 +44,6 @@ class LyricsRepository {
     
     try {
       final result = await future;
-      // [V20.27 SOTA] Pemasangan Paksa Memori Cache (Amnesia Fix)
       _lastTrackId = trackId;
       _lastLyrics = result;
       return result;
@@ -384,16 +381,16 @@ class LyricsRepository {
         final List<dynamic> data = jsonDecode(response.body);
         
         if (data.isNotEmpty) {
-          // PUTARAN 1: Cari dengan ketat HANYA lirik yang tersinkronisasi di seluruh hasil
+          // ROUND 1: Strictly search ONLY for synced lyrics across all results
           for (var item in data) {
             final synced = item['syncedLyrics'] as String?;
             if (synced != null && synced.trim().isNotEmpty) {
               debugPrint('LyricsRepository: Found SYNCED lyrics via [$label]');
-              return synced; // Langsung kembalikan lirik yang ada waktu/tag-nya
+              return synced; // Directly return lyrics that contain timestamp tags
             }
           }
 
-          // PUTARAN 2: Jika satupun tidak ada yang sinkron, ambil plain text dari hasil teratas (Fallback)
+          // ROUND 2: If none are synced, fallback to plain text from the top result (Fallback)
           final bestMatch = data.first;
           final plain = bestMatch['plainLyrics'] as String?;
           if (plain != null && plain.trim().isNotEmpty) {
