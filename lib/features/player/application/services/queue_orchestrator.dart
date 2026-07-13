@@ -10,14 +10,11 @@ class QueueOrchestrator {
 
   QueueOrchestrator(this._ref);
 
-  /// Turns shuffle OFF and plays from a specific index in the given context.
+  /// Plays from a specific index in the given context.
   void playSequentialContext(MediaItem track, List<MediaItem> contextQueue) {
     final notifier = _ref.read(audioProvider.notifier);
     
-    // 1. Force Shuffle OFF for sequential experience
-    notifier.setShuffle(false);
-
-    // 2. Resolve index
+    // 1. Resolve index
     final trackId = track.id ?? track.path;
     final index = contextQueue.indexWhere((t) => (t.id ?? t.path) == trackId);
 

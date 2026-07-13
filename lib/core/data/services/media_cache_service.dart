@@ -101,15 +101,20 @@ class MediaCacheService {
     try {
       final request = http.Request('GET', Uri.parse(url));
       
-      final activeUA = userAgent ?? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36";
+      final activeUA = userAgent ?? (url.contains('c=ANDROID_VR')
+          ? 'com.google.android.apps.youtube.vr.oculus/1.56.21 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip'
+          : url.contains('c=IOS')
+              ? 'com.google.ios.youtube/19.29.1 (iPhone14,3; U; CPU iOS 15_6_1 like Mac OS X)'
+              : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36");
       
-      final isAndroid = activeUA.contains('Android');
+      final isAndroid = activeUA.toLowerCase().contains('android');
       
       final Map<String, String> resolvedHeaders = {
         'User-Agent': activeUA,
         'Accept': '*/*',
         'Accept-Language': 'en-US,en;q=0.9',
         'Connection': 'keep-alive',
+        'Range': 'bytes=0-',
       };
 
       if (!isAndroid) {

@@ -11,7 +11,9 @@ import 'package:resonance/core/widgets/media_artwork_widget.dart';
 import 'package:resonance/core/widgets/reusable_hover_icon_button.dart';
 import 'package:resonance/core/widgets/app_back_button.dart';
 import 'package:resonance/core/widgets/online_track_badge.dart';
-// import 'package:resonance/core/widgets/hover_widgets.dart'; // Unused
+import 'package:resonance/features/playlist/application/playlist_io_helper.dart';
+import 'package:resonance/core/widgets/resonance_context_menu.dart';
+import 'package:resonance/core/utils/app_icons.dart';
 
 class PlaylistDetailScreen extends ConsumerWidget {
   const PlaylistDetailScreen({super.key, required this.playlistId});
@@ -90,6 +92,21 @@ class PlaylistDetailScreen extends ConsumerWidget {
                       );
                     },
                   ),
+                  if (state.online.any((p) => p.id == playlist.id))
+                    ResonanceContextMenu(
+                      items: PlaylistIOHelper.buildPlaylistMenuItems(
+                        context: context,
+                        ref: ref,
+                        playlist: playlist,
+                        isOnline: true,
+                        onDeleteSuccess: () => ref.read(selectedPlaylistIdProvider.notifier).setSelectedId(null),
+                      ),
+                      child: ReusableHoverIconButton(
+                        icon: AppIcons.moreVert,
+                        tooltip: 'More options',
+                        iconSize: 18,
+                      ),
+                    ),
                 ],
                 flexibleSpace: ClipRect(
                   child: BackdropFilter(
@@ -193,27 +210,28 @@ class PlaylistDetailScreen extends ConsumerWidget {
                         horizontal: 16,
                         vertical: 4,
                       ),
-                      leading: MediaArtworkWidget(
-                        item: track,
-                        width: 48,
-                        height: 48,
-                        borderRadius: 6,
-                        placeholderIcon: isOnline ? UIcons.regular.globe : UIcons.regular.music,
-                      ),
-                      title: Row(
+                      leading: Stack(
+                        clipBehavior: Clip.none,
                         children: [
-                          Expanded(
-                            child: Text(
-                              track.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                          MediaArtworkWidget(
+                            item: track,
+                            width: 48,
+                            height: 48,
+                            borderRadius: 6,
+                            placeholderIcon: isOnline ? UIcons.regular.globe : UIcons.regular.music,
                           ),
-                          if (isOnline) ...[
-                            const SizedBox(width: 6),
-                            const OnlineTrackBadge(),
-                          ],
+                          if (isOnline)
+                            const Positioned(
+                              top: -4,
+                              left: -4,
+                              child: OnlineTrackBadge(),
+                            ),
                         ],
+                      ),
+                      title: Text(
+                        track.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       subtitle: Text(
                         track.artist ?? 'Unknown Artist',

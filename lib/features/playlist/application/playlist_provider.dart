@@ -250,6 +250,9 @@ class PlaylistNotifier extends AsyncNotifier<PlaylistState> {
     if (state.value == null) return;
     try {
       final Map<String, dynamic> data = jsonDecode(jsonString);
+      if (!data.containsKey('id') || !data.containsKey('name') || !data.containsKey('tracks')) {
+        throw const FormatException('Invalid playlist JSON format. Missing required fields.');
+      }
       final imported = Playlist.fromJson(data);
       
       // Force "str_" prefix to indicate stream playlist type

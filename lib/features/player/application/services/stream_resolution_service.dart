@@ -68,11 +68,14 @@ class StreamResolutionService {
     return streamUrl;
   }
 
-  /// Builds the [Media] object for media_kit, adding the anti-ban User-Agent
-  /// header for HTTP streams.
   Media buildMedia(String resolvedPath) {
     if (resolvedPath.startsWith('http')) {
-      return Media(resolvedPath, httpHeaders: {'User-Agent': _defaultUserAgent});
+      final userAgent = resolvedPath.contains('c=ANDROID_VR')
+          ? 'com.google.android.apps.youtube.vr.oculus/1.56.21 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip'
+          : resolvedPath.contains('c=IOS')
+              ? 'com.google.ios.youtube/19.29.1 (iPhone14,3; U; CPU iOS 15_6_1 like Mac OS X)'
+              : _defaultUserAgent;
+      return Media(resolvedPath, httpHeaders: {'User-Agent': userAgent});
     }
     return Media(resolvedPath);
   }
