@@ -6,7 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'data_usage_service.dart';
 import 'cache_manager.dart';
-import '../../../features/library/data/models/media_item.dart';
+import 'package:resonance/core/domain/models/media_item.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'stream_cache_tracker_service.dart';
 

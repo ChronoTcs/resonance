@@ -1,22 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:resonance/core/providers/search_provider.dart';
 import '../../data/repositories/youtube_search_repository.dart';
 import '../../data/models/explore_item.dart';
 import '../../../player/application/providers/audio_provider.dart';
 import '../../../library/data/models/media_item.dart';
 
-class SearchStateNotifier extends Notifier<bool> {
-  @override
-  bool build() => false;
-  void setSearching(bool isSearching) => state = isSearching;
-}
-final searchStateProvider = NotifierProvider<SearchStateNotifier, bool>(() => SearchStateNotifier());
+// ponytail: re-export from core so existing callers of explore_provider don't break
+export 'package:resonance/core/providers/search_provider.dart'
+    show searchQueryProvider, searchStateProvider, SearchQueryNotifier, SearchStateNotifier;
 
-class SearchQueryNotifier extends Notifier<String> {
-  @override
-  String build() => '';
-  void setQuery(String query) => state = query;
-}
-final searchQueryProvider = NotifierProvider<SearchQueryNotifier, String>(() => SearchQueryNotifier());
 
 final searchResultsProvider = FutureProvider<List<ExploreItem>>((ref) async {
   final query = ref.watch(searchQueryProvider);

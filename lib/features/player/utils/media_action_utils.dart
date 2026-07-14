@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance/features/library/data/models/media_item.dart';
-import 'package:resonance/core/widgets/media_actions_bottom_sheet.dart';
+import 'package:resonance/features/library/presentation/widgets/media_actions_bottom_sheet.dart';
 import 'package:resonance/features/library/application/library_provider.dart';
 import 'package:resonance/features/player/application/providers/audio_provider.dart';
 

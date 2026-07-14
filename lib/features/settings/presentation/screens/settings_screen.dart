@@ -9,7 +9,7 @@ import '../widgets/audio_settings_section.dart';
 import '../widgets/translation_section.dart';
 import '../widgets/downloads_settings_section.dart';
 import '../widgets/support_update_section.dart';
-import '../../../../core/widgets/top_navigation_header.dart';
+import 'package:resonance/features/dashboard/presentation/widgets/top_navigation_header.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -34,40 +34,41 @@ class SettingsScreen extends ConsumerWidget {
               left: Row(
                 children: [
                   SizedBox(
-                    width: 100,
+                    width: 140,
                     child: Text(
                       'Settings',
                       style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  SizedBox(
-                    height: 50,
-                    width: 380,
-                    child: TabBar(
-                      isScrollable: true,
-                      tabAlignment: TabAlignment.start,
-                      dividerColor: Colors.transparent,
-                      indicatorSize: TabBarIndicatorSize.label,
-                      overlayColor: WidgetStateProperty.resolveWith<Color?>((states) {
-                        if (states.contains(WidgetState.hovered)) {
-                          return theme.primaryColor.withValues(alpha: 0.08);
-                        }
-                        return null;
-                      }),
-                      tabs: [
-                        for (final t in tabs)
-                          Tab(
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(t.icon, size: 14),
-                                const SizedBox(width: 6),
-                                Text(t.label),
-                              ],
+                  const SizedBox(width: 24),
+                  Expanded(
+                    child: SizedBox(
+                      height: 50,
+                      child: TabBar(
+                        isScrollable: true,
+                        tabAlignment: TabAlignment.start,
+                        dividerColor: Colors.transparent,
+                        indicatorSize: TabBarIndicatorSize.label,
+                        overlayColor: WidgetStateProperty.resolveWith<Color?>((states) {
+                          if (states.contains(WidgetState.hovered)) {
+                            return theme.primaryColor.withValues(alpha: 0.08);
+                          }
+                          return null;
+                        }),
+                        tabs: [
+                          for (final t in tabs)
+                            Tab(
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(t.icon, size: 14),
+                                  const SizedBox(width: 6),
+                                  Text(t.label),
+                                ],
+                              ),
                             ),
-                          ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ],

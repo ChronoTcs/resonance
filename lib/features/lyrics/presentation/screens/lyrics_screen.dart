@@ -1,3 +1,4 @@
+import 'package:resonance/core/widgets/widgets.dart';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -5,9 +6,8 @@ import '../../application/lyrics_provider.dart';
 import 'package:resonance/core/theme/theme_provider.dart';
 import '../../../player/application/providers/audio_provider.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
-import 'package:resonance/core/widgets/media_artwork_widget.dart';
-import 'package:resonance/core/widgets/collapse_button.dart';
-import '../providers/lyrics_ui_provider.dart';
+
+import 'package:resonance/core/providers/overlay_provider.dart';
 import '../../application/lyrics_translation_provider.dart';
 import '../widgets/lyrics_retry_button.dart';
 import '../widgets/lyrics_translation_toggle.dart';

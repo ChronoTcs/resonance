@@ -1,8 +1,8 @@
+import 'package:resonance/core/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance/core/utils/uicons.dart';
-import 'package:resonance/core/widgets/resonance_selector.dart';
-import 'package:resonance/core/widgets/reusable_hover_icon_button.dart';
+
 import '../../../download/application/providers/download_settings_provider.dart';
 
 class DownloadsSettingsSection extends ConsumerWidget {
@@ -11,7 +11,6 @@ class DownloadsSettingsSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settingsAsync = ref.watch(downloadSettingsProvider);
-
 
     return settingsAsync.when(
       data: (settings) {

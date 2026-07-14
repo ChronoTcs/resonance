@@ -1,15 +1,15 @@
+import 'package:resonance/core/widgets/widgets.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:silky_scroll/silky_scroll.dart';
 import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/core/utils/app_icons.dart';
-import 'package:resonance/core/widgets/resonance_button.dart';
-import 'package:resonance/core/widgets/resonance_selector.dart';
+
 import 'package:resonance/features/download/data/models/download_item.dart';
 import 'package:resonance/features/download/application/providers/download_provider.dart';
 import 'package:resonance/features/download/application/providers/download_settings_provider.dart';
-import 'package:resonance/core/widgets/top_navigation_header.dart';
+import 'package:resonance/features/dashboard/presentation/widgets/top_navigation_header.dart';
 
 class DownloadScreen extends ConsumerStatefulWidget {
   const DownloadScreen({super.key});
@@ -91,16 +91,13 @@ class _DownloadScreenState extends ConsumerState<DownloadScreen>
               left: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  SizedBox(
-                    width: 180,
-                    child: Text(
-                      'Download Manager',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                  Text(
+                    'Download Manager',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(width: 32),
+                  const SizedBox(width: 24),
                   Text(
                     '$activeCount active · $queuedCount queued · $doneCount done',
                     style: theme.textTheme.bodySmall?.copyWith(
@@ -113,13 +110,10 @@ class _DownloadScreenState extends ConsumerState<DownloadScreen>
             ),
           ] else ...[
             TopNavigationHeader(
-              left: SizedBox(
-                width: 180,
-                child: Text(
-                  'Download Manager',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+              left: Text(
+                'Download Manager',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
                 ),
               ),
               right: const SizedBox(),

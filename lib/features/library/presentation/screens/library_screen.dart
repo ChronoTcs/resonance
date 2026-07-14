@@ -1,15 +1,14 @@
+import 'package:resonance/core/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:silky_scroll/silky_scroll.dart';
 import '../../application/library_provider.dart';
 import '../../data/models/media_item.dart';
 import '../../../player/application/services/queue_orchestrator.dart';
-import '../../../../core/widgets/media_actions_bottom_sheet.dart';
-import '../../../../core/widgets/media_artwork_widget.dart';
+import 'package:resonance/features/library/presentation/widgets/media_actions_bottom_sheet.dart';
 import 'package:resonance/core/utils/uicons.dart';
-import 'package:resonance/core/widgets/reusable_hover_icon_button.dart';
-import 'package:resonance/core/widgets/overflow_menu_button.dart';
-import 'package:resonance/core/widgets/top_navigation_header.dart';
+
+import 'package:resonance/features/dashboard/presentation/widgets/top_navigation_header.dart';
 import 'package:resonance/features/playlist/presentation/screens/playlist_screen.dart';
 
 class LibraryScreen extends ConsumerStatefulWidget {
@@ -113,7 +112,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                 : Row(
                     children: [
                       SizedBox(
-                        width: 120,
+                        width: 140,
                         child: Text(
                           'Local Library',
                           style: theme.textTheme.titleMedium?.copyWith(
@@ -121,42 +120,43 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                           ),
                         ),
                       ),
-                      const SizedBox(width: 32),
-                      SizedBox(
-                        height: 50,
-                        width: 260,
-                        child: TabBar(
-                          controller: _tabController,
-                          dividerColor: Colors.transparent,
-                          indicatorSize: TabBarIndicatorSize.label,
-                          overlayColor: WidgetStateProperty.resolveWith<Color?>((states) {
-                            if (states.contains(WidgetState.hovered)) {
-                              return theme.primaryColor.withValues(alpha: 0.08);
-                            }
-                            return null;
-                          }),
-                          tabs: [
-                            Tab(
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(UIcons.regular.music, size: 14),
-                                  const SizedBox(width: 6),
-                                  const Text('Music'),
-                                ],
+                      const SizedBox(width: 24),
+                      Expanded(
+                        child: SizedBox(
+                          height: 50,
+                          child: TabBar(
+                            controller: _tabController,
+                            dividerColor: Colors.transparent,
+                            indicatorSize: TabBarIndicatorSize.label,
+                            overlayColor: WidgetStateProperty.resolveWith<Color?>((states) {
+                              if (states.contains(WidgetState.hovered)) {
+                                return theme.primaryColor.withValues(alpha: 0.08);
+                              }
+                              return null;
+                            }),
+                            tabs: [
+                              Tab(
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(UIcons.regular.music, size: 14),
+                                    const SizedBox(width: 6),
+                                    const Text('Music'),
+                                  ],
+                                ),
                               ),
-                            ),
-                            Tab(
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(UIcons.regular.list_music, size: 14),
-                                  const SizedBox(width: 6),
-                                  const Text('Playlists'),
-                                ],
+                              Tab(
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(UIcons.regular.list_music, size: 14),
+                                    const SizedBox(width: 6),
+                                    const Text('Playlists'),
+                                  ],
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ],
@@ -286,8 +286,6 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
       },
     );
   }
-
-
 
   void _confirmDelete(BuildContext context, WidgetRef ref, MediaItem item) {
     showDialog(

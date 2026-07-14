@@ -5,10 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/core/theme/theme_provider.dart';
-import 'package:resonance/features/player/application/providers/audio_provider.dart';
-
 class CustomTitleBar extends ConsumerStatefulWidget {
-  const CustomTitleBar({super.key});
+  final String? nowPlayingTitle;
+  const CustomTitleBar({super.key, this.nowPlayingTitle});
 
   @override
   ConsumerState<CustomTitleBar> createState() => _CustomTitleBarState();
@@ -121,12 +120,11 @@ class _CustomTitleBarState extends ConsumerState<CustomTitleBar> with WindowList
     }
 
     final theme = Theme.of(context);
-    final currentTrack = ref.watch(currentTrackProvider);
     final themeMode = ref.watch(themeProvider);
     final accentMode = ref.watch(accentColorProvider);
 
-    final titleText = currentTrack != null
-        ? '${currentTrack.title} - ${currentTrack.artist ?? "Unknown"} | Resonance'
+    final titleText = widget.nowPlayingTitle != null
+        ? '${widget.nowPlayingTitle} | Resonance'
         : 'Resonance';
 
     // Resolve palette/accent gradient colors dynamically from the ColorScheme

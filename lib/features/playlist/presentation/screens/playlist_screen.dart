@@ -1,3 +1,4 @@
+import 'package:resonance/core/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance/core/utils/uicons.dart';
@@ -6,11 +7,9 @@ import 'package:resonance/features/playlist/data/models/playlist_model.dart';
 import 'package:resonance/features/playlist/application/playlist_provider.dart';
 import 'package:resonance/features/playlist/application/playlist_io_helper.dart';
 import 'package:resonance/features/playlist/presentation/screens/playlist_detail_screen.dart';
-import 'package:resonance/core/widgets/reusable_hover_icon_button.dart';
-import 'package:resonance/core/widgets/resonance_button.dart';
-import 'package:resonance/core/widgets/resonance_context_menu.dart';
-import 'package:resonance/core/widgets/media_artwork_widget.dart';
-import 'package:resonance/core/widgets/top_navigation_header.dart';
+
+import 'package:resonance/features/dashboard/presentation/widgets/top_navigation_header.dart';
+import 'package:resonance/features/playlist/presentation/widgets/playlist_tile.dart';
 
 class PlaylistScreen extends ConsumerWidget {
   final bool isLocalOnly;
@@ -44,7 +43,7 @@ class PlaylistScreen extends ConsumerWidget {
               left: Row(
                 children: [
                   SizedBox(
-                    width: 180,
+                    width: 140,
                     child: Text(
                       'Playlists',
                       style: theme.textTheme.titleMedium?.copyWith(
@@ -52,41 +51,42 @@ class PlaylistScreen extends ConsumerWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 32),
-                  SizedBox(
-                    height: 50,
-                    width: 260,
-                    child: TabBar(
-                      dividerColor: Colors.transparent,
-                      indicatorSize: TabBarIndicatorSize.label,
-                      overlayColor: WidgetStateProperty.resolveWith<Color?>((states) {
-                        if (states.contains(WidgetState.hovered)) {
-                          return theme.primaryColor.withValues(alpha: 0.08);
-                        }
-                        return null;
-                      }),
-                      tabs: [
-                        Tab(
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(UIcons.regular.folder, size: 14),
-                              const SizedBox(width: 6),
-                              const Text('Local'),
-                            ],
+                  const SizedBox(width: 24),
+                  Expanded(
+                    child: SizedBox(
+                      height: 50,
+                      child: TabBar(
+                        dividerColor: Colors.transparent,
+                        indicatorSize: TabBarIndicatorSize.label,
+                        overlayColor: WidgetStateProperty.resolveWith<Color?>((states) {
+                          if (states.contains(WidgetState.hovered)) {
+                            return theme.primaryColor.withValues(alpha: 0.08);
+                          }
+                          return null;
+                        }),
+                        tabs: [
+                          Tab(
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(UIcons.regular.folder, size: 14),
+                                const SizedBox(width: 6),
+                                const Text('Local'),
+                              ],
+                            ),
                           ),
-                        ),
-                        Tab(
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(UIcons.regular.world, size: 14),
-                              const SizedBox(width: 6),
-                              const Text('Stream'),
-                            ],
+                          Tab(
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(UIcons.regular.world, size: 14),
+                                const SizedBox(width: 6),
+                                const Text('Stream'),
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -210,7 +210,7 @@ class PlaylistScreen extends ConsumerWidget {
         itemCount: playlists.length,
         itemBuilder: (ctx, i) {
           final playlist = playlists[i];
-          return _PlaylistTile(playlist: playlist, isOnline: isOnline);
+          return PlaylistTile(playlist: playlist, isOnline: isOnline);
         },
       ),
     );
@@ -356,94 +356,4 @@ class PlaylistScreen extends ConsumerWidget {
     );
   }
 }
-
-// ──────────────────────────────────────────────────────────
-class _PlaylistTile extends ConsumerWidget {
-  const _PlaylistTile({required this.playlist, this.isOnline = false});
-  final Playlist playlist;
-  final bool isOnline;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final firstTrack = playlist.tracks.isNotEmpty ? playlist.tracks.first : null;
-
-    return Card(
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: ReusableHoverIconButton(
-        tooltip: 'Open Playlist',
-        padding: 12,
-        scaleOnHover: 1.0, // No scale for list tile card
-        onTap: () {
-          ref.read(selectedPlaylistIdProvider.notifier).setSelectedId(playlist.id);
-        },
-        child: Row(
-          children: [
-            // Thumbnail
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: firstTrack != null
-                  ? MediaArtworkWidget(
-                      item: firstTrack,
-                      width: 56,
-                      height: 56,
-                      borderRadius: 8,
-                      placeholderIcon: AppIcons.playlist,
-                    )
-                  : Container(
-                      width: 56,
-                      height: 56,
-                      color: theme.colorScheme.surfaceContainerHighest,
-                      child: Icon(
-                        AppIcons.playlist,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-            ),
-            const SizedBox(width: 12),
-            // Info
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    playlist.name,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${playlist.tracks.length} track${playlist.tracks.length == 1 ? '' : 's'} • ${isOnline ? 'Stream' : 'Local'}',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: isOnline ? theme.colorScheme.primary : theme.hintColor,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            // Context menu
-            ResonanceContextMenu(
-              items: PlaylistIOHelper.buildPlaylistMenuItems(
-                context: context,
-                ref: ref,
-                playlist: playlist,
-                isOnline: isOnline,
-              ),
-              child: ReusableHoverIconButton(
-                icon: AppIcons.moreVert,
-                tooltip: 'More options',
-                iconSize: 16,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 

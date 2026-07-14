@@ -1,3 +1,4 @@
+import 'package:resonance/core/widgets/widgets.dart';
 import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -7,9 +8,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'playlist_provider.dart';
 import '../data/models/playlist_model.dart';
-import 'package:resonance/core/widgets/resonance_confirm_dialog.dart';
-import 'package:resonance/core/widgets/resonance_button.dart';
-import 'package:resonance/core/widgets/resonance_context_menu.dart';
+
 import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/core/utils/app_icons.dart';
 import 'package:resonance/features/player/application/providers/audio_provider.dart';

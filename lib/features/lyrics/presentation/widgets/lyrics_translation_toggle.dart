@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../application/lyrics_translation_provider.dart';
-import '../../../../core/widgets/reusable_hover_icon_button.dart';
+import 'package:resonance/core/widgets/widgets.dart';
 
 class LyricsTranslationToggle extends ConsumerWidget {
   final double iconSize;

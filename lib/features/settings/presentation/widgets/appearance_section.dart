@@ -1,8 +1,8 @@
+import 'package:resonance/core/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance/core/utils/uicons.dart';
-import 'package:resonance/core/widgets/resonance_selector.dart';
-import 'package:resonance/core/widgets/resonance_slider.dart';
+
 import '../../../../core/theme/theme_provider.dart';
 
 class AppearanceSection extends ConsumerWidget {

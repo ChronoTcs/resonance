@@ -13,22 +13,20 @@ import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:system_theme/system_theme.dart';
 import 'dart:convert';
-import 'core/widgets/blur_transition_overlay.dart';
-import 'core/widgets/global_shortcut_wrapper.dart';
+import 'package:resonance/features/dashboard/presentation/widgets/overlay_layer.dart';
+import 'package:resonance/features/player/presentation/widgets/player_shortcut_wrapper.dart';
 import 'core/data/services/storage_service.dart';
 import 'core/configs/provider_observer.dart';
-import 'core/data/services/data_usage_service.dart';
+
 import 'core/routing/route_provider.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'features/player/application/audio_handler.dart';
 import 'core/data/services/po_token_provider_service.dart';
-
-import 'package:resonance/features/player/presentation/widgets/mini_player/floating/floating_window.dart';
-import 'package:resonance/features/player/presentation/notifiers/mini_player_view_notifier.dart';
-import 'package:resonance/features/settings/application/notification_provider.dart';
-import 'package:resonance/features/settings/application/update_provider.dart';
+import 'package:resonance/features/settings/application/startup_service.dart';
+import 'package:resonance/core/application/services/window_persistence_service.dart';
+import 'package:resonance/core/application/services/lifecycle_service.dart';
 
 Future<void> _cleanSharedPreferences() async {
   try {
@@ -203,7 +201,7 @@ void main() async {
 
   if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
     await windowManager.ensureInitialized();
-    windowManager.addListener(_GlobalWindowListener());
+    windowManager.addListener(AppWindowStyleListener());
     final prefs = await SharedPreferences.getInstance();
 
     final width = prefs.getDouble('window_width') ?? 1280;
@@ -250,83 +248,27 @@ class ResonanceApp extends ConsumerStatefulWidget {
   ConsumerState<ResonanceApp> createState() => _ResonanceAppState();
 }
 
-class _ResonanceAppState extends ConsumerState<ResonanceApp>
-    with WindowListener {
-  late final AppLifecycleListener _lifecycleListener;
+class _ResonanceAppState extends ConsumerState<ResonanceApp> {
+  late final WindowPersistenceService _windowService;
+  late final AppLifecycleService _lifecycleService;
 
   @override
   void initState() {
     super.initState();
-    windowManager.addListener(this);
-
-    _lifecycleListener = AppLifecycleListener(
-      onStateChange: (state) {
-        if (state == AppLifecycleState.hidden ||
-            state == AppLifecycleState.paused ||
-            state == AppLifecycleState.detached) {
-          ref.read(dataUsageServiceProvider).flush();
-        }
-      },
-    );
+    _windowService = WindowPersistenceService(ref);
+    _lifecycleService = AppLifecycleService(ref);
+    windowManager.addListener(_windowService);
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      // Lazy initialization of notification provider
-      ref.read(notificationProvider);
-
-      // Auto update check on startup
-      try {
-        final updateNotifier = ref.read(updateProvider.notifier);
-        await updateNotifier.checkForUpdate();
-        final updateState = ref.read(updateProvider);
-        if (updateState.updateAvailable) {
-          ref.read(notificationProvider.notifier).showNotification(
-            'Update Available',
-            'A new version (${updateState.latestVersion}) is available. Click to download.',
-          );
-        }
-      } catch (e) {
-        debugPrint('Startup update check failed: $e');
-      }
+      await runStartupChecks(ref);
     });
   }
 
   @override
   void dispose() {
-    poTokenProviderService.stop();
-    _lifecycleListener.dispose();
-    windowManager.removeListener(this);
+    windowManager.removeListener(_windowService);
+    _lifecycleService.dispose();
     super.dispose();
-  }
-
-  @override
-  void onWindowResized() async {
-    final popState = ref.read(miniPlayerPopProvider);
-    if (popState.isPopped) return;
-
-    final size = await windowManager.getSize();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble('window_width', size.width);
-    await prefs.setDouble('window_height', size.height);
-  }
-
-  @override
-  void onWindowMoved() async {
-    final popState = ref.read(miniPlayerPopProvider);
-    if (popState.isPopped) return;
-
-    final pos = await windowManager.getPosition();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble('window_x', pos.dx);
-    await prefs.setDouble('window_y', pos.dy);
-  }
-
-  @override
-  void onWindowClose() async {
-    if (Platform.isWindows) {
-      await windowManager.hide();
-    } else {
-      await windowManager.destroy();
-    }
   }
 
   @override
@@ -357,81 +299,8 @@ class _ResonanceAppState extends ConsumerState<ResonanceApp>
       theme: AppTheme.getLightTheme(accentColor),
       darkTheme: AppTheme.getDarkTheme(accentColor, isOnyx: appThemeMode == AppThemeMode.onyx),
       scrollBehavior: FluentScrollBehavior(),
-      builder: (context, child) {
-        final content = Material(
-          color: Colors.black,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              // Layer 1: Main Application Navigator (Base Layer)
-              // We watch isPopped here to hide the main UI, but child! stays fresh outside Overlay.
-              Consumer(
-                builder: (context, ref, _) {
-                  final isPopped = ref.watch(miniPlayerPopProvider).isPopped;
-                  return Offstage(
-                    offstage: isPopped,
-                    child: OverflowBox(
-                      minWidth: 0,
-                      maxWidth: isPopped ? 4000 : null,
-                      minHeight: 0,
-                      maxHeight: isPopped ? 4000 : null,
-                      alignment: Alignment.topLeft,
-                      child: child!,
-                    ),
-                  );
-                },
-              ),
-
-              // Layer 2: Sibling Global Overlay (Top Layer)
-              // This provides the Overlay context for Tooltips and PiP without trapping the main app.
-              Positioned.fill(
-                child: Overlay(
-                  initialEntries: [
-                    OverlayEntry(
-                      builder: (context) => Consumer(
-                        builder: (context, ref, _) {
-                          final isPopped = ref
-                              .watch(miniPlayerPopProvider)
-                              .isPopped;
-                          return Material(
-                            type: MaterialType.transparency,
-                            child: Stack(
-                              children: [
-                                if (isPopped && Platform.isWindows)
-                                  const FloatingWindow(),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // Layer 3: Global blur flash — covers all layers during non-nav transitions
-              const BlurTransitionLayer(),
-            ],
-          ),
-        );
-        if (Platform.isWindows) {
-          return ExcludeSemantics(child: content);
-        }
-        return content;
-      },
-      home: const GlobalShortcutWrapper(child: MainDashboard()),
+      builder: (context, child) => OverlayLayer(child: child!),
+      home: const PlayerShortcutWrapper(child: MainDashboard()),
     );
-  }
-}
-
-class _GlobalWindowListener extends WindowListener {
-  @override
-  void onWindowLeaveFullScreen() {
-    windowManager.setTitleBarStyle(TitleBarStyle.hidden);
-  }
-
-  @override
-  void onWindowRestore() {
-    windowManager.setTitleBarStyle(TitleBarStyle.hidden);
   }
 }

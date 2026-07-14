@@ -1,15 +1,15 @@
+import 'package:resonance/core/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/core/utils/app_icons.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart' as yt;
-import '../../features/library/data/models/media_item.dart';
-import '../../features/playlist/application/playlist_provider.dart';
-import '../../features/download/application/providers/download_provider.dart';
-import '../../features/download/data/models/download_item.dart';
-import '../../core/providers/navigation_provider.dart';
-import 'package:resonance/core/widgets/resonance_button.dart';
+import 'package:resonance/features/library/data/models/media_item.dart';
+import 'package:resonance/features/playlist/application/playlist_provider.dart';
+import 'package:resonance/features/download/application/providers/download_provider.dart';
+import 'package:resonance/features/download/data/models/download_item.dart';
+import 'package:resonance/core/providers/navigation_provider.dart';
 
 class MediaActionsBottomSheet extends ConsumerWidget {
   const MediaActionsBottomSheet({
@@ -151,13 +151,13 @@ class MediaActionsBottomSheet extends ConsumerWidget {
   }
 
   void _showPlaylistPicker(BuildContext context) {
+    final showOnline = item.isStreaming;
     showModalBottomSheet(
       context: context,
       builder: (_) => Consumer(
         builder: (context, ref, _) {
           final theme = Theme.of(context);
           final playlistsAsync = ref.watch(playlistProvider);
-          final showOnline = item.isStreaming;
 
           return playlistsAsync.when(
             data: (state) {

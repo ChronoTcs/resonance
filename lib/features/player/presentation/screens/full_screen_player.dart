@@ -1,13 +1,14 @@
+import 'package:resonance/core/widgets/widgets.dart';
 import 'dart:ui';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
-import 'package:resonance/core/widgets/blur_transition_overlay.dart';
-import 'package:resonance/features/lyrics/presentation/providers/lyrics_ui_provider.dart';
+
+import 'package:resonance/core/providers/overlay_provider.dart';
 import 'package:resonance/features/lyrics/presentation/screens/lyrics_screen.dart';
-import 'package:resonance/core/widgets/media_artwork_widget.dart';
+
 import 'package:resonance/features/player/application/providers/audio_provider.dart';
 import 'package:resonance/features/player/presentation/widgets/full_screen_player/full_screen_audio_view.dart';
 import 'package:resonance/features/player/presentation/widgets/full_screen_player/full_screen_bottom_bar.dart';

@@ -1,8 +1,9 @@
+import 'package:resonance/core/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance/core/utils/uicons.dart';
-import 'package:resonance/core/widgets/top_navigation_header.dart';
-import 'package:resonance/core/widgets/glossy_animated_background.dart';
+import 'package:resonance/features/dashboard/presentation/widgets/top_navigation_header.dart';
+
 import 'package:resonance/features/home/presentation/providers/home_navigation_provider.dart';
 import 'package:resonance/features/home/presentation/screens/components/recent_sub_page.dart';
 import 'package:resonance/features/home/presentation/screens/components/playlist_sub_page.dart';
@@ -86,7 +87,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
               left: Row(
                 children: [
                   SizedBox(
-                    width: 100,
+                    width: 140,
                     child: Text(
                       'Home',
                       style: theme.textTheme.titleMedium?.copyWith(
@@ -94,52 +95,53 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
                       ),
                     ),
                   ),
-                  const SizedBox(width: 32),
-                  SizedBox(
-                    height: 50,
-                    width: 360,
-                    child: TabBar(
-                      controller: _tabController,
-                      dividerColor: Colors.transparent,
-                      indicatorSize: TabBarIndicatorSize.label,
-                      overlayColor: WidgetStateProperty.resolveWith<Color?>((states) {
-                        if (states.contains(WidgetState.hovered)) {
-                          return theme.primaryColor.withValues(alpha: 0.08);
-                        }
-                        return null;
-                      }),
-                      tabs: [
-                        Tab(
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(UIcons.regular.clock, size: 14),
-                              const SizedBox(width: 6),
-                              const Text('Recent'),
-                            ],
+                  const SizedBox(width: 24),
+                  Expanded(
+                    child: SizedBox(
+                      height: 50,
+                      child: TabBar(
+                        controller: _tabController,
+                        dividerColor: Colors.transparent,
+                        indicatorSize: TabBarIndicatorSize.label,
+                        overlayColor: WidgetStateProperty.resolveWith<Color?>((states) {
+                          if (states.contains(WidgetState.hovered)) {
+                            return theme.primaryColor.withValues(alpha: 0.08);
+                          }
+                          return null;
+                        }),
+                        tabs: [
+                          Tab(
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(UIcons.regular.clock, size: 14),
+                                const SizedBox(width: 6),
+                                const Text('Recent'),
+                              ],
+                            ),
                           ),
-                        ),
-                        Tab(
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(UIcons.regular.list_music, size: 14),
-                              const SizedBox(width: 6),
-                              const Text('Playlists'),
-                            ],
+                          Tab(
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(UIcons.regular.list_music, size: 14),
+                                const SizedBox(width: 6),
+                                const Text('Playlists'),
+                              ],
+                            ),
                           ),
-                        ),
-                        Tab(
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(UIcons.regular.user, size: 14),
-                              const SizedBox(width: 6),
-                              const Text('Artists'),
-                            ],
+                          Tab(
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(UIcons.regular.user, size: 14),
+                                const SizedBox(width: 6),
+                                const Text('Artists'),
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -149,7 +151,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
           ] else ...[
             TopNavigationHeader(
               left: SizedBox(
-                width: 180,
+                width: 140,
                 child: Text(
                   'Home',
                   style: theme.textTheme.titleMedium?.copyWith(

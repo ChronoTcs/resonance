@@ -1,8 +1,8 @@
+import 'package:resonance/core/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance/core/utils/uicons.dart';
-import 'package:resonance/core/widgets/resonance_selector.dart';
-import 'package:resonance/core/widgets/resonance_switch.dart';
+
 import '../../../lyrics/application/lyrics_translation_provider.dart';
 
 class TranslationSection extends ConsumerWidget {

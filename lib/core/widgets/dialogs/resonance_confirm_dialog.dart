@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:resonance/core/widgets/resonance_button.dart';
+import '../buttons/resonance_button.dart';
 
 class ResonanceConfirmDialog extends StatelessWidget {
   final String title;

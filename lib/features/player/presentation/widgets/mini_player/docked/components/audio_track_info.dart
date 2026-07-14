@@ -1,7 +1,8 @@
+import 'package:resonance/core/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance/features/library/data/models/media_item.dart';
-import 'package:resonance/core/widgets/media_artwork_widget.dart';
+
 import 'package:resonance/core/utils/formatters.dart';
 import 'package:resonance/features/player/application/providers/audio_provider.dart';
 

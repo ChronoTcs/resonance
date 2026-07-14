@@ -1,10 +1,11 @@
+import 'package:resonance/core/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance/features/library/data/models/media_item.dart';
 import 'package:resonance/features/library/application/library_provider.dart';
 import 'package:resonance/features/player/application/services/queue_orchestrator.dart';
-import 'package:resonance/core/widgets/media_artwork_widget.dart';
-import 'package:resonance/core/widgets/media_actions_bottom_sheet.dart';
+
+import 'package:resonance/features/library/presentation/widgets/media_actions_bottom_sheet.dart';
 
 class TrackCard extends ConsumerWidget {
   const TrackCard({super.key, required this.track});

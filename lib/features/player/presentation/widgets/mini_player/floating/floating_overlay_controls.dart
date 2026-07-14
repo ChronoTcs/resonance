@@ -1,9 +1,10 @@
+import 'package:resonance/core/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance/features/player/application/providers/audio_provider.dart';
 import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/features/player/presentation/notifiers/mini_player_view_notifier.dart';
-import 'package:resonance/core/widgets/reusable_hover_icon_button.dart';
+
 import 'package:resonance/features/player/data/models/player_enums.dart';
 
 class FloatingOverlayControls extends ConsumerStatefulWidget {

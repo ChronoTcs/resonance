@@ -1,18 +1,17 @@
+import 'package:resonance/core/widgets/widgets.dart';
 import 'dart:ui';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/features/player/application/providers/audio_provider.dart';
-import 'package:resonance/features/lyrics/presentation/providers/lyrics_ui_provider.dart';
-import 'package:resonance/core/widgets/media_artwork_widget.dart';
-import 'package:resonance/core/widgets/media_actions_bottom_sheet.dart';
+import 'package:resonance/core/providers/overlay_provider.dart';
+
+import 'package:resonance/features/library/presentation/widgets/media_actions_bottom_sheet.dart';
 import '../widgets/player_cards.dart';
 import '../widgets/equalizer_sheet.dart';
-import 'package:resonance/core/widgets/reusable_hover_icon_button.dart';
-import 'package:resonance/core/widgets/collapse_button.dart';
-import 'package:resonance/core/widgets/overflow_menu_button.dart';
-// import 'package:resonance/core/widgets/hover_widgets.dart'; // Unused
+
+//  // Unused
 
 class NowPlayingScreen extends ConsumerWidget {
   const NowPlayingScreen({super.key});

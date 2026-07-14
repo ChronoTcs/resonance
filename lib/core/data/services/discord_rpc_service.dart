@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:dart_discord_presence/dart_discord_presence.dart';
-import '../../../features/library/data/models/media_item.dart';
+import 'package:resonance/core/domain/models/media_item.dart';
 import 'rpc_cache_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

@@ -1,10 +1,11 @@
+import 'package:resonance/core/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:silky_scroll/silky_scroll.dart';
 import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/features/library/application/library_provider.dart';
 import 'package:resonance/features/player/application/services/queue_orchestrator.dart';
-import 'package:resonance/core/widgets/media_artwork_widget.dart';
+
 import 'package:resonance/features/home/presentation/providers/home_navigation_provider.dart';
 
 class ArtistSubPage extends ConsumerWidget {

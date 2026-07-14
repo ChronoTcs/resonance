@@ -1,3 +1,4 @@
+import 'package:resonance/core/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:silky_scroll/silky_scroll.dart';
@@ -6,12 +7,11 @@ import 'package:resonance/features/explore/presentation/providers/explore_provid
 import 'package:resonance/features/player/application/providers/audio_provider.dart';
 import 'package:resonance/features/library/data/models/media_item.dart';
 import 'package:resonance/features/home/presentation/providers/recently_played_provider.dart';
-import 'package:resonance/core/widgets/media_actions_bottom_sheet.dart';
-import 'package:resonance/core/widgets/media_artwork_widget.dart';
-import 'package:resonance/core/widgets/overflow_menu_button.dart';
+import 'package:resonance/features/library/presentation/widgets/media_actions_bottom_sheet.dart';
+
 import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/core/utils/app_icons.dart';
-import 'package:resonance/core/widgets/top_navigation_header.dart';
+import 'package:resonance/features/dashboard/presentation/widgets/top_navigation_header.dart';
 
 class ExploreScreen extends ConsumerStatefulWidget {
   const ExploreScreen({super.key});
@@ -184,8 +184,6 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
 ),
     );
   }
-
-
 
   Widget _buildRecentPlays(WidgetRef ref, ThemeData theme) {
     final recentAsync = ref.watch(recentlyPlayedProvider).whenData(

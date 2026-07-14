@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:resonance/core/utils/app_icons.dart';
-import '../../features/library/data/models/media_item.dart';
-import '../data/services/media_cache_service.dart';
+import 'package:resonance/core/domain/models/media_item.dart';
+import 'package:resonance/core/data/services/media_cache_service.dart';
 
 class MediaArtworkWidget extends ConsumerStatefulWidget {
   final MediaItem item;

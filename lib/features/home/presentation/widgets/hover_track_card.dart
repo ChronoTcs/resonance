@@ -1,3 +1,4 @@
+import 'package:resonance/core/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance/core/utils/uicons.dart';
@@ -8,8 +9,8 @@ import 'package:resonance/features/player/application/services/queue_orchestrato
 import 'package:resonance/features/player/application/providers/audio_provider.dart';
 import 'package:resonance/features/playlist/application/playlist_provider.dart';
 import 'package:resonance/features/playlist/data/models/playlist_model.dart';
-import 'package:resonance/core/widgets/media_artwork_widget.dart';
-import 'package:resonance/core/widgets/media_actions_bottom_sheet.dart';
+
+import 'package:resonance/features/library/presentation/widgets/media_actions_bottom_sheet.dart';
 
 class HoverTrackCard extends ConsumerStatefulWidget {
   const HoverTrackCard({super.key, required this.track});

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:resonance/core/utils/app_icons.dart';
-import 'package:resonance/core/widgets/reusable_hover_icon_button.dart';
+import 'reusable_hover_icon_button.dart';
 
 class CollapseButton extends StatelessWidget {
   const CollapseButton({

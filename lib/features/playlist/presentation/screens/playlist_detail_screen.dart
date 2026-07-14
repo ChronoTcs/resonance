@@ -1,4 +1,5 @@
 import 'dart:ui' show ImageFilter;
+import 'package:resonance/core/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:silky_scroll/silky_scroll.dart';
@@ -6,14 +7,12 @@ import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/features/player/application/providers/audio_provider.dart';
 import 'package:resonance/features/playlist/application/playlist_provider.dart';
 import 'package:resonance/features/library/application/library_provider.dart';
-import 'package:resonance/core/widgets/media_actions_bottom_sheet.dart';
-import 'package:resonance/core/widgets/media_artwork_widget.dart';
-import 'package:resonance/core/widgets/reusable_hover_icon_button.dart';
-import 'package:resonance/core/widgets/app_back_button.dart';
-import 'package:resonance/core/widgets/online_track_badge.dart';
+import 'package:resonance/features/library/presentation/widgets/media_actions_bottom_sheet.dart';
+
 import 'package:resonance/features/playlist/application/playlist_io_helper.dart';
-import 'package:resonance/core/widgets/resonance_context_menu.dart';
+
 import 'package:resonance/core/utils/app_icons.dart';
+import 'package:resonance/features/playlist/presentation/widgets/music_picker_sheet.dart';
 
 class PlaylistDetailScreen extends ConsumerWidget {
   const PlaylistDetailScreen({super.key, required this.playlistId});
@@ -88,7 +87,7 @@ class PlaylistDetailScreen extends ConsumerWidget {
                         context: context,
                         isScrollControlled: true,
                         useSafeArea: true,
-                        builder: (ctx) => _MusicPickerSheet(playlistId: playlistId),
+                        builder: (ctx) => MusicPickerSheet(playlistId: playlistId),
                       );
                     },
                   ),
@@ -276,116 +275,3 @@ class PlaylistDetailScreen extends ConsumerWidget {
   }
 }
 
-class _MusicPickerSheet extends ConsumerStatefulWidget {
-  final String playlistId;
-  const _MusicPickerSheet({required this.playlistId});
-
-  @override
-  ConsumerState<_MusicPickerSheet> createState() => _MusicPickerSheetState();
-}
-
-class _MusicPickerSheetState extends ConsumerState<_MusicPickerSheet> {
-  final Set<String> _selectedIds = {};
-  String _searchQuery = '';
-
-  @override
-  Widget build(BuildContext context) {
-    final libraryState = ref.watch(libraryProvider);
-    final theme = Theme.of(context);
-    
-    final playlistsAsync = ref.watch(playlistProvider);
-    final playlistStateObj = playlistsAsync.value;
-    final isStreamPlaylist = playlistStateObj != null &&
-        playlistStateObj.online.any((p) => p.id == widget.playlistId);
-
-    // Only show music for adding to playlists (filtering stream vs local tracks)
-    final music = libraryState.allMedia
-        .where((m) => m.type == 'audio' &&
-            (isStreamPlaylist ? m.isStreaming : m.isLocal) &&
-            (m.title.toLowerCase().contains(_searchQuery.toLowerCase()) || 
-             (m.artist?.toLowerCase().contains(_searchQuery.toLowerCase()) ?? false)))
-        .toList();
-
-    return DraggableScrollableSheet(
-      initialChildSize: 0.9,
-      minChildSize: 0.5,
-      maxChildSize: 0.95,
-      expand: false,
-      builder: (context, scrollController) {
-        return Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Row(
-                children: [
-                  Text('Add to Playlist', style: theme.textTheme.titleLarge),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: _selectedIds.isEmpty ? null : () async {
-                      final selectedTracks = libraryState.allMedia
-                          .where((m) => _selectedIds.contains(m.id ?? m.path))
-                          .toList();
-                      await ref.read(playlistProvider.notifier).addTracksToPlaylist(widget.playlistId, selectedTracks);
-                      if (context.mounted) Navigator.pop(context);
-                    },
-                    child: Text('Add (${_selectedIds.length})'),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: TextField(
-                decoration: InputDecoration(
-                  hintText: 'Search my music...',
-                  prefixIcon: Icon(UIcons.regular.search),
-                  filled: true,
-                  fillColor: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-                onChanged: (v) => setState(() => _searchQuery = v),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: SilkyListView.builder(
-                controller: scrollController,
-                itemCount: music.length,
-                itemBuilder: (context, index) {
-                  final track = music[index];
-                  final trackId = track.id ?? track.path;
-                  final isSelected = _selectedIds.contains(trackId);
-                  final alreadyInPlaylist = ref.read(playlistProvider.notifier).isTrackInPlaylist(widget.playlistId, track);
-
-                  return CheckboxListTile(
-                    value: isSelected || alreadyInPlaylist,
-                    onChanged: alreadyInPlaylist ? null : (v) {
-                      setState(() {
-                        if (v == true) {
-                          _selectedIds.add(trackId);
-                        } else {
-                          _selectedIds.remove(trackId);
-                        }
-                      });
-                    },
-                    title: Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-                    subtitle: Text(track.artist ?? 'Unknown Artist', maxLines: 1, overflow: TextOverflow.ellipsis),
-                    secondary: MediaArtworkWidget(
-                      item: track,
-                      width: 40,
-                      height: 40,
-                      borderRadius: 4,
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-}

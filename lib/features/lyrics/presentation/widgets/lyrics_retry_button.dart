@@ -1,9 +1,9 @@
+import 'package:resonance/core/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance/core/utils/uicons.dart';
 import '../../application/lyrics_translation_provider.dart';
-import 'package:resonance/core/widgets/reusable_hover_icon_button.dart';
-// import '../../../../core/widgets/hover_widgets.dart'; // Unused
+
 
 class LyricsRetryButton extends ConsumerStatefulWidget {
   final String modeLabel;
