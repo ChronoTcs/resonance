@@ -61,14 +61,15 @@ class _ResonanceButtonState extends State<ResonanceButton> {
             : theme.disabledColor.withValues(alpha: 0.2);
         break;
       case ResonanceButtonStyle.danger:
-        bg = isEnabled
+        bg = _isHovered
+            ? theme.colorScheme.error.withValues(alpha: 0.12)
+            : theme.colorScheme.surface.withValues(alpha: 0.4);
+        fg = isEnabled ? theme.colorScheme.error : theme.disabledColor;
+        border = isEnabled
             ? (_isHovered
-                ? theme.colorScheme.error.withValues(alpha: 0.85)
-                : theme.colorScheme.error)
-            : theme.disabledColor;
-        fg = ThemeData.estimateBrightnessForColor(bg) == Brightness.dark
-            ? Colors.white
-            : Colors.black87;
+                ? theme.colorScheme.error.withValues(alpha: 0.6)
+                : theme.colorScheme.error.withValues(alpha: 0.3))
+            : theme.disabledColor.withValues(alpha: 0.2);
         break;
     }
 

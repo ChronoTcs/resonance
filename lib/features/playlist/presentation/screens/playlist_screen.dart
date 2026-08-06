@@ -33,8 +33,11 @@ class PlaylistScreen extends ConsumerWidget {
       );
     }
 
+    final currentTabIndex = ref.watch(playlistTabIndexProvider);
+
     return DefaultTabController(
       length: 2,
+      initialIndex: currentTabIndex,
       child: Scaffold(
         resizeToAvoidBottomInset: false,
         body: Column(
@@ -58,6 +61,7 @@ class PlaylistScreen extends ConsumerWidget {
                       child: TabBar(
                         dividerColor: Colors.transparent,
                         indicatorSize: TabBarIndicatorSize.label,
+                        onTap: (index) => ref.read(playlistTabIndexProvider.notifier).setTabIndex(index),
                         overlayColor: WidgetStateProperty.resolveWith<Color?>((states) {
                           if (states.contains(WidgetState.hovered)) {
                             return theme.primaryColor.withValues(alpha: 0.08);

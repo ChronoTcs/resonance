@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:resonance/core/utils/app_icons.dart';
+import 'package:resonance/core/utils/thumbnail_utils.dart';
 import 'package:resonance/core/domain/models/media_item.dart';
 import 'package:resonance/core/data/services/media_cache_service.dart';
 
@@ -45,7 +46,9 @@ class _MediaArtworkWidgetState extends ConsumerState<MediaArtworkWidget> {
   @override
   void didUpdateWidget(covariant MediaArtworkWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.item.path != widget.item.path || oldWidget.item.thumbnailUrl != widget.item.thumbnailUrl) {
+    if (oldWidget.item.id != widget.item.id ||
+        oldWidget.item.path != widget.item.path ||
+        oldWidget.item.thumbnailUrl != widget.item.thumbnailUrl) {
       _resolveThumbnail();
     }
   }
@@ -55,25 +58,37 @@ class _MediaArtworkWidgetState extends ConsumerState<MediaArtworkWidget> {
       if (mounted) setState(() => _resolvedThumbnailUrl = null);
       return;
     }
-    
-    if (widget.item.thumbnailUrl != null) {
-      if (mounted) setState(() => _resolvedThumbnailUrl = widget.item.thumbnailUrl);
-      return;
-    }
 
-    if (!widget.item.path.startsWith('http')) {
-      if (mounted) setState(() => _isLoading = true);
-      // Attempt to find inside cache
-      final songId = widget.item.id ?? widget.item.path;
-      final cache = ref.read(mediaCacheServiceProvider);
-      final path = await cache.getCachedArtPath(songId);
+    final songId = widget.item.id ?? (widget.item.setVideoId ?? widget.item.path);
+
+    // 1. Check if a local cached artwork file exists on disk first (HD stream/local image)
+    final cache = ref.read(mediaCacheServiceProvider);
+    final cachedPath = await cache.getCachedArtPath(songId);
+    if (cachedPath != null && File(cachedPath).existsSync()) {
       if (mounted) {
         setState(() {
-          _resolvedThumbnailUrl = path;
+          _resolvedThumbnailUrl = cachedPath;
           _isLoading = false;
         });
       }
+      return;
     }
+
+    // 2. Fallback to upgraded HTTP thumbnail URL if item.thumbnailUrl is set
+    if (widget.item.thumbnailUrl != null && widget.item.thumbnailUrl!.isNotEmpty) {
+      final upgraded = widget.item.thumbnailUrl!.startsWith('http')
+          ? ThumbnailUtils.upgradeResolution(widget.item.thumbnailUrl)
+          : widget.item.thumbnailUrl;
+      if (mounted) {
+        setState(() {
+          _resolvedThumbnailUrl = upgraded;
+          _isLoading = false;
+        });
+      }
+      return;
+    }
+
+    if (mounted) setState(() => _isLoading = false);
   }
 
   @override
@@ -117,8 +132,13 @@ class _MediaArtworkWidgetState extends ConsumerState<MediaArtworkWidget> {
           errorWidget: (context, url, error) => fallback,
         );
       } else {
+        final file = File(_resolvedThumbnailUrl!);
+        final cacheKey = file.existsSync()
+            ? '${_resolvedThumbnailUrl!}-${file.lastModifiedSync().millisecondsSinceEpoch}'
+            : _resolvedThumbnailUrl!;
         imageWidget = Image.file(
-          File(_resolvedThumbnailUrl!),
+          file,
+          key: ValueKey(cacheKey),
           width: widget.width,
           height: widget.height,
           fit: widget.fit,

@@ -17,7 +17,10 @@ class LibraryState {
   final String? musicFolderPath;
   final String? videoFolderPath;
   final String? lyricsFolderPath;
+  final String? streamFolderPath;
   final String? cacheFolderPath;
+  final Set<String> _downloadedTrackIds;
+  final Set<String> _downloadedSignatures;
 
   LibraryState({
     this.allMedia = const [],
@@ -25,8 +28,18 @@ class LibraryState {
     this.musicFolderPath,
     this.videoFolderPath,
     this.lyricsFolderPath,
+    this.streamFolderPath,
     this.cacheFolderPath,
-  });
+    Set<String>? downloadedTrackIds,
+    Set<String>? downloadedSignatures,
+  })  : _downloadedTrackIds = downloadedTrackIds ??
+            allMedia
+                .expand((m) => [if (m.id != null) m.id!, if (m.setVideoId != null) m.setVideoId!])
+                .toSet(),
+        _downloadedSignatures = downloadedSignatures ??
+            allMedia.map((m) => _normalizeKey(m.title, m.artist)).toSet();
+
+  Set<String> get downloadedTrackIds => _downloadedTrackIds;
 
   LibraryState copyWith({
     List<MediaItem>? allMedia,
@@ -34,16 +47,44 @@ class LibraryState {
     String? musicFolderPath,
     String? videoFolderPath,
     String? lyricsFolderPath,
+    String? streamFolderPath,
     String? cacheFolderPath,
   }) {
+    final media = allMedia ?? this.allMedia;
     return LibraryState(
-      allMedia: allMedia ?? this.allMedia,
+      allMedia: media,
       isLoading: isLoading ?? this.isLoading,
       musicFolderPath: musicFolderPath ?? this.musicFolderPath,
       videoFolderPath: videoFolderPath ?? this.videoFolderPath,
       lyricsFolderPath: lyricsFolderPath ?? this.lyricsFolderPath,
+      streamFolderPath: streamFolderPath ?? this.streamFolderPath,
       cacheFolderPath: cacheFolderPath ?? this.cacheFolderPath,
+      downloadedTrackIds: allMedia != null
+          ? media
+              .expand((m) => [if (m.id != null) m.id!, if (m.setVideoId != null) m.setVideoId!])
+              .toSet()
+          : _downloadedTrackIds,
+      downloadedSignatures: allMedia != null
+          ? media.map((m) => _normalizeKey(m.title, m.artist)).toSet()
+          : _downloadedSignatures,
     );
+  }
+
+  bool isTrackDownloaded(String? id, {String? title, String? artist}) {
+    if (id != null && id.isNotEmpty && _downloadedTrackIds.contains(id)) {
+      return true;
+    }
+    if (title != null && title.isNotEmpty) {
+      final key = _normalizeKey(title, artist);
+      if (_downloadedSignatures.contains(key)) return true;
+    }
+    return false;
+  }
+
+  static String _normalizeKey(String title, String? artist) {
+    final cleanTitle = title.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+    final cleanArtist = (artist ?? '').toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+    return '$cleanTitle|$cleanArtist';
   }
 }
 
@@ -53,8 +94,9 @@ class LibraryNotifier extends Notifier<LibraryState> {
   @override
   LibraryState build() {
     final prefs = ref.watch(sharedPreferencesProvider);
-    Future.microtask(() => _loadSavedPaths(prefs));
     
+    // ponytail: load saved paths synchronously or trigger post-frame if async
+    _loadSavedPaths(prefs);
 
     ref.onDispose(() => _saveDebouncer?.cancel());
 
@@ -74,12 +116,14 @@ class LibraryNotifier extends Notifier<LibraryState> {
     final musicPath = prefs.getString('music_folder') ?? await PathUtils.getMusicDefault();
     final videoPath = prefs.getString('video_folder') ?? '';
     final lyricsPath = prefs.getString('lyrics_folder') ?? await PathUtils.getLyricsDefault();
+    final streamPath = prefs.getString('stream_folder') ?? await PathUtils.getStreamDefault();
     final cachePath = prefs.getString('cache_folder') ?? await PathUtils.getCacheDefault();
 
     state = state.copyWith(
       musicFolderPath: musicPath,
       videoFolderPath: videoPath,
       lyricsFolderPath: lyricsPath,
+      streamFolderPath: streamPath,
       cacheFolderPath: cachePath,
     );
     
@@ -160,10 +204,18 @@ class LibraryNotifier extends Notifier<LibraryState> {
     }
   }
 
+  Future<void> setStreamFolder(String path) async {
+    final prefs = ref.read(sharedPreferencesProvider);
+    await prefs.setString('stream_folder', path);
+    state = state.copyWith(streamFolderPath: path);
+    ref.read(mediaCacheServiceProvider).setCustomPath(state.cacheFolderPath);
+  }
+
   Future<void> setCacheFolder(String path) async {
     final prefs = ref.read(sharedPreferencesProvider);
     await prefs.setString('cache_folder', path);
     state = state.copyWith(cacheFolderPath: path);
+    ref.read(mediaCacheServiceProvider).setCustomPath(path);
   }
 
   Future<void> resetToDefaults() async {
@@ -171,10 +223,13 @@ class LibraryNotifier extends Notifier<LibraryState> {
     await prefs.remove('music_folder');
     await prefs.remove('video_folder');
     await prefs.remove('lyrics_folder');
+    await prefs.remove('stream_folder');
     await prefs.remove('cache_folder');
 
     final musicPath = await PathUtils.getMusicDefault();
     final lyricsPath = await PathUtils.getLyricsDefault();
+    final streamPath = await PathUtils.getStreamDefault();
+    final cachePath = await PathUtils.getCacheDefault();
 
     state = LibraryState(
       allMedia: state.allMedia,
@@ -182,7 +237,8 @@ class LibraryNotifier extends Notifier<LibraryState> {
       musicFolderPath: musicPath,
       videoFolderPath: '',
       lyricsFolderPath: lyricsPath,
-      cacheFolderPath: null,
+      streamFolderPath: streamPath,
+      cacheFolderPath: cachePath,
     );
 
     _syncToDownloadSettings(musicPath, '', lyricsPath);
@@ -227,12 +283,16 @@ class LibraryNotifier extends Notifier<LibraryState> {
     try {
       final String path = item.path;
       final String songId = item.id ?? path;
-      
+
       // 1. Delete Main File
       final file = File(path);
       if (await file.exists()) {
-        await file.delete();
-        debugPrint('Library removal: Deleted main file $path');
+        try {
+          await file.delete();
+          debugPrint('Library removal: Deleted main file $path');
+        } catch (e) {
+          debugPrint('Library removal: File deletion postponed (locked by process): $path');
+        }
       }
 
       // 2. Delete Local Lyrics (.lrc in same folder)
@@ -261,7 +321,7 @@ class LibraryNotifier extends Notifier<LibraryState> {
       await ref.read(mediaCacheServiceProvider).removeFromCache(songId);
 
     } catch (e) {
-        debugPrint('Error caching art in recently played: $e');
+        debugPrint('Error deleting track: $e');
     }
     
     state = state.copyWith(

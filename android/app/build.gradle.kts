@@ -11,6 +11,7 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -22,10 +23,9 @@ android {
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.chronostudio.resonance"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
+        // Pinned: audio_service requires minSdk 21. targetSdk 34 required for POST_NOTIFICATIONS.
         minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
+        targetSdk = 34
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
@@ -64,4 +64,5 @@ flutter {
 
 dependencies {
     implementation("com.github.ZemerTeam:zemer-cipher:master-SNAPSHOT")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }

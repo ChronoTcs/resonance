@@ -75,12 +75,16 @@ class _FullScreenPlayerState extends ConsumerState<FullScreenPlayer> {
       if (!mounted) return;
       await windowManager.setFullScreen(true);
       _focusNode.requestFocus();
+    } else if (Platform.isAndroid) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     }
   }
 
   Future<void> _exitFullScreen() async {
     if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
       await windowManager.setFullScreen(false);
+    } else if (Platform.isAndroid) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     }
   }
 
@@ -94,18 +98,6 @@ class _FullScreenPlayerState extends ConsumerState<FullScreenPlayer> {
 
   @override
   Widget build(BuildContext context) {
-    if (!Platform.isWindows) {
-      return const Scaffold(
-        backgroundColor: Colors.black,
-        body: Center(
-          child: Text(
-            'Full Screen Player is only available on Windows.',
-            style: TextStyle(color: Colors.white70),
-          ),
-        ),
-      );
-    }
-
     final audioState = ref.watch(audioProvider);
     final currentTrack = audioState.currentTrack;
     final showFullLyrics = ref.watch(lyricsOverlayProvider);

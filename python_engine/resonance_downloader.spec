@@ -11,7 +11,7 @@ datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
 
 a = Analysis(
-    ['D:\\File Mata Kuliah\\Projek\\streamly\\resonance_app\\python_engine\\resonance_downloader.py'],
+    ['D:\\File Mata Kuliah\\Projek\\streamly\\resonance\\python_engine\\resonance_downloader.py'],
     pathex=[],
     binaries=binaries,
     datas=datas,

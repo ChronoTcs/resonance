@@ -56,10 +56,18 @@ class ArtistSubPage extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Row(
                 children: [
-                  CircleAvatar(
-                    radius: 16,
-                    backgroundColor: theme.primaryColor.withValues(alpha: 0.1),
-                    child: Icon(UIcons.regular.user, size: 14, color: theme.primaryColor),
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: theme.primaryColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: theme.primaryColor.withValues(alpha: 0.25),
+                        width: 1,
+                      ),
+                    ),
+                    child: Icon(UIcons.regular.user, size: 16, color: theme.primaryColor),
                   ),
                   const SizedBox(width: 10),
                   Expanded(

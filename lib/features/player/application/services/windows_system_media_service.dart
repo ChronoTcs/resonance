@@ -77,6 +77,7 @@ class WindowsSystemMediaService with WindowListener {
     MediaItem? track,
     bool isPlaying, {
     String? overrideThumbnailUrl,
+    bool force = false,
   }) async {
     if (!Platform.isWindows) return;
 
@@ -107,7 +108,8 @@ class WindowsSystemMediaService with WindowListener {
       }
 
       // CEGAH UPDATE BERULANG (FLICKER)
-      if (_lastSMTCTitle == track.title &&
+      if (!force &&
+          _lastSMTCTitle == track.title &&
           _lastSMTCArtist == track.artist &&
           _lastSMTCThumb == formattedThumbnail) {
         await _updateTaskbarThumbnail(isPlaying);

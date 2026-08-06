@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:window_manager/window_manager.dart';
+import 'package:resonance/core/providers/navigation_provider.dart';
 
 class NotificationItem {
   final String id;
@@ -11,6 +12,7 @@ class NotificationItem {
   final DateTime timestamp;
   final bool isRead;
   final bool isError;
+  final String? targetScreen;
 
   NotificationItem({
     required this.id,
@@ -19,6 +21,7 @@ class NotificationItem {
     required this.timestamp,
     this.isRead = false,
     this.isError = false,
+    this.targetScreen,
   });
 
   NotificationItem copyWith({
@@ -28,6 +31,7 @@ class NotificationItem {
     DateTime? timestamp,
     bool? isRead,
     bool? isError,
+    String? targetScreen,
   }) {
     return NotificationItem(
       id: id ?? this.id,
@@ -36,6 +40,7 @@ class NotificationItem {
       timestamp: timestamp ?? this.timestamp,
       isRead: isRead ?? this.isRead,
       isError: isError ?? this.isError,
+      targetScreen: targetScreen ?? this.targetScreen,
     );
   }
 }
@@ -89,26 +94,49 @@ class NotificationNotifier extends Notifier<NotificationState> {
       await _localNotificationsPlugin.initialize(
         settings: initializationSettings,
         onDidReceiveNotificationResponse: (response) {
-          _handleNotificationClick();
+          handleNotificationClick(targetScreen: response.payload);
         },
       );
-      _isInitialized = true;
+    } else if (Platform.isAndroid) {
+      const AndroidInitializationSettings androidSettings =
+          AndroidInitializationSettings('@mipmap/ic_launcher');
+      await _localNotificationsPlugin.initialize(
+        settings: const InitializationSettings(android: androidSettings),
+        onDidReceiveNotificationResponse: (response) => handleNotificationClick(targetScreen: response.payload),
+      );
+      // Request POST_NOTIFICATIONS permission (Android 13+)
+      await _localNotificationsPlugin
+          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+          ?.requestNotificationsPermission();
     }
+    _isInitialized = true;
   }
 
-  Future<void> _handleNotificationClick() async {
+  Future<void> handleNotificationClick({String? targetScreen}) async {
     try {
       if (Platform.isWindows) {
         await windowManager.show();
         await windowManager.focus();
       }
-      state = state.copyWith(isDropdownVisible: true);
+      
+      if (targetScreen == 'target:download') {
+        ref.read(mainNavigationProvider.notifier).setIndex(4);
+      } else if (targetScreen == 'target:settings') {
+        ref.read(mainNavigationProvider.notifier).setIndex(5);
+      } else {
+        state = state.copyWith(isDropdownVisible: true);
+      }
     } catch (e) {
       debugPrint('Notification click restore failed: $e');
     }
   }
 
-  Future<void> showNotification(String title, String message, {bool isError = false}) async {
+  Future<void> showNotification(
+    String title,
+    String message, {
+    bool isError = false,
+    String? target,
+  }) async {
     // 1. Add to in-app notification list
     final newItem = NotificationItem(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -116,6 +144,7 @@ class NotificationNotifier extends Notifier<NotificationState> {
       message: message,
       timestamp: DateTime.now(),
       isError: isError,
+      targetScreen: target,
     );
 
     state = state.copyWith(items: [newItem, ...state.items]);
@@ -133,9 +162,32 @@ class NotificationNotifier extends Notifier<NotificationState> {
           title: title,
           body: message,
           notificationDetails: platformDetails,
+          payload: target,
         );
       } catch (e) {
         debugPrint('Windows local notification show failed: $e');
+      }
+    }
+
+    // 3. Trigger native notification on Android
+    if (Platform.isAndroid && _isInitialized) {
+      try {
+        const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+          'resonance_downloads',
+          'Download Notifications',
+          channelDescription: 'Resonance download progress and completion',
+          importance: Importance.high,
+          priority: Priority.high,
+        );
+        await _localNotificationsPlugin.show(
+          id: newItem.id.hashCode,
+          title: title,
+          body: message,
+          notificationDetails: const NotificationDetails(android: androidDetails),
+          payload: target,
+        );
+      } catch (e) {
+        debugPrint('Android local notification show failed: $e');
       }
     }
   }

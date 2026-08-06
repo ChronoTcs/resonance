@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:resonance/core/utils/app_icons.dart';
+import 'package:resonance/core/utils/uicons.dart';
 import '../buttons/reusable_hover_icon_button.dart';
 
 class AppBackButton extends StatelessWidget {
@@ -10,9 +10,10 @@ class AppBackButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ReusableHoverIconButton(
-      icon: AppIcons.back,
+      icon: UIcons.regular.angle_small_left,
       tooltip: 'Back',
       color: color,
+      iconSize: 20,
       onTap: onTap ?? () => Navigator.maybePop(context),
     );
   }

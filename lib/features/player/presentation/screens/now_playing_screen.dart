@@ -184,7 +184,7 @@ class NowPlayingScreen extends ConsumerWidget {
                   children: [
                     CollapseButton(
                       tooltip: 'Close',
-                      iconSize: 32,
+                      iconSize: 20,
                       color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
                       onTap: () => ref.read(nowPlayingOverlayProvider.notifier).setVisible(false),
                     ),

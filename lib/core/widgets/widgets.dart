@@ -18,3 +18,4 @@ export 'overlays/blur_fade_page_route.dart';
 export 'overlays/blur_transition_overlay.dart';
 export 'overlays/glossy_animated_background.dart';
 export 'wrappers/keyboard_listener_wrapper.dart';
+export 'common/shimmer_skeleton.dart';

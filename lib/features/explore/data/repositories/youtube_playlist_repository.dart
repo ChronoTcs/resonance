@@ -48,8 +48,52 @@ class YoutubePlaylistRepository {
     String? continuationToken;
 
     try {
-      // First batch
-      final data = await _client.post('browse', {"browseId": playlistId});
+      final rawId = playlistId.startsWith('VL') ? playlistId.substring(2) : playlistId;
+      
+      // Mix/radio playlists (RDAMVM..., RDCLAK..., VLRD..., RDAT..., OLAK...) use 'next' endpoint
+      final isMix = rawId.startsWith('RD') ||
+          rawId.startsWith('OLAK') ||
+          rawId.startsWith('VLRD') ||
+          playlistId.startsWith('VLRD');
+      
+      if (isMix) {
+        debugPrint('[PlaylistRepo] Mix detected ($rawId), using next endpoint');
+        final data = await _client.post('next', {"playlistId": rawId});
+        final queueItems = data['contents']?['singleColumnMusicWatchNextResultsRenderer']?['tabbedRenderer']?['watchNextTabbedResultsRenderer']?['tabs']?[0]?['tabRenderer']?['content']?['musicQueueRenderer']?['content']?['playlistPanelRenderer']?['contents'] ?? [];
+        
+        debugPrint('[PlaylistRepo] Mix queue items count: ${queueItems.length}');
+        
+        for (var qItem in queueItems) {
+          final renderer = qItem['playlistPanelVideoRenderer'];
+          if (renderer == null) continue;
+          final videoId = renderer['videoId'];
+          if (videoId == null) continue;
+          
+          items.add(ExploreItem(
+            id: videoId,
+            title: _client.getText(renderer['title']) ?? 'Unknown',
+            author: _client.getText(renderer['shortBylineText']) ?? 
+                    _client.getText(renderer['longBylineText'])?.split('•').first.trim() ?? 'Unknown',
+            duration: '0:00',
+            thumbnailUrl: renderer['thumbnail']?['thumbnails']?.last?['url'] ?? '',
+            url: 'https://www.youtube.com/watch?v=$videoId',
+            setVideoId: null,
+            originalVideo: null,
+          ));
+        }
+        return items;
+      }
+
+      // Standard playlist vs Channel browse ID handling
+      final String browseId;
+      if (playlistId.startsWith('VL') || playlistId.startsWith('PL') || playlistId.startsWith('RDCLAK')) {
+        browseId = playlistId.startsWith('VL') ? playlistId : 'VL$playlistId';
+      } else {
+        browseId = playlistId;
+      }
+
+      debugPrint('[PlaylistRepo] Browse request ($browseId)');
+      final data = await _client.post('browse', {"browseId": browseId});
       continuationToken = _parsePlaylistBatch(data, items);
 
       // Recursive continuation for large playlists (>100 songs)
@@ -61,6 +105,33 @@ class YoutubePlaylistRepository {
         continuationToken = _parsePlaylistBatch(contData, items);
         safetyLimit++;
       }
+
+      // Fallback failover: If browse returned 0 items (e.g. for a community mix ID), try the next endpoint
+      if (items.isEmpty) {
+        debugPrint('[PlaylistRepo] Browse returned 0 items for $browseId, attempting next endpoint failover');
+        final nextData = await _client.post('next', {"playlistId": rawId});
+        final queueItems = nextData['contents']?['singleColumnMusicWatchNextResultsRenderer']?['tabbedRenderer']?['watchNextTabbedResultsRenderer']?['tabs']?[0]?['tabRenderer']?['content']?['musicQueueRenderer']?['content']?['playlistPanelRenderer']?['contents'] ?? [];
+        for (var qItem in queueItems) {
+          final renderer = qItem['playlistPanelVideoRenderer'];
+          if (renderer == null) continue;
+          final videoId = renderer['videoId'];
+          if (videoId == null) continue;
+          
+          items.add(ExploreItem(
+            id: videoId,
+            title: _client.getText(renderer['title']) ?? 'Unknown',
+            author: _client.getText(renderer['shortBylineText']) ?? 
+                    _client.getText(renderer['longBylineText'])?.split('•').first.trim() ?? 'Unknown',
+            duration: '0:00',
+            thumbnailUrl: renderer['thumbnail']?['thumbnails']?.last?['url'] ?? '',
+            url: 'https://www.youtube.com/watch?v=$videoId',
+            setVideoId: null,
+            originalVideo: null,
+          ));
+        }
+      }
+
+      debugPrint('[PlaylistRepo] Playlist returned ${items.length} tracks');
     } catch (e) {
       debugPrint('YoutubePlaylistRepository: Error fetching playlist contents: $e');
     }
@@ -88,8 +159,40 @@ class YoutubePlaylistRepository {
   }
 
   String? _parsePlaylistBatch(Map<String, dynamic> data, List<ExploreItem> items) {
-    final contents = data['contents']?['singleColumnBrowseResultsRenderer']?['tabs']?[0]?['content']?['sectionListRenderer']?['contents']?[0]?['musicPlaylistShelfRenderer']?['contents'] ?? 
-                    data['onResponseReceivedActions']?[0]?['appendContinuationItemsAction']?['continuationItems'] ?? [];
+    List contents = [];
+    final singleCol = data['contents']?['singleColumnBrowseResultsRenderer']?['tabs']?[0]?['content']?['sectionListRenderer']?['contents'] as List?;
+    final twoColSecondary = data['contents']?['twoColumnBrowseResultsRenderer']?['secondaryContents']?['sectionListRenderer']?['contents'] as List?;
+    final twoColTab = data['contents']?['twoColumnBrowseResultsRenderer']?['tabs']?[0]?['tabRenderer']?['content']?['sectionListRenderer']?['contents'] as List?;
+
+    final sectionListContents = singleCol ?? twoColSecondary ?? twoColTab;
+    
+    // Extract header playlist / album / artist & thumbnail for fallbacks using safe null-aware checks
+    final header = data['header']?['musicDetailHeaderRenderer'] ??
+        data['header']?['musicResponsiveHeaderRenderer'] ??
+        data['header']?['musicEditableHeaderRenderer']?['header']?['musicDetailHeaderRenderer'] ??
+        data['header']?['musicHeaderRenderer'];
+
+    final String? headerArtist = header != null
+        ? (_client.getText(header['subtitle']) ?? _client.getText(header['straplineTextOne']))
+        : null;
+
+    final String? headerThumb = header != null
+        ? (header['thumbnail']?['croppedSquareThumbnailRenderer']?['thumbnail']?['thumbnails']?.last?['url'] ??
+            header['thumbnail']?['musicThumbnailRenderer']?['thumbnail']?['thumbnails']?.last?['url'])
+        : null;
+
+    if (sectionListContents != null) {
+      for (final section in sectionListContents) {
+        final shelf = section['musicPlaylistShelfRenderer'] ?? section['musicShelfRenderer'] ?? section['musicCarouselShelfRenderer'];
+        if (shelf != null && shelf['contents'] != null) {
+          contents.addAll(shelf['contents'] as List);
+        }
+      }
+    }
+
+    if (contents.isEmpty) {
+      contents = data['onResponseReceivedActions']?[0]?['appendContinuationItemsAction']?['continuationItems'] ?? [];
+    }
     
     for (var item in contents) {
       final renderer = item['musicResponsiveListItemRenderer'];
@@ -99,12 +202,54 @@ class YoutubePlaylistRepository {
       final setVideoId = renderer['playlistItemData']?['setVideoId'];
       
       if (videoId != null) {
+        final title = _client.getText(renderer['flexColumns']?[0]?['musicResponsiveListItemFlexColumnRenderer']?['text']) ??
+            _client.getText(renderer['title']) ??
+            "Unknown";
+
+        // Extract Artist from runs array or headerArtist fallback
+        String author = 'Unknown';
+        final flexColumn1 = renderer['flexColumns']?[1]?['musicResponsiveListItemFlexColumnRenderer']?['text'];
+        final runs1 = flexColumn1?['runs'] as List?;
+        if (runs1 != null && runs1.isNotEmpty) {
+          final runTexts = runs1
+              .map((r) => (r['text'] as String? ?? '').trim())
+              .where((t) => t.isNotEmpty && t != '•' && t != '·' && !RegExp(r'^\d+:\d+(?::\d+)?$').hasMatch(t))
+              .toList();
+          if (runTexts.isNotEmpty) {
+            author = runTexts.first;
+          }
+        }
+
+        if (author == 'Unknown' || author.isEmpty) {
+          author = _client.getText(renderer['shortBylineText']) ??
+              _client.getText(renderer['longBylineText']) ??
+              headerArtist ??
+              "Unknown Artist";
+        }
+
+        if (author.contains('•')) {
+          author = author.split('•').first.trim();
+        }
+
+        // Duration extraction from fixedColumns[0] or flexColumns
+        String duration = "0:00";
+        final fixedText = _client.getText(renderer['fixedColumns']?[0]?['musicResponsiveListItemFixedColumnRenderer']?['text']);
+        if (fixedText != null && RegExp(r'^\d+:\d+(?::\d+)?$').hasMatch(fixedText.trim())) {
+          duration = fixedText.trim();
+        }
+
+        // Thumbnail extraction with headerThumb & HQ default YouTube fallback
+        String thumbnailUrl = renderer['thumbnail']?['musicThumbnailRenderer']?['thumbnail']?['thumbnails']?.last?['url'] ??
+            renderer['thumbnailRenderer']?['musicThumbnailRenderer']?['thumbnail']?['thumbnails']?.last?['url'] ??
+            headerThumb ??
+            'https://i.ytimg.com/vi/$videoId/hqdefault.jpg';
+
         items.add(ExploreItem(
           id: videoId,
-          title: _client.getText(renderer['flexColumns']?[0]?['musicResponsiveListItemFlexColumnRenderer']?['text']) ?? "Unknown",
-          author: _client.getText(renderer['flexColumns']?[1]?['musicResponsiveListItemFlexColumnRenderer']?['text']) ?? "Unknown",
-          duration: "0:00", 
-          thumbnailUrl: renderer['thumbnail']?['musicThumbnailRenderer']?['thumbnail']?['thumbnails']?.last?['url'] ?? "",
+          title: title,
+          author: author,
+          duration: duration, 
+          thumbnailUrl: thumbnailUrl,
           url: "https://www.youtube.com/watch?v=$videoId",
           setVideoId: setVideoId,
           originalVideo: null,
@@ -112,9 +257,22 @@ class YoutubePlaylistRepository {
       }
     }
 
-    final contData = data['contents']?['singleColumnBrowseResultsRenderer']?['tabs']?[0]?['content']?['sectionListRenderer']?['contents']?[0]?['musicPlaylistShelfRenderer']?['continuations']?[0]?['nextContinuationData'] ??
-                    data['onResponseReceivedActions']?[0]?['appendContinuationItemsAction']?['continuationItems']?.last?['continuationItemRenderer']?['continuationEndpoint']?['continuationCommand'];
+    String? contToken;
+    if (sectionListContents != null) {
+      for (final section in sectionListContents) {
+        final shelf = section['musicPlaylistShelfRenderer'] ?? section['musicShelfRenderer'];
+        if (shelf != null) {
+          final conts = shelf['continuations'] as List?;
+          if (conts != null && conts.isNotEmpty) {
+            contToken = conts[0]?['nextContinuationData']?['continuation'];
+            break;
+          }
+        }
+      }
+    }
+
+    contToken ??= data['onResponseReceivedActions']?[0]?['appendContinuationItemsAction']?['continuationItems']?.last?['continuationItemRenderer']?['continuationEndpoint']?['continuationCommand']?['token'];
     
-    return contData?['token'];
+    return contToken;
   }
 }

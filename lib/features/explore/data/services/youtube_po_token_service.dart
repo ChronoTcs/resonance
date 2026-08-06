@@ -4,8 +4,8 @@ import 'dart:math';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:http/http.dart' as http;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/data/services/po_token_provider_service.dart';
 
 final youtubePoTokenServiceProvider = Provider<YoutubePoTokenService>((ref) {
   return YoutubePoTokenService();
@@ -25,16 +25,11 @@ class YoutubePoTokenService {
         debugPrint('[YoutubePoTokenService] Android zemer-cipher MethodChannel failed: $e');
       }
     } else if (Platform.isWindows) {
-      try {
-        // Query local bgutil-ytdlp-pot-provider server running on port 4416
-        final response = await http.get(Uri.parse('http://127.0.0.1:4416/')).timeout(const Duration(seconds: 2));
-        if (response.statusCode == 200) {
-          final data = jsonDecode(response.body);
-          return (data['poToken'] ?? data['po_token']) as String?;
-        }
-      } catch (e) {
-        debugPrint('[YoutubePoTokenService] Windows bgutil-pot-provider query failed: $e');
+      final activeToken = poTokenProviderService.activePoToken;
+      if (activeToken != null && activeToken.isNotEmpty) {
+        return activeToken;
       }
+      return await poTokenProviderService.generateFreshToken();
     }
 
     // Fallback to local XOR mock token generator if platform-specific methods fail

@@ -41,40 +41,54 @@ class TranslationSection extends ConsumerWidget {
         ),
         const SizedBox(height: 16),
 
-        // Enable/disable toggle
-         Material(
+        // Grouped Lyrics Translation Card Container
+        Material(
           color: theme.colorScheme.surface,
           clipBehavior: Clip.antiAlias,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
             side: BorderSide(color: theme.dividerColor.withValues(alpha: 0.08)),
           ),
-          child: ListTile(
-            leading: Icon(UIcons.regular.language, size: 18, color: theme.primaryColor),
-            title: const Text('Show Translation Button', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-            subtitle: Text(
-              'Show a button to translate lyrics in the player',
-              style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
-            ),
-            trailing: ResonanceSwitch(
-              value: translationState.isSystemEnabled,
-              onChanged: (_) => translationNotifier.toggleSystemEnabled(),
-            ),
+          child: Column(
+            children: [
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                leading: Icon(UIcons.regular.language, size: 18, color: theme.primaryColor),
+                title: const Text('Show Translation Button', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                subtitle: Text(
+                  'Show a button to translate lyrics in the player',
+                  style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                ),
+                trailing: ResonanceSwitch(
+                  value: translationState.isSystemEnabled,
+                  onChanged: (_) => translationNotifier.toggleSystemEnabled(),
+                ),
+              ),
+              const Divider(height: 1),
+              Theme(
+                data: theme.copyWith(dividerColor: Colors.transparent),
+                child: ExpansionTile(
+                  leading: Icon(UIcons.regular.globe, size: 18, color: theme.primaryColor),
+                  title: const Text('Target Language', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                  subtitle: Text(
+                    'Language to translate lyrics into (${_languages[translationState.targetLanguage] ?? translationState.targetLanguage})',
+                    style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                  children: [
+                    for (final entry in _languages.entries)
+                      ListTile(
+                        dense: true,
+                        title: Text(entry.value, style: const TextStyle(fontSize: 13)),
+                        trailing: translationState.targetLanguage == entry.key
+                            ? Icon(UIcons.regular.check, size: 16, color: theme.primaryColor)
+                            : null,
+                        onTap: () => translationNotifier.setTargetLanguage(entry.key),
+                      ),
+                  ],
+                ),
+              ),
+            ],
           ),
-        ),
-
-        const SizedBox(height: 12),
-
-        // Target language selector
-        ResonanceSelector<String>(
-          icon: UIcons.regular.language,
-          title: 'Target Language',
-          subtitle: 'Language to translate lyrics into',
-          value: translationState.targetLanguage,
-          onChanged: (lang) => translationNotifier.setTargetLanguage(lang),
-          items: _languages.entries
-              .map((e) => ResonanceSelectorItem(value: e.key, label: e.value))
-              .toList(),
         ),
       ],
     );

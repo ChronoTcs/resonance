@@ -41,13 +41,24 @@ class AudioTrackInfo extends ConsumerWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                track.title,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              // Title row — badge only for streaming tracks
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      track.title,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (track.isStreaming) ...[
+                    const SizedBox(width: 6),
+                    TrackTypeChip(isVideo: track.type == 'video'),
+                  ],
+                ],
               ),
               Text(
                 track.artist ?? 'Unknown Artist',
@@ -79,6 +90,40 @@ class AudioTrackInfo extends ConsumerWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Pill badge for streaming tracks: "Song" (blue) or "Video" (purple).
+/// Only rendered for streaming tracks — local tracks show nothing.
+class TrackTypeChip extends StatelessWidget {
+  final bool isVideo;
+
+  const TrackTypeChip({super.key, required this.isVideo});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isVideo
+        ? const Color(0xFFCE93D8) // purple for video
+        : const Color(0xFF4FC3F7); // blue for song
+    final label = isVideo ? 'Video' : 'Song';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: color.withValues(alpha: 0.5), width: 0.8),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 9,
+          fontWeight: FontWeight.w600,
+          color: color,
+          letterSpacing: 0.3,
+        ),
+      ),
     );
   }
 }

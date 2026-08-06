@@ -1,17 +1,13 @@
-import 'package:resonance/core/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:silky_scroll/silky_scroll.dart';
-import 'package:cached_network_image/cached_network_image.dart';
-import 'package:resonance/features/explore/presentation/providers/explore_provider.dart';
-import 'package:resonance/features/player/application/providers/audio_provider.dart';
-import 'package:resonance/features/library/data/models/media_item.dart';
-import 'package:resonance/features/home/presentation/providers/recently_played_provider.dart';
-import 'package:resonance/features/library/presentation/widgets/media_actions_bottom_sheet.dart';
-
 import 'package:resonance/core/utils/uicons.dart';
-import 'package:resonance/core/utils/app_icons.dart';
 import 'package:resonance/features/dashboard/presentation/widgets/top_navigation_header.dart';
+import 'package:resonance/features/explore/presentation/providers/explore_provider.dart';
+import 'package:resonance/features/explore/presentation/widgets/explore_music_tile.dart';
+import 'package:resonance/features/explore/presentation/widgets/explore_playlist_card_tile.dart';
+import 'package:resonance/features/explore/presentation/widgets/explore_recent_plays_section.dart';
+import 'package:resonance/features/explore/presentation/widgets/explore_home_feed_section.dart';
 
 class ExploreScreen extends ConsumerStatefulWidget {
   const ExploreScreen({super.key});
@@ -20,249 +16,158 @@ class ExploreScreen extends ConsumerStatefulWidget {
   ConsumerState<ExploreScreen> createState() => _ExploreScreenState();
 }
 
-class _ExploreScreenState extends ConsumerState<ExploreScreen> {
+class _ExploreScreenState extends ConsumerState<ExploreScreen> with SingleTickerProviderStateMixin {
+  TabController? _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _initTabController();
+  }
+
+  void _initTabController() {
+    final activeTab = ref.read(exploreSearchTabProvider);
+    _tabController = TabController(length: 2, vsync: this, initialIndex: activeTab);
+    _tabController!.addListener(() {
+      if (!_tabController!.indexIsChanging) {
+        ref.read(exploreSearchTabProvider.notifier).setTab(_tabController!.index);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _tabController?.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isSearching = ref.watch(searchStateProvider);
     final searchResultsAsync = ref.watch(searchResultsProvider);
+    final searchPlaylistsAsync = ref.watch(searchPlaylistResultsProvider);
     final currentQuery = ref.watch(searchQueryProvider);
+    final activeTab = ref.watch(exploreSearchTabProvider);
+
+    if (_tabController != null && _tabController!.index != activeTab) {
+      _tabController!.animateTo(activeTab);
+    }
 
     return Scaffold(
       body: Column(
         children: [
           TopNavigationHeader(
-            left: Text(
-              'Explore',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+            left: currentQuery.isEmpty
+                ? Text(
+                    'Explore',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  )
+                : SizedBox(
+                    height: 50,
+                    child: TabBar(
+                      controller: _tabController,
+                      isScrollable: true,
+                      tabAlignment: TabAlignment.start,
+                      dividerColor: Colors.transparent,
+                      indicatorSize: TabBarIndicatorSize.label,
+                      overlayColor: WidgetStateProperty.resolveWith<Color?>((states) {
+                        if (states.contains(WidgetState.hovered)) {
+                          return theme.primaryColor.withValues(alpha: 0.08);
+                        }
+                        return null;
+                      }),
+                      tabs: [
+                        Tab(
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(UIcons.regular.music, size: 14),
+                              const SizedBox(width: 6),
+                              const Text('Music'),
+                            ],
+                          ),
+                        ),
+                        Tab(
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(UIcons.regular.list_music, size: 14),
+                              const SizedBox(width: 6),
+                              const Text('Playlists'),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
           ),
           Expanded(
             child: SilkyCustomScrollView(
               slivers: [
-
-          // ─── Content Area ───────────────────────────────────────────────
-          if (currentQuery.isEmpty) ...[
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 8, 8),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Text(
-                         'Recently Played',
-                        style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    TextButton.icon(
-                      onPressed: () {
-                        ref.read(recentlyPlayedProvider.notifier).clearHistory();
-                      },
-                      icon: Icon(AppIcons.trash, size: 18),
-                      label: const Text('Clear'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: theme.colorScheme.error,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            _buildRecentPlays(ref, theme),
-            const SliverToBoxAdapter(child: SizedBox(height: 100)), // Bottom padding
-          ] else ...[
-            if (isSearching)
-              const SliverFillRemaining(
-                child: Center(child: CircularProgressIndicator()),
-              )
-            else
-              searchResultsAsync.when(
-                data: (results) {
-                  if (results.isEmpty) {
-                    return const SliverFillRemaining(
-                      child: Center(child: Text('No results found')),
-                    );
-                  }
-                  return SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final item = results[index];
-                        Duration trackDuration = Duration.zero;
-                        final parts = item.duration.split(':');
-                        if (parts.length == 2) {
-                          trackDuration = Duration(minutes: int.tryParse(parts[0]) ?? 0, seconds: int.tryParse(parts[1]) ?? 0);
-                        } else if (parts.length == 3) {
-                          trackDuration = Duration(hours: int.tryParse(parts[0]) ?? 0, minutes: int.tryParse(parts[1]) ?? 0, seconds: int.tryParse(parts[2]) ?? 0);
+                if (currentQuery.isEmpty) ...[
+                  const ExploreRecentPlaysSection(),
+                  const ExploreHomeFeedSection(),
+                  const SliverToBoxAdapter(child: SizedBox(height: 100)),
+                ] else ...[
+                  if (isSearching)
+                    const SliverFillRemaining(
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (activeTab == 0)
+                    searchResultsAsync.when(
+                      data: (results) {
+                        if (results.isEmpty) {
+                          return const SliverFillRemaining(
+                            child: Center(child: Text('No results found')),
+                          );
                         }
-
-                        final mediaItem = MediaItem(
-                          id: item.id,
-                          path: item.id, // Use ID as initial path so isStreaming is triggered
-                          title: item.title,
-                          artist: item.author,
-                          thumbnailUrl: item.thumbnailUrl,
-                          duration: trackDuration,
-                          type: 'audio',
+                        return SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) => ExploreMusicTile(item: results[index]),
+                            childCount: results.length,
+                          ),
                         );
-
-                        return ListTile(
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          leading: ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: CachedNetworkImage(
-                              imageUrl: item.thumbnailUrl,
-                              width: 60,
-                              height: 60,
-                              fit: BoxFit.cover,
-                              placeholder: (context, url) => Container(
-                                color: Colors.blueAccent.withValues(alpha: 0.1),
-                                child: Icon(AppIcons.music),
-                              ),
-                              errorWidget: (context, url, error) => Icon(UIcons.regular.exclamation),
+                      },
+                      loading: () => const SliverFillRemaining(
+                        child: Center(child: CircularProgressIndicator()),
+                      ),
+                      error: (err, stack) => SliverFillRemaining(
+                        child: Center(child: Text('Error: $err')),
+                      ),
+                    )
+                  else
+                    searchPlaylistsAsync.when(
+                      data: (playlists) {
+                        if (playlists.isEmpty) {
+                          return const SliverFillRemaining(
+                            child: Center(child: Text('No playlists found')),
+                          );
+                        }
+                        return SliverPadding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                          sliver: SliverList(
+                            delegate: SliverChildBuilderDelegate(
+                              (context, index) => ExplorePlaylistCardTile(playlist: playlists[index]),
+                              childCount: playlists.length,
                             ),
                           ),
-                          title: Text(
-                            item.title,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                          subtitle: Text('${item.author} • ${item.duration}'),
-                          onTap: () {
-                            ref.read(audioProvider.notifier).playYouTubeTrack(mediaItem);
-                          },
-                          onLongPress: () {
-                            showModalBottomSheet(
-                              context: context,
-                              builder: (_) => MediaActionsBottomSheet(
-                                item: mediaItem,
-                                video: item.originalVideo,
-                              ),
-                            );
-                          },
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const SizedBox(width: 8),
-                              OverflowMenuButton(
-                                tooltip: 'Actions',
-                                onTap: () {
-                                  showModalBottomSheet(
-                                    context: context,
-                                    builder: (_) => MediaActionsBottomSheet(
-                                      item: mediaItem,
-                                      video: item.originalVideo,
-                                    ),
-                                  );
-                                },
-                              ),
-                            ],
-                          ),
                         );
                       },
-                      childCount: results.length,
+                      loading: () => const SliverFillRemaining(
+                        child: Center(child: CircularProgressIndicator()),
+                      ),
+                      error: (err, stack) => SliverFillRemaining(
+                        child: Center(child: Text('Error: $err')),
+                      ),
                     ),
-                  );
-                },
-                loading: () => const SliverFillRemaining(
-                  child: Center(child: CircularProgressIndicator()),
-                ),
-                error: (err, stack) => SliverFillRemaining(
-                  child: Center(child: Text('Error: $err')),
-                ),
-              ),
-          ],
-        ],
-      ),
-    ),
-  ],
-),
-    );
-  }
-
-  Widget _buildRecentPlays(WidgetRef ref, ThemeData theme) {
-    final recentAsync = ref.watch(recentlyPlayedProvider).whenData(
-      (items) => items.where((item) => item.id != null && !item.isLocal).toList(),
-    );
-    
-    return recentAsync.when(
-      data: (items) {
-        if (items.isEmpty) {
-          return SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Container(
-                height: 100,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: theme.primaryColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: theme.primaryColor.withValues(alpha: 0.2)),
-                ),
-                child: const Center(
-                  child: Text('Play some online songs to see them here!', style: TextStyle(color: Colors.grey)),
-                ),
-              ),
+                ],
+              ],
             ),
-          );
-        }
-        
-        return SliverList.builder(
-          itemCount: items.length,
-          itemBuilder: (context, index) {
-            final item = items[index];
-            return ListTile(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              leading: MediaArtworkWidget(
-                item: item,
-                width: 52,
-                height: 52,
-                borderRadius: 8,
-                placeholderIcon: AppIcons.music,
-              ),
-              title: Text(
-                item.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-              subtitle: Text(
-                item.artist ?? 'Unknown Artist',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              onTap: () {
-                ref.read(audioProvider.notifier).playYouTubeTrack(item);
-              },
-              onLongPress: () {
-                showModalBottomSheet(
-                  context: context,
-                  builder: (_) => MediaActionsBottomSheet(item: item),
-                );
-              },
-              trailing: OverflowMenuButton(
-                tooltip: 'Actions',
-                onTap: () {
-                  showModalBottomSheet(
-                    context: context,
-                    builder: (_) => MediaActionsBottomSheet(item: item),
-                  );
-                },
-              ),
-            );
-          },
-        );
-      },
-      loading: () => const SliverToBoxAdapter(
-        child: SizedBox(height: 140, child: Center(child: CircularProgressIndicator())),
-      ),
-      error: (e, _) => SliverToBoxAdapter(
-        child: SizedBox(height: 140, child: Center(child: Text('Error: $e'))),
+          ),
+        ],
       ),
     );
   }

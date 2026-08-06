@@ -42,7 +42,6 @@ class AudioNotifier extends Notifier<AudioState> {
 
   // ── Navigation guards ──────────────────────────────────────────────────────
   bool _isNavigating = false;
-  bool _isGaplessTransitioning = false;
   final List<StreamSubscription> _subscriptions = [];
   DateTime? _lastCompletionTime;
 
@@ -99,7 +98,6 @@ class AudioNotifier extends Notifier<AudioState> {
     return AudioState();
   }
 
-
   Player get player => _player;
 
   void setRestoredSettings({double? volume, double? speed, double? pitch}) {
@@ -130,6 +128,7 @@ class AudioNotifier extends Notifier<AudioState> {
       currentTrack: track,
       position: Duration(milliseconds: positionMs),
     );
+    _metadata.onTrackChanged(track, isPlaying: false);
   }
 
   // ── Initialization ─────────────────────────────────────────────────────────
@@ -181,44 +180,26 @@ class AudioNotifier extends Notifier<AudioState> {
 
       _player.stream.completed.listen((completed) {
         if (!completed) return;
-        // CRITICAL: If player already has a pre-buffered track in its playlist
-        // (GaplessPrefetchService called player.add()), the playlist.index listener
-        // will handle the transition via _acceptGaplessTransition().
-        // completed fires BEFORE playlist.index, so _gaplessTransitionInProgress
-        // cannot intercept it — we must check the player's live state instead.
-        if (_player.state.playlist.medias.length > 1) return;
         final now = DateTime.now();
         if (_lastCompletionTime != null &&
             now.difference(_lastCompletionTime!).inMilliseconds < 800) {
           return;
         }
         _lastCompletionTime = now;
-        final isNearEnd =
-            state.position > Duration.zero &&
-            state.duration > Duration.zero &&
-            state.position >= state.duration - const Duration(seconds: 2);
-        if (isNearEnd && ref.read(mediaFocusProvider) == MediaFocus.audio) {
+        if (ref.read(mediaFocusProvider) == MediaFocus.audio) {
           next(fromCompletion: true);
-        }
-      }),
-
-      // Gapless transition: engine auto-moved to pre-buffered index 1.
-      // Only update Dart state — do NOT call player.open() again.
-      _player.stream.playlist.listen((playlist) {
-        if (playlist.index == 1 &&
-            ref.read(mediaFocusProvider) == MediaFocus.audio) {
-          debugPrint('[Gapless] Engine auto-transitioned to pre-buffered track.');
-          _acceptGaplessTransition();
         }
       }),
 
       // ── Anti-Loop Error Guard ─────────────────────────────────────────────
       _player.stream.error.listen((error) {
-        ref.read(notificationProvider.notifier).showNotification(
-          'Playback Error',
-          'Streaming / Playback error: $error',
-          isError: true,
-        );
+        ref
+            .read(notificationProvider.notifier)
+            .showNotification(
+              'Playback Error',
+              'Streaming / Playback error: $error',
+              isError: true,
+            );
         final shouldStop = _engine.handlePlaybackError(error);
         if (shouldStop) {
           state = state.copyWith(isPlaying: false, isLoading: false);
@@ -231,57 +212,15 @@ class AudioNotifier extends Notifier<AudioState> {
     ]);
   }
 
-  // ── Gapless Accept (no player.open — engine already transitioned) ──────────
-
-  Future<void> _acceptGaplessTransition() async {
-    if (_isNavigating || _isGaplessTransitioning) return;
-    _isGaplessTransitioning = true;
-    _isNavigating = true;
-
-    final nextTrack = _queue.getNextTrack(
-      state.loopMode,
-      state.isShuffleEnabled,
-      fromCompletion: true,
-    );
-
-    if (nextTrack != null) {
-      _onTrackChanged(nextTrack, _queue.currentIndex);
-      ref.read(mediaFocusProvider.notifier).setAudioFocus();
-      _smtc.setCallbacks(
-        onPlay: play,
-        onPause: pause,
-        onNext: next,
-        onPrevious: previous,
-        onStop: stop,
-      );
-      _engine.resetErrorGuard();
-
-      // Shift media_kit playlist back by removing the completed track at index 0.
-      // This resets index 1 back to index 0.
-      try {
-        await _player.remove(0);
-        debugPrint('[Gapless] Successfully removed completed track from player playlist.');
-      } catch (e) {
-        debugPrint('[Gapless] Failed to remove completed track: $e');
-      }
-    }
-    state = state.copyWith(currentIndex: _queue.currentIndex);
-    _updateNextTrack();
-    _isNavigating = false;
-
-    // Cooldown lock to let media_kit playlist events settle
-    await Future.delayed(const Duration(milliseconds: 500));
-    _isGaplessTransitioning = false;
-  }
-
   // ── Track Changed ──────────────────────────────────────────────────────────
 
   void _onTrackChanged(MediaItem track, int index) {
+    final cleanTrack = track.copyWith(lyricsOffset: Duration.zero);
     state = state.copyWith(
-      currentTrack: track,
+      currentTrack: cleanTrack,
       currentIndex: index,
       position: Duration.zero,
-      duration: track.duration ?? Duration.zero,
+      duration: cleanTrack.duration ?? Duration.zero,
     );
     if (index != -1) _queue.setCurrentIndex(index);
     _metadata.onTrackChanged(track, isPlaying: state.isPlaying);
@@ -297,6 +236,14 @@ class AudioNotifier extends Notifier<AudioState> {
       queueJson: state.queue.map((t) => jsonEncode(t.toJson())).toList(),
       index: index,
     );
+  }
+
+  /// Updates current track metadata in state without re-triggering playback setup
+  void updateCurrentTrack(MediaItem updatedTrack) {
+    if (state.currentTrack?.id == updatedTrack.id ||
+        (state.currentTrack?.title == updatedTrack.title && state.currentTrack?.artist == updatedTrack.artist)) {
+      state = state.copyWith(currentTrack: updatedTrack);
+    }
   }
 
   // ── Playback Controls ──────────────────────────────────────────────────────
@@ -316,7 +263,23 @@ class AudioNotifier extends Notifier<AudioState> {
 
   // Public entry-point for YouTube / streaming tracks
   Future<void> playYouTubeTrack(MediaItem item, {int index = -1}) async {
-    state = state.copyWith(isLoading: true, currentTrack: item);
+    // If playing a new standalone track (index == -1), reset queue immediately to avoid metadata desync
+    final existingIndex = state.queue.indexWhere(
+      (t) => (t.id ?? t.path) == (item.id ?? item.path),
+    );
+    if (index == -1 && existingIndex == -1) {
+      _queue.setQueue([item], initialIndex: 0);
+      state = state.copyWith(
+        isLoading: true,
+        currentTrack: item,
+        queue: [item],
+        currentIndex: 0,
+      );
+      index = 0;
+    } else {
+      state = state.copyWith(isLoading: true, currentTrack: item);
+    }
+
     try {
       final resolvedPath = await _resolver.resolve(item);
       await playTrack(item.copyWith(path: resolvedPath), index: index);
@@ -329,18 +292,22 @@ class AudioNotifier extends Notifier<AudioState> {
   }
 
   Future<void> playTrack(MediaItem item, {int index = -1}) async {
+    final targetId = item.id ?? item.path;
     if (state.queue.isEmpty ||
         (index == -1 &&
-            !state.queue.any(
-              (t) => (t.id ?? t.path) == (item.id ?? item.path),
-            ))) {
+            !state.queue.any((t) => (t.id ?? t.path) == targetId))) {
       _queue.setQueue([item], initialIndex: 0);
       state = state.copyWith(queue: [item], currentIndex: 0);
       index = 0;
+    } else if (index == -1) {
+      index = state.queue.indexWhere((t) => (t.id ?? t.path) == targetId);
     }
 
     MediaItem trackToPlay = item;
-    if (item.isStreaming && !item.path.startsWith('http') && !item.path.contains('/') && !item.path.contains('\\')) {
+    if (item.isStreaming &&
+        !item.path.startsWith('http') &&
+        !item.path.contains('/') &&
+        !item.path.contains('\\')) {
       state = state.copyWith(isLoading: true, currentTrack: item);
       try {
         final resolvedPath = await _resolver.resolve(item);
@@ -352,7 +319,10 @@ class AudioNotifier extends Notifier<AudioState> {
       }
     }
 
-    _onTrackChanged(trackToPlay, index);
+    // ponytail: pass original item (not resolved-URL trackToPlay) so state.currentTrack
+    // keeps the video-ID path. Prevents orchestrator from seeing a fake "track change"
+    // when the URL is resolved, which would re-trigger a duplicate radio fetch.
+    _onTrackChanged(item, index);
     state = state.copyWith(isLoading: true);
     try {
       await _player.open(_resolver.buildMedia(trackToPlay.path), play: true);
@@ -417,6 +387,23 @@ class AudioNotifier extends Notifier<AudioState> {
     }
   }
 
+  void adjustLyricsOffset(Duration delta) {
+    final current = state.currentTrack;
+    if (current != null) {
+      final updatedTrack = current.copyWith(
+        lyricsOffset: current.lyricsOffset + delta,
+      );
+      state = state.copyWith(currentTrack: updatedTrack);
+      final updatedQueue = state.queue.map((track) {
+        if ((track.id ?? track.path) == (current.id ?? current.path)) {
+          return updatedTrack;
+        }
+        return track;
+      }).toList();
+      state = state.copyWith(queue: updatedQueue);
+    }
+  }
+
   void play() => _player.play();
   void pause() => _player.pause();
   void stop() => _player.stop();
@@ -453,20 +440,24 @@ class AudioNotifier extends Notifier<AudioState> {
 
     if (nextTrack != null) {
       if (fromCompletion && state.loopMode == LoopMode.one) {
-        ref.read(notificationProvider.notifier).showNotification(
-          'Track Repeating',
-          'Repeating: ${nextTrack.title}',
-        );
+        ref
+            .read(notificationProvider.notifier)
+            .showNotification(
+              'Track Repeating',
+              'Repeating: ${nextTrack.title}',
+            );
       }
       _playCurrentFromQueue(nextTrack).then((_) => _isNavigating = false);
     } else if (fromCompletion) {
       _isNavigating = false;
       pause();
       seek(Duration.zero);
-      ref.read(notificationProvider.notifier).showNotification(
-        'Queue Completed',
-        'Finished playing all tracks in the queue.',
-      );
+      ref
+          .read(notificationProvider.notifier)
+          .showNotification(
+            'Queue Completed',
+            'Finished playing all tracks in the queue.',
+          );
     } else {
       _isNavigating = false;
     }

@@ -7,6 +7,7 @@ import 'playback_restoration_service.dart';
 import 'playback_sync_service.dart';
 import 'playback_tracking_service.dart';
 import 'gapless_prefetch_service.dart';
+import 'sponsor_block_service.dart';
 
 /// It decouples orthogonal logic (Sync, Tracking, Maintenance) from the core 
 /// AudioNotifier using the Riverpod pattern.
@@ -59,6 +60,15 @@ class AudioOrchestrator {
 
       // Reset Gapless Lock on track change
       _ref.read(gaplessPrefetchServiceProvider).resetLock();
+
+      // SponsorBlock Auto Intro Trimming Offset
+      if (next != null && next.isStreaming) {
+        final prevId = prev?.id ?? prev?.path;
+        final nextId = next.id ?? next.path;
+        if (nextId != prevId) {
+          _ref.read(sponsorBlockServiceProvider).autoDetectAndApplyIntroOffset(next);
+        }
+      }
 
       // [Radio] Fire-and-forget radio recommendation seeding.
       // Guards:

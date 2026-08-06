@@ -47,7 +47,7 @@ app.*.map.json
 **/windows/flutter/ephemeral/
 **/windows/CMakeLists.txt.user
 
-# Local configuration / secrets
+# Local configuration
 .env
 .env.*
 !.env.example
@@ -58,3 +58,6 @@ app.*.map.json
 .agents/
 .graphifyignore
 graphify-out/
+
+# Machine-specific VS Code dev config
+.vscode/launch.json

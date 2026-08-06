@@ -9,24 +9,38 @@ import 'cache_manager.dart';
 import 'package:resonance/core/domain/models/media_item.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'stream_cache_tracker_service.dart';
+import '../../../features/settings/application/maintenance_provider.dart';
+import '../../../features/explore/data/repositories/youtube_stream_repository.dart';
+import '../../utils/thumbnail_utils.dart';
 
 final mediaCacheServiceProvider = Provider<MediaCacheService>((ref) {
   final dataUsageService = ref.watch(dataUsageServiceProvider);
   final cacheManager = ref.watch(cacheManagerProvider);
   final trackerService = ref.watch(streamCacheTrackerServiceProvider);
-  final service = MediaCacheService(dataUsageService, cacheManager, trackerService);
+  final service = MediaCacheService(
+    ref,
+    dataUsageService,
+    cacheManager,
+    trackerService,
+  );
   ref.onDispose(() => service.dispose());
   return service;
 });
 
 class MediaCacheService {
+  final Ref _ref;
   final DataUsageService _dataUsageService;
   final CacheManager _cacheManager;
   final StreamCacheTrackerService _trackerService;
   final http.Client _client = http.Client(); // Persistent HTTP client
   Timer? _cleanupTimer;
 
-  MediaCacheService(this._dataUsageService, this._cacheManager, this._trackerService);
+  MediaCacheService(
+    this._ref,
+    this._dataUsageService,
+    this._cacheManager,
+    this._trackerService,
+  );
 
   void setCustomPath(String? path) {
     _cacheManager.setCustomPath(path);
@@ -47,8 +61,11 @@ class MediaCacheService {
   final Map<String, DateTime> _failedDownloads = {};
   static const _kFailureCooldown = Duration(seconds: 60);
 
-
-  Future<String> getAudioPath(String songId, String streamUrl, {String? userAgent}) async {
+  Future<String> getAudioPath(
+    String songId,
+    String streamUrl, {
+    String? userAgent,
+  }) async {
     final dir = await _cacheManager.getStreamAudioDir();
     final safeId = getSafeFilename(songId);
     final file = File(p.join(dir.path, '$safeId.m4a'));
@@ -62,24 +79,39 @@ class MediaCacheService {
 
     // If currently being downloaded, return streamUrl immediately so the player streams instantly instead of blocking
     if (_activeDownloads.containsKey(songId)) {
-      debugPrint('MediaCacheService: Existing prefetch in progress for $songId. Returning streamUrl to avoid blocking.');
+      debugPrint(
+        'MediaCacheService: Existing prefetch in progress for $songId. Returning streamUrl to avoid blocking.',
+      );
       return streamUrl;
     }
 
     // [Deadlock Guard] If this song recently failed, suppress retry and stream directly
     final failedAt = _failedDownloads[songId];
-    if (failedAt != null && DateTime.now().difference(failedAt) < _kFailureCooldown) {
-      debugPrint('MediaCacheService: [$songId] In failure cooldown. Streaming directly.');
+    if (failedAt != null &&
+        DateTime.now().difference(failedAt) < _kFailureCooldown) {
+      debugPrint(
+        'MediaCacheService: [$songId] In failure cooldown. Streaming directly.',
+      );
       return streamUrl;
     }
     _failedDownloads.remove(songId); // cooldown expired — clear it
 
-    debugPrint('MediaCacheService: Cache miss for $songId. Starting background cache...');
-    final downloadFuture = _downloadAudioInBackground(songId, streamUrl, file.path, userAgent: userAgent).catchError((e) {
-      debugPrint('MediaCacheService: Caught unhandled background failure for $songId: $e');
-    });
+    debugPrint(
+      'MediaCacheService: Cache miss for $songId. Starting background cache...',
+    );
+    final downloadFuture =
+        _downloadAudioInBackground(
+          songId,
+          streamUrl,
+          file.path,
+          userAgent: userAgent,
+        ).catchError((e) {
+          debugPrint(
+            'MediaCacheService: Caught unhandled background failure for $songId: $e',
+          );
+        });
     _activeDownloads[songId] = downloadFuture;
-    
+
     return streamUrl;
   }
 
@@ -94,21 +126,28 @@ class MediaCacheService {
     return file.existsSync() ? file.path : null;
   }
 
-  Future<void> _downloadAudioInBackground(String songId, String url, String savePath, {String? userAgent}) async {
+  Future<void> _downloadAudioInBackground(
+    String songId,
+    String url,
+    String savePath, {
+    String? userAgent,
+  }) async {
     final file = File(savePath);
     IOSink? sink;
 
     try {
       final request = http.Request('GET', Uri.parse(url));
-      
-      final activeUA = userAgent ?? (url.contains('c=ANDROID_VR')
-          ? 'com.google.android.apps.youtube.vr.oculus/1.56.21 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip'
-          : url.contains('c=IOS')
+
+      final activeUA =
+          userAgent ??
+          (url.contains('c=ANDROID_VR')
+              ? 'com.google.android.apps.youtube.vr.oculus/1.56.21 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip'
+              : url.contains('c=IOS')
               ? 'com.google.ios.youtube/19.29.1 (iPhone14,3; U; CPU iOS 15_6_1 like Mac OS X)'
               : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36");
-      
+
       final isAndroid = activeUA.toLowerCase().contains('android');
-      
+
       final Map<String, String> resolvedHeaders = {
         'User-Agent': activeUA,
         'Accept': '*/*',
@@ -126,15 +165,17 @@ class MediaCacheService {
           'Sec-Fetch-Site': 'cross-site',
         });
       }
-      
+
       request.headers.addAll(resolvedHeaders);
-      
-      final response = await _client.send(request).timeout(const Duration(minutes: 5));
-      
+
+      final response = await _client
+          .send(request)
+          .timeout(const Duration(minutes: 5));
+
       if (response.statusCode == 200 || response.statusCode == 206) {
         sink = file.openWrite();
         int downloadedBytes = 0;
-        
+
         await response.stream.forEach((chunk) {
           sink!.add(chunk);
           downloadedBytes += chunk.length;
@@ -145,29 +186,59 @@ class MediaCacheService {
         sink = null;
 
         _dataUsageService.addBytes(downloadedBytes);
-        debugPrint('MediaCacheService: Audio cached successfully for $songId ($downloadedBytes bytes)');
-        
+        debugPrint(
+          'MediaCacheService: Audio cached successfully for $songId ($downloadedBytes bytes)',
+        );
+
         // Tandai sebagai 'biasa diputar' agar masuk siklus 30 hari
         _trackerService.updateLastPlayed(songId);
-        
+
         _scheduleCleanup();
+      } else if (response.statusCode == 403) {
+        // HTTP 403: Stream URL expired or signature rejected by specific CDN node.
+        // Force-resolve a fresh stream URL directly via YoutubeStreamRepository to avoid circular provider loop.
+        debugPrint(
+          'MediaCacheService: [403 Retry] Stream URL expired for $songId. Resolving fresh URL via repo...',
+        );
+        final freshUrl = await _ref
+            .read(youtubeStreamRepositoryProvider)
+            .getStreamUrl(songId);
+        if (freshUrl != null &&
+            freshUrl != url &&
+            freshUrl.startsWith('http')) {
+          return await _downloadAudioInBackground(
+            songId,
+            freshUrl,
+            savePath,
+            userAgent: userAgent,
+          );
+        }
+        throw Exception(
+          'Media Integrity Check failed: Server returned 403 after retry',
+        );
       } else {
-        throw Exception('Media Integrity Check failed: Server returned ${response.statusCode}');
+        throw Exception(
+          'Media Integrity Check failed: Server returned ${response.statusCode}',
+        );
       }
     } catch (e) {
       _activeDownloads.remove(songId);
       // [Deadlock Guard] Record failure time to suppress retry spam
       _failedDownloads[songId] = DateTime.now();
-      
+
       debugPrint('MediaCacheService: Audio caching failed for $songId: $e');
       if (sink != null) {
-        try { await sink.close(); } catch (_) {}
+        try {
+          await sink.close();
+        } catch (_) {}
       }
-      
+
       if (file.existsSync()) {
-        try { 
-          await file.delete(); 
-          debugPrint('MediaCacheService: Cleaned up corrupted session for $songId');
+        try {
+          await file.delete();
+          debugPrint(
+            'MediaCacheService: Cleaned up corrupted session for $songId',
+          );
         } catch (_) {}
       }
       rethrow; // Propagate error back to repository to trigger escalation
@@ -177,7 +248,10 @@ class MediaCacheService {
     }
   }
 
-  Future<String?> getLyrics(String songId, Future<String?> Function() fetchLyrics) async {
+  Future<String?> getLyrics(
+    String songId,
+    Future<String?> Function() fetchLyrics,
+  ) async {
     final dir = await _cacheManager.getStreamLyricsDir();
     final safeId = getSafeFilename(songId);
     final file = File(p.join(dir.path, '$safeId.lrc'));
@@ -189,14 +263,13 @@ class MediaCacheService {
 
     try {
       final lyrics = await fetchLyrics();
-      if (lyrics != null && 
-          lyrics.isNotEmpty && 
-          !lyrics.toLowerCase().contains('not found') && 
+      if (lyrics != null &&
+          lyrics.isNotEmpty &&
+          !lyrics.toLowerCase().contains('not found') &&
           lyrics.trim().isNotEmpty) {
-        
         // Ensure directory exists just in case
         if (!dir.existsSync()) await dir.create(recursive: true);
-        
+
         await file.writeAsString(lyrics);
         debugPrint('MediaCacheService: Lyrics SAVED to cache: ${file.path}');
         _trackerService.updateLastPlayed(songId);
@@ -215,29 +288,46 @@ class MediaCacheService {
     return file.existsSync() ? file.path : null;
   }
 
-  Future<String?> cacheArtwork(String songId, String? url) async {
+  Future<String?> cacheArtwork(String songId, String? url, {bool forceOverwrite = false}) async {
     if (url == null || !url.startsWith('http')) return null;
+    final upgradedUrl = ThumbnailUtils.upgradeResolution(url);
     // ponytail: in-flight guard prevents 3 concurrent callers downloading same file
     if (_activeArtworkDownloads.contains(songId)) return null;
 
     try {
       final dir = await _cacheManager.getStreamImagesDir();
       final safeId = getSafeFilename(songId);
-      
+
       // Deteksi ekstensi dari URL atau default ke .jpg
       String ext = '.jpg';
-      if (url.toLowerCase().contains('.webp')) ext = '.webp';
-      if (url.toLowerCase().contains('.png')) ext = '.png';
+      if (upgradedUrl.toLowerCase().contains('.webp')) ext = '.webp';
+      if (upgradedUrl.toLowerCase().contains('.png')) ext = '.png';
 
       final file = File(p.join(dir.path, 'art_$safeId$ext'));
-      
-      if (file.existsSync()) return file.path;
+
+      if (file.existsSync()) {
+        if (!forceOverwrite) return file.path;
+        // forceOverwrite: delete stale low-res file so high-res art replaces it
+        try {
+          await file.delete();
+        } catch (_) {}
+      }
 
       _activeArtworkDownloads.add(songId);
-      final response = await _client.get(Uri.parse(url));
+      final response = await _client.get(Uri.parse(upgradedUrl));
       if (response.statusCode == 200) {
         await file.writeAsBytes(response.bodyBytes);
         debugPrint('MediaCacheService: Artwork cached safely: ${file.path}');
+
+        // Also sync to local/images/ if this track has a local download copy
+        final localDir = await _cacheManager.getLocalImagesDir();
+        final localFile = File(p.join(localDir.path, 'art_$safeId.jpg'));
+        if (localFile.existsSync() || forceOverwrite) {
+          try {
+            await localFile.writeAsBytes(response.bodyBytes);
+          } catch (_) {}
+        }
+
         return file.path;
       }
     } catch (e) {
@@ -265,16 +355,16 @@ class MediaCacheService {
 
   Future<String?> getCachedArtPath(String songId) async {
     try {
-      final dir = await _cacheManager.getStreamImagesDir();
+      final streamDir = await _cacheManager.getStreamImagesDir();
       final safeId = getSafeFilename(songId);
-      final file = File(p.join(dir.path, 'art_$safeId.jpg'));
-      if (file.existsSync()) return file.path;
+      final streamFile = File(p.join(streamDir.path, 'art_$safeId.jpg'));
+      if (streamFile.existsSync()) return streamFile.path;
 
-      // Check permanent images dir as fallback
-      final permDir = await _cacheManager.getImagesDir();
-      final permFile = File(p.join(permDir.path, 'art_$safeId.jpg'));
-      if (permFile.existsSync()) return permFile.path;
-      
+      // Fallback: check local/images/ for downloaded songs
+      final localDir = await _cacheManager.getLocalImagesDir();
+      final localFile = File(p.join(localDir.path, 'art_$safeId.jpg'));
+      if (localFile.existsSync()) return localFile.path;
+
       return null;
     } catch (e) {
       return null;
@@ -286,7 +376,7 @@ class MediaCacheService {
       final dir = await _cacheManager.getMetadataDir();
       final safeId = getSafeFilename(songId);
       final file = File(p.join(dir.path, '$safeId.json'));
-      
+
       if (await file.exists()) {
         final stat = await file.stat();
         if (DateTime.now().difference(stat.modified).inHours < 1) return;
@@ -298,6 +388,36 @@ class MediaCacheService {
       _scheduleCleanup();
     } catch (e) {
       debugPrint('Metadata caching error: $e');
+    }
+  }
+
+  /// Bypasses the 1-hour freshness guard when iTunes enrichment provides a
+  /// better [album] or [thumbnailUrl] than what the sidecar JSON already has.
+  /// ponytail: only writes when enriched fields differ from stored values.
+  Future<void> saveMetadataForced(String songId, MediaItem item) async {
+    try {
+      final dir = await _cacheManager.getMetadataDir();
+      final safeId = getSafeFilename(songId);
+      final file = File(p.join(dir.path, '$safeId.json'));
+
+      // Read existing sidecar to check if enriched fields are actually new.
+      if (await file.exists()) {
+        try {
+          final existing = MediaItem.fromJson(jsonDecode(await file.readAsString()));
+          final albumEnriched = (existing.album == null || existing.album!.isEmpty || existing.album == 'Unknown Album') &&
+              item.album != null && item.album!.isNotEmpty && item.album != 'Unknown Album';
+          final artEnriched = (existing.thumbnailUrl == null || existing.thumbnailUrl!.isEmpty) &&
+              item.thumbnailUrl != null && item.thumbnailUrl!.isNotEmpty;
+          if (!albumEnriched && !artEnriched) return; // nothing new to write
+        } catch (_) {
+          // corrupt sidecar — fall through and overwrite
+        }
+      }
+
+      await _cacheManager.synchronizedWrite(file, jsonEncode(item.toJson(includeArt: false)));
+      debugPrint('[MediaCache] Forced sidecar update for $songId (album/art enriched)');
+    } catch (e) {
+      debugPrint('Metadata forced-save error: $e');
     }
   }
 
@@ -318,7 +438,7 @@ class MediaCacheService {
   Future<void> removeFromCache(String songId) async {
     try {
       final safeId = getSafeFilename(songId);
-      
+
       final audioDir = await _cacheManager.getStreamAudioDir();
       final lyricsDir = await _cacheManager.getStreamLyricsDir();
       final imagesDir = await _cacheManager.getStreamImagesDir();
@@ -332,19 +452,30 @@ class MediaCacheService {
         File(p.join(imagesDir.path, 'art_$safeId.png')),
         File(p.join(imagesDir.path, 'art_$safeId.webp')),
       ];
-      
+
       for (final file in filesToDelete) {
         if (await file.exists()) {
           // SAFETY CHECK: Ensure we are only deleting within 'stream' or 'metadata' cache subfolders
           final normalizedPath = file.path.replaceAll('\\', '/');
-          final isSafePath = normalizedPath.contains('/cache/stream/') || 
-                             normalizedPath.contains('/cache/metadata/');
-          
+          final isSafePath =
+              normalizedPath.contains('/stream/') ||
+              normalizedPath.contains('/cache/');
+
           if (isSafePath) {
-            await file.delete();
-            debugPrint('MediaCacheService: Cache removal SUCCESS: ${p.basename(file.path)}');
+            try {
+              await file.delete();
+              debugPrint(
+                'MediaCacheService: Cache removal SUCCESS: ${p.basename(file.path)}',
+              );
+            } catch (e) {
+              debugPrint(
+                'MediaCacheService: File removal postponed (locked by player): ${p.basename(file.path)}',
+              );
+            }
           } else {
-            debugPrint('MediaCacheService: [CRITICAL] Blocked deletion of non-cache file: ${file.path}');
+            debugPrint(
+              'MediaCacheService: [CRITICAL] Blocked deletion of non-cache file: ${file.path}',
+            );
           }
         }
       }
@@ -353,36 +484,59 @@ class MediaCacheService {
     }
   }
 
-  // ---------------- Cache Management (Granular) ---------------- 
+  // ---------------- Cache Management (Granular) ----------------
 
   Future<int> _getDirSize(Directory dir) async {
     int total = 0;
     if (!await dir.exists()) return 0;
     try {
-      await for (final entity in dir.list(recursive: true, followLinks: false)) {
+      await for (final entity in dir.list(
+        recursive: true,
+        followLinks: false,
+      )) {
         if (entity is File) {
           total += await entity.length();
         }
       }
     } catch (e) {
-      debugPrint('MediaCacheService: Error calculating size for ${dir.path}: $e');
+      debugPrint(
+        'MediaCacheService: Error calculating size for ${dir.path}: $e',
+      );
     }
     return total;
   }
 
   Future<Map<String, int>> getDetailedCacheSizes() async {
     final Map<String, int> sizes = {};
-    
-    // Core folders
-    sizes['images'] = await _getDirSize(await _cacheManager.getImagesDir());
+
+    // Local (downloaded) folders
+    sizes['local_music'] = await _getDirSize(
+      await _cacheManager.getLocalMusicDir(),
+    );
+    sizes['local_lyrics'] = await _getDirSize(
+      await _cacheManager.getLocalLyricsDir(),
+    );
+    sizes['local_images'] = await _getDirSize(
+      await _cacheManager.getLocalImagesDir(),
+    );
+
+    // Core system cache folders
     sizes['metadata'] = await _getDirSize(await _cacheManager.getMetadataDir());
-    sizes['translate'] = await _getDirSize(await _cacheManager.getTranslateDir());
-    
+    sizes['translate'] = await _getDirSize(
+      await _cacheManager.getTranslateDir(),
+    );
+
     // Stream sub-folders
-    sizes['stream_audio'] = await _getDirSize(await _cacheManager.getStreamAudioDir());
-    sizes['stream_images'] = await _getDirSize(await _cacheManager.getStreamImagesDir());
-    sizes['stream_lyrics'] = await _getDirSize(await _cacheManager.getStreamLyricsDir());
-    
+    sizes['stream_audio'] = await _getDirSize(
+      await _cacheManager.getStreamAudioDir(),
+    );
+    sizes['stream_images'] = await _getDirSize(
+      await _cacheManager.getStreamImagesDir(),
+    );
+    sizes['stream_lyrics'] = await _getDirSize(
+      await _cacheManager.getStreamLyricsDir(),
+    );
+
     return sizes;
   }
 
@@ -390,10 +544,12 @@ class MediaCacheService {
     try {
       final detailed = await getDetailedCacheSizes();
       final totalSize = detailed.values.fold(0, (sum, val) => sum + val);
-      
+
       if (totalSize < 1024) return '$totalSize B';
-      if (totalSize < 1024 * 1024) return '${(totalSize / 1024).toStringAsFixed(2)} KB';
-      if (totalSize < 1024 * 1024 * 1024) return '${(totalSize / (1024 * 1024)).toStringAsFixed(2)} MB';
+      if (totalSize < 1024 * 1024)
+        return '${(totalSize / 1024).toStringAsFixed(2)} KB';
+      if (totalSize < 1024 * 1024 * 1024)
+        return '${(totalSize / (1024 * 1024)).toStringAsFixed(2)} MB';
       return '${(totalSize / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
     } catch (e) {
       return '0 B';
@@ -404,13 +560,34 @@ class MediaCacheService {
     try {
       Directory? dir;
       switch (category) {
-        case 'images': dir = await _cacheManager.getImagesDir(); break;
-        case 'metadata': dir = await _cacheManager.getMetadataDir(); break;
-        case 'translate': dir = await _cacheManager.getTranslateDir(); break;
-        case 'stream_audio': dir = await _cacheManager.getStreamAudioDir(); break;
-        case 'stream_images': dir = await _cacheManager.getStreamImagesDir(); break;
-        case 'stream_lyrics': dir = await _cacheManager.getStreamLyricsDir(); break;
-        case 'all': 
+        case 'local_music':
+          dir = await _cacheManager.getLocalMusicDir();
+          break;
+        case 'local_lyrics':
+          dir = await _cacheManager.getLocalLyricsDir();
+          break;
+        case 'local_images':
+          dir = await _cacheManager.getLocalImagesDir();
+          break;
+        case 'metadata':
+          dir = await _cacheManager.getMetadataDir();
+          break;
+        case 'translate':
+          dir = await _cacheManager.getTranslateDir();
+          break;
+        case 'images':
+          dir = await _cacheManager.getStreamImagesDir();
+          break;
+        case 'stream_audio':
+          dir = await _cacheManager.getStreamAudioDir();
+          break;
+        case 'stream_images':
+          dir = await _cacheManager.getStreamImagesDir();
+          break;
+        case 'stream_lyrics':
+          dir = await _cacheManager.getStreamLyricsDir();
+          break;
+        case 'all':
           await clearCache();
           return;
       }
@@ -419,7 +596,9 @@ class MediaCacheService {
         final List<FileSystemEntity> entities = dir.listSync();
         for (final entity in entities) {
           if (entity is File) {
-            try { await entity.delete(); } catch (_) {}
+            try {
+              await entity.delete();
+            } catch (_) {}
           }
         }
         debugPrint('MediaCacheService: Cleared category $category');
@@ -431,14 +610,13 @@ class MediaCacheService {
 
   Future<void> clearCache() async {
     try {
-      // Clear all major directories
+      // Clear all stream + system cache dirs; local/ is user data, not auto-cleared here
       final dirs = [
         await _cacheManager.getStreamAudioDir(),
         await _cacheManager.getStreamImagesDir(),
         await _cacheManager.getStreamLyricsDir(),
         await _cacheManager.getMetadataDir(),
         await _cacheManager.getTranslateDir(),
-        await _cacheManager.getImagesDir(),
       ];
 
       for (var dir in dirs) {
@@ -446,7 +624,9 @@ class MediaCacheService {
         final List<FileSystemEntity> entities = dir.listSync();
         for (final entity in entities) {
           if (entity is File) {
-            try { await entity.delete(); } catch (_) {}
+            try {
+              await entity.delete();
+            } catch (_) {}
           }
         }
       }
@@ -459,8 +639,12 @@ class MediaCacheService {
   void _scheduleCleanup() {
     _cleanupTimer?.cancel();
     _cleanupTimer = Timer(const Duration(seconds: 5), () {
-      enforceCacheLimit(2048); // Batas 2GB (2048MB)
-      _cacheManager.cleanupTemporaryStreams();
+      final limitGb = _ref.read(streamCacheLimitGbProvider);
+      final secondaryDays = _ref.read(secondaryCacheRetentionDaysProvider);
+      final limitMb = limitGb * 1024;
+
+      enforceCacheLimit(limitMb);
+      _cacheManager.cleanupTemporaryStreams(maxAgeDays: secondaryDays);
     });
   }
 

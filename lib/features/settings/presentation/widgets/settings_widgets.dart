@@ -99,7 +99,7 @@ class SettingsDropdownTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Material(
         color: theme.colorScheme.surface,
         clipBehavior: Clip.antiAlias,
@@ -110,7 +110,7 @@ class SettingsDropdownTile extends StatelessWidget {
         child: Theme(
           data: theme.copyWith(dividerColor: Colors.transparent),
           child: ExpansionTile(
-            tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
             collapsedBackgroundColor: Colors.transparent,
             backgroundColor: Colors.transparent,
             leading: Icon(icon, size: 18, color: theme.primaryColor),

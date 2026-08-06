@@ -1,3 +1,4 @@
+import 'package:resonance/core/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:silky_scroll/silky_scroll.dart';
@@ -19,11 +20,35 @@ class RecentSubPage extends ConsumerWidget {
     return SilkyListView(
       padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
       children: [
-        Text(
-          'Recently Played',
-          style: theme.textTheme.headlineSmall?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Recently Played',
+              style: theme.textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            ResonanceButton(
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder: (dlg) => ResonanceConfirmDialog(
+                    title: 'Clear History',
+                    content: 'Remove all recently played tracks from your history? This cannot be undone.',
+                    confirmLabel: 'Clear',
+                    isDanger: true,
+                    onConfirm: () {
+                      ref.read(recentlyPlayedProvider.notifier).clearHistory();
+                    },
+                  ),
+                );
+              },
+              icon: UIcons.regular.trash,
+              label: 'Clear',
+              style: ResonanceButtonStyle.danger,
+            ),
+          ],
         ),
         const SizedBox(height: 16),
         SizedBox(

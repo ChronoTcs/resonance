@@ -11,11 +11,44 @@ import '../widgets/downloads_settings_section.dart';
 import '../widgets/support_update_section.dart';
 import 'package:resonance/features/dashboard/presentation/widgets/top_navigation_header.dart';
 
-class SettingsScreen extends ConsumerWidget {
+import 'help_screen.dart';
+import 'release_manager_screen.dart';
+
+enum SettingsSubView { none, help, updates }
+
+class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+  SettingsSubView _subView = SettingsSubView.none;
+  final ScrollController _displayScrollController = ScrollController();
+
+  void _openSubView(SettingsSubView view) {
+    setState(() => _subView = view);
+    if (_displayScrollController.hasClients) {
+      _displayScrollController.jumpTo(0);
+    }
+  }
+
+  void _closeSubView() {
+    setState(() => _subView = SettingsSubView.none);
+    if (_displayScrollController.hasClients) {
+      _displayScrollController.jumpTo(0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _displayScrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
     final tabs = [
@@ -79,14 +112,32 @@ class SettingsScreen extends ConsumerWidget {
             Expanded(
               child: TabBarView(
                 children: [
-                  // ── Tab 1: Display (Appearance + Lyrics) ───────────
-                  _SettingsTabPage(children: const [
-                    AppearanceSection(),
-                    SizedBox(height: 32),
-                    TranslationSection(),
-                    SizedBox(height: 32),
-                    SupportUpdateSection(),
-                  ]),
+                  // ── Tab 1: Display (Appearance + Lyrics + Update OR SubViews) ───
+                  _SettingsTabPage(
+                    controller: _displayScrollController,
+                    children: _subView == SettingsSubView.help
+                        ? [
+                            HelpScreen(
+                              onBack: _closeSubView,
+                            ),
+                          ]
+                        : _subView == SettingsSubView.updates
+                            ? [
+                                ReleaseManagerScreen(
+                                  onBack: _closeSubView,
+                                ),
+                              ]
+                            : [
+                                const AppearanceSection(),
+                                const SizedBox(height: 24),
+                                const TranslationSection(),
+                                const SizedBox(height: 24),
+                                SupportUpdateSection(
+                                  onOpenHelp: () => _openSubView(SettingsSubView.help),
+                                  onOpenUpdates: () => _openSubView(SettingsSubView.updates),
+                                ),
+                              ],
+                  ),
 
                   // ── Tab 2: Audio ───────────────────────────────────
                   _SettingsTabPage(children: const [
@@ -96,7 +147,7 @@ class SettingsScreen extends ConsumerWidget {
                   // ── Tab 3: Storage (Library Paths + Cache) ─────────
                   _SettingsTabPage(children: const [
                     LibraryPathsSection(),
-                    SizedBox(height: 32),
+                    SizedBox(height: 24),
                     CacheManagementSection(),
                   ]),
 
@@ -116,11 +167,14 @@ class SettingsScreen extends ConsumerWidget {
 
 class _SettingsTabPage extends StatelessWidget {
   final List<Widget> children;
-  const _SettingsTabPage({required this.children});
+  final ScrollController? controller;
+
+  const _SettingsTabPage({required this.children, this.controller});
 
   @override
   Widget build(BuildContext context) {
     return ListView(
+      controller: controller,
       physics: const ClampingScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       children: children,

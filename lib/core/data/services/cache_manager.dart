@@ -47,9 +47,76 @@ class CacheManager {
     return cacheDir;
   }
 
+  // ── Local (Downloaded) Directories ──
+
+  Future<Directory> getLocalMusicDir() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final overridePath = prefs.getString('music_folder');
+      if (overridePath != null && overridePath.isNotEmpty) {
+        final dir = Directory(overridePath);
+        if (!dir.existsSync()) dir.createSync(recursive: true);
+        return dir;
+      }
+    } catch (_) {}
+
+    final path = await PathUtils.getMusicDefault();
+    final dir = Directory(path);
+    if (!dir.existsSync()) dir.createSync(recursive: true);
+    return dir;
+  }
+
+  Future<Directory> getLocalLyricsDir() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final musicOverride = prefs.getString('music_folder');
+      if (musicOverride != null && musicOverride.isNotEmpty) {
+        final dir = Directory(p.join(Directory(musicOverride).parent.path, 'lyrics'));
+        if (!dir.existsSync()) dir.createSync(recursive: true);
+        return dir;
+      }
+    } catch (_) {}
+
+    final path = await PathUtils.getLyricsDefault();
+    final dir = Directory(path);
+    if (!dir.existsSync()) dir.createSync(recursive: true);
+    return dir;
+  }
+
+  Future<Directory> getLocalImagesDir() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final musicOverride = prefs.getString('music_folder');
+      if (musicOverride != null && musicOverride.isNotEmpty) {
+        final dir = Directory(p.join(Directory(musicOverride).parent.path, 'images'));
+        if (!dir.existsSync()) dir.createSync(recursive: true);
+        return dir;
+      }
+    } catch (_) {}
+
+    final path = await PathUtils.getLocalImagesDefault();
+    final dir = Directory(path);
+    if (!dir.existsSync()) dir.createSync(recursive: true);
+    return dir;
+  }
+
+  // ── Stream Directories (top-level sibling of cache/) ──
+
   Future<Directory> getStreamDir() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final overridePath = prefs.getString('stream_folder');
+      if (overridePath != null && overridePath.isNotEmpty) {
+        final dir = Directory(overridePath);
+        if (!dir.existsSync()) dir.createSync(recursive: true);
+        return dir;
+      }
+    } catch (_) {}
+
+    // ponytail: stream/ is top-level next to cache/, not nested inside it
     final base = await _baseCacheDir;
-    final dir = Directory(p.join(base.path, 'stream'));
+    final streamPath = p.join(p.dirname(base.path), 'stream');
+    final dir = Directory(streamPath);
     if (!dir.existsSync()) dir.createSync(recursive: true);
     return dir;
   }
@@ -71,16 +138,6 @@ class CacheManager {
   Future<Directory> getStreamLyricsDir() async {
     final streamDir = await getStreamDir();
     final dir = Directory(p.join(streamDir.path, 'lyrics'));
-    if (!dir.existsSync()) dir.createSync(recursive: true);
-    return dir;
-  }
-
-  Future<Directory> getImagesDir() async {
-    final base = await _baseCacheDir;
-    final path = base.path;
-    final dir = (path.endsWith('images') || path.endsWith('images${Platform.pathSeparator}'))
-        ? Directory(path)
-        : Directory(p.join(path, 'images'));
     if (!dir.existsSync()) dir.createSync(recursive: true);
     return dir;
   }
@@ -181,23 +238,43 @@ class CacheManager {
   }
 
   /// Cleans up temporary stream images and lyrics to prevent piling up.
-  /// Standard retention: Delete files older than 7 days.
-  Future<void> cleanupTemporaryStreams() async {
+  /// Only deletes orphaned files (where corresponding audio stream was already deleted/erased)
+  /// AND the secondary file age exceeds [maxAgeDays].
+  Future<void> cleanupTemporaryStreams({int maxAgeDays = 7}) async {
     try {
+      final audioDir = await getStreamAudioDir();
       final imgsDir = await getStreamImagesDir();
       final lrcDir = await getStreamLyricsDir();
       
-      final maxAge = const Duration(days: 7);
+      final maxAge = Duration(days: maxAgeDays);
       final now = DateTime.now();
+
+      // Collect existing audio song IDs (without extension)
+      final Set<String> existingAudioIds = {};
+      if (await audioDir.exists()) {
+        await for (var entity in audioDir.list(recursive: false)) {
+          if (entity is File) {
+            existingAudioIds.add(p.basenameWithoutExtension(entity.path));
+          }
+        }
+      }
 
       for (var dir in [imgsDir, lrcDir]) {
         if (!await dir.exists()) continue;
         await for (var entity in dir.list(recursive: false)) {
           if (entity is File) {
             try {
-              final stat = await entity.stat();
-              if (now.difference(stat.modified) > maxAge) {
-                await entity.delete();
+              final basename = p.basenameWithoutExtension(entity.path);
+              // Art files are named 'art_{id}' — strip prefix if present
+              final songId = basename.startsWith('art_') ? basename.substring(4) : basename;
+
+              // Orphan guard: Only delete if the audio file was already erased
+              if (!existingAudioIds.contains(songId)) {
+                final stat = await entity.stat();
+                if (now.difference(stat.modified) > maxAge) {
+                  await entity.delete();
+                  debugPrint('CacheManager: Cleaned up orphaned secondary stream file ${entity.path}');
+                }
               }
             } catch (_) {}
           }

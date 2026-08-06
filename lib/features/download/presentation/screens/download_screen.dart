@@ -144,6 +144,35 @@ class _DownloadScreenState extends ConsumerState<DownloadScreen>
             child: SilkyCustomScrollView(
               slivers: [
 
+          // ─── Android Notice Banner ─────────────────────────────────
+          if (Platform.isAndroid)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.amber.withValues(alpha: 0.4)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.info_outline, color: Colors.amber, size: 20),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Text(
+                          'Direct URL downloads require the desktop Python bridge (unavailable on Android). '
+                          'Use the Explore tab to stream or save tracks instead.',
+                          style: TextStyle(fontSize: 12, color: Colors.amber),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
           // ─── Input Panel ──────────────────────────────────────────
           SliverToBoxAdapter(
             child: Padding(
@@ -277,11 +306,24 @@ class _DownloadScreenState extends ConsumerState<DownloadScreen>
                     ),
                     const Spacer(),
                     if (doneCount > 0)
-                      TextButton.icon(
-                        onPressed: () =>
-                            ref.read(downloadProvider.notifier).clearCompleted(),
-                        icon: Icon(AppIcons.trash, size: 18),
-                        label: const Text('Clear done'),
+                      ResonanceButton(
+                        onPressed: () {
+                          showDialog(
+                            context: context,
+                            builder: (dlg) => ResonanceConfirmDialog(
+                              title: 'Clear Completed Downloads',
+                              content: 'Are you sure you want to clear all finished downloads from the queue history?',
+                              confirmLabel: 'Clear',
+                              isDanger: true,
+                              onConfirm: () async {
+                                ref.read(downloadProvider.notifier).clearCompleted();
+                              },
+                            ),
+                          );
+                        },
+                        icon: UIcons.regular.trash,
+                        label: 'Clear done',
+                        style: ResonanceButtonStyle.secondary,
                       ),
                   ],
                 ),

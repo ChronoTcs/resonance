@@ -15,9 +15,14 @@ import 'package:resonance/core/utils/app_icons.dart';
 import 'package:resonance/features/playlist/presentation/widgets/music_picker_sheet.dart';
 
 class PlaylistDetailScreen extends ConsumerWidget {
-  const PlaylistDetailScreen({super.key, required this.playlistId});
+  const PlaylistDetailScreen({
+    super.key,
+    required this.playlistId,
+    this.showBackButton = true,
+  });
 
   final String playlistId;
+  final bool showBackButton;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -49,12 +54,15 @@ class PlaylistDetailScreen extends ConsumerWidget {
                 pinned: true,
                 elevation: 0,
                 backgroundColor: theme.colorScheme.surface.withValues(alpha: 0.7),
-                leading: Center(
-                  child: AppBackButton(
-                    color: theme.colorScheme.onSurface,
-                    onTap: () => ref.read(selectedPlaylistIdProvider.notifier).setSelectedId(null),
-                  ),
-                ),
+                automaticallyImplyLeading: false,
+                leading: showBackButton
+                    ? Center(
+                        child: AppBackButton(
+                          color: theme.colorScheme.onSurface,
+                          onTap: () => ref.read(selectedPlaylistIdProvider.notifier).setSelectedId(null),
+                        ),
+                      )
+                    : null,
                 actions: [
                   ReusableHoverIconButton(
                     icon: UIcons.regular.refresh,

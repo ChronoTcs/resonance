@@ -34,26 +34,17 @@ class FullScreenAudioView extends ConsumerWidget {
   void _confirmDelete(BuildContext context, WidgetRef ref, dynamic item) {
     showDialog(
       context: context,
-      builder: (dlg) => AlertDialog(
-        title: const Text('Delete Track'),
-        content: Text('Permanently delete "${item.title}" from your device?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dlg),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () {
-              Navigator.pop(dlg);
-              ref.read(libraryProvider.notifier).deleteTrack(item.path);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('"${item.title}" deleted.')),
-              );
-            },
-            child: const Text('Delete'),
-          ),
-        ],
+      builder: (dlg) => ResonanceConfirmDialog(
+        title: 'Delete Track',
+        content: 'Permanently delete "${item.title}" from your device? This cannot be undone.',
+        confirmLabel: 'Delete',
+        isDanger: true,
+        onConfirm: () {
+          ref.read(libraryProvider.notifier).deleteTrack(item.path);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('"${item.title}" deleted.')),
+          );
+        },
       ),
     );
   }
@@ -122,7 +113,7 @@ class FullScreenAudioView extends ConsumerWidget {
           onTap: () => _showMediaActions(context, ref, displayTrack),
         ),
         ReusableHoverIconButton(
-          icon: UIcons.regular.menu_dots,
+          icon: UIcons.regular.menu_dots_vertical,
           color: Colors.white70,
           tooltip: 'Audio Settings',
           // [DRY PRINCIPLE] Reuses the existing, reusable AudioSettingsSheet

@@ -35,15 +35,11 @@ class GaplessPrefetchService {
 
     try {
       final resolver = _ref.read(streamResolutionServiceProvider);
-      final player = _ref.read(audioProvider.notifier).player;
       
-      // Resolve using InnerTube (calls YoutubeService internally)
-      final resolvedPath = await resolver.resolve(nextTrack);
+      // Pre-resolve stream URL into cache so player.open() starts instantly on track change
+      await resolver.resolve(nextTrack);
       
-      // Append to the active player playlist for gapless transition
-      await player.add(resolver.buildMedia(resolvedPath));
-      
-      debugPrint('[Gapless] Next track resolved and buffered: ${nextTrack.title}');
+      debugPrint('[Gapless] Next track pre-resolved into cache: ${nextTrack.title}');
     } catch (e) {
       debugPrint('[Gapless] JIT Prefetch failed: $e');
       _isFetching = false;

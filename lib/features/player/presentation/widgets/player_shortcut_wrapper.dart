@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance/features/player/application/providers/audio_provider.dart';
+import 'package:resonance/core/providers/navigation_provider.dart';
+import 'package:resonance/features/player/presentation/notifiers/mini_player_view_notifier.dart';
 
 class PlayerShortcutWrapper extends ConsumerWidget {
   final Widget child;
@@ -59,6 +61,30 @@ class PlayerShortcutWrapper extends ConsumerWidget {
           }
           if (key == LogicalKeyboardKey.arrowLeft) {
             audioNotifier.adjustPosition(const Duration(seconds: -10));
+            return true;
+          }
+        }
+
+        // 5. Ctrl + F (Search / Explore) & Ctrl + L (Library)
+        if (isControl && !isInputFocused) {
+          if (key == LogicalKeyboardKey.keyF) {
+            ref.read(mainNavigationProvider.notifier).setIndex(1); // Explore / Search
+            return true;
+          }
+          if (key == LogicalKeyboardKey.keyL) {
+            ref.read(mainNavigationProvider.notifier).setIndex(2); // Library
+            return true;
+          }
+        }
+
+        // 6. Escape Key -> Exit MiniPlayer mode with blur transition animation
+        if (key == LogicalKeyboardKey.escape) {
+          final miniPlayerState = ref.read(miniPlayerPopProvider);
+          if (miniPlayerState.isPopped) {
+            BlurTransitionOverlay.run(
+              ref,
+              () async => ref.read(miniPlayerPopProvider.notifier).togglePop(),
+            );
             return true;
           }
         }

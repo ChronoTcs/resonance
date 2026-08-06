@@ -94,20 +94,18 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
         children: [
           TopNavigationHeader(
             left: _isSearching
-                ? Expanded(
-                    child: TextField(
-                      controller: _searchController,
-                      autofocus: true,
-                      decoration: const InputDecoration(
-                        hintText: 'Search in library...',
-                        border: InputBorder.none,
-                      ),
-                      onChanged: (value) {
-                        setState(() {
-                          _searchQuery = value;
-                        });
-                      },
+                ? TextField(
+                    controller: _searchController,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      hintText: 'Search in library...',
+                      border: InputBorder.none,
                     ),
+                    onChanged: (value) {
+                      setState(() {
+                        _searchQuery = value;
+                      });
+                    },
                   )
                 : Row(
                     children: [
@@ -290,23 +288,17 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
   void _confirmDelete(BuildContext context, WidgetRef ref, MediaItem item) {
     showDialog(
       context: context,
-      builder: (dlg) => AlertDialog(
-        title: const Text('Delete Track'),
-        content: Text('Permanently delete "${item.title}" from your device?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dlg), child: const Text('Cancel')),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () {
-              Navigator.pop(dlg);
-              ref.read(libraryProvider.notifier).deleteTrack(item);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('"${item.title}" deleted.')),
-              );
-            },
-            child: const Text('Delete'),
-          ),
-        ],
+      builder: (dlg) => ResonanceConfirmDialog(
+        title: 'Delete Track',
+        content: 'Permanently delete "${item.title}" from your device? This cannot be undone.',
+        confirmLabel: 'Delete',
+        isDanger: true,
+        onConfirm: () {
+          ref.read(libraryProvider.notifier).deleteTrack(item);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('"${item.title}" deleted.')),
+          );
+        },
       ),
     );
   }

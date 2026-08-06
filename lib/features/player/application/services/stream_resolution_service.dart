@@ -38,7 +38,8 @@ class StreamResolutionService {
 
     // ── 1. Physical local file check ───────────────────────────────────────
     final hasSlash = item.path.contains('/') || item.path.contains('\\');
-    final isStreamCache = item.path.replaceAll('\\', '/').contains('/cache/stream/');
+    final isStreamCache = item.path.replaceAll('\\', '/').contains('/stream/') ||
+        item.path.replaceAll('\\', '/').contains('/cache/');
     if (!item.isStreaming && hasSlash && !isStreamCache) {
       debugPrint('[StreamResolution] Local file: ${item.path}');
       return item.path;

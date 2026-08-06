@@ -7,7 +7,14 @@ import 'package:resonance/features/settings/application/notification_provider.da
 /// Self-contained notification bell icon + dropdown overlay.
 /// Lives in the dashboard feature — legal to read notificationProvider here.
 class NotificationBell extends ConsumerStatefulWidget {
-  const NotificationBell({super.key});
+  final Color? iconColor;
+  final bool isTitleBar;
+
+  const NotificationBell({
+    super.key,
+    this.iconColor,
+    this.isTitleBar = false,
+  });
 
   @override
   ConsumerState<NotificationBell> createState() => _NotificationBellState();
@@ -51,7 +58,7 @@ class _NotificationBellState extends ConsumerState<NotificationBell> {
               child: CompositedTransformFollower(
                 link: _layerLink,
                 showWhenUnlinked: false,
-                offset: const Offset(-270, 40),
+                offset: widget.isTitleBar ? const Offset(-280, 32) : const Offset(-270, 40),
                 child: Material(
                   elevation: 8,
                   borderRadius: BorderRadius.circular(10),
@@ -68,48 +75,42 @@ class _NotificationBellState extends ConsumerState<NotificationBell> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Padding(
-                          padding: const EdgeInsets.all(12),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
                                 'Notifications',
-                                style: theme.textTheme.titleSmall?.copyWith(
+                                style: theme.textTheme.titleMedium?.copyWith(
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
                               if (notifState.items.isNotEmpty)
-                                TextButton(
+                                ResonanceButton(
                                   onPressed: () {
                                     ref.read(notificationProvider.notifier).clearAll();
                                     ref.read(notificationProvider.notifier).toggleDropdown(visible: false);
                                   },
-                                  style: TextButton.styleFrom(
-                                    padding: EdgeInsets.zero,
-                                    minimumSize: Size.zero,
-                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                  ),
-                                  child: Text(
-                                    'Clear All',
-                                    style: TextStyle(
-                                      color: theme.colorScheme.error,
-                                      fontSize: 12,
-                                    ),
-                                  ),
+                                  icon: UIcons.regular.trash,
+                                  label: 'Clear All',
+                                  style: ResonanceButtonStyle.secondary,
                                 ),
                             ],
                           ),
                         ),
                         const Divider(height: 1),
                         ConstrainedBox(
-                          constraints: const BoxConstraints(maxHeight: 250),
+                          constraints: const BoxConstraints(maxHeight: 280),
                           child: notifState.items.isEmpty
-                              ? const Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 24),
+                              ? SizedBox(
+                                  height: 52,
                                   child: Center(
                                     child: Text(
                                       'No new notifications',
-                                      style: TextStyle(color: Colors.grey, fontSize: 12),
+                                      style: TextStyle(
+                                        color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                                        fontSize: 12,
+                                      ),
                                     ),
                                   ),
                                 )
@@ -145,9 +146,11 @@ class _NotificationBellState extends ConsumerState<NotificationBell> {
                                           color: Colors.grey,
                                         ),
                                       ),
-                                      onTap: () => ref
-                                          .read(notificationProvider.notifier)
-                                          .markAllAsRead(),
+                                      onTap: () {
+                                        ref.read(notificationProvider.notifier).markAllAsRead();
+                                        ref.read(notificationProvider.notifier).toggleDropdown(visible: false);
+                                        ref.read(notificationProvider.notifier).handleNotificationClick(targetScreen: item.targetScreen);
+                                      },
                                     );
                                   },
                                 ),
@@ -173,11 +176,47 @@ class _NotificationBellState extends ConsumerState<NotificationBell> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       if (notifState.isDropdownVisible) {
+        _hideOverlay();
         _showOverlay(context, notifState);
       } else {
         _hideOverlay();
       }
     });
+
+    if (widget.isTitleBar) {
+      return CompositedTransformTarget(
+        link: _layerLink,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            _TitleBarBellIconButton(
+              iconColor: widget.iconColor ?? Colors.white,
+              onTap: () => ref.read(notificationProvider.notifier).toggleDropdown(),
+            ),
+            if (unreadCount > 0)
+              Positioned(
+                right: 2,
+                top: 2,
+                child: Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.error,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Text(
+                    '$unreadCount',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 7,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      );
+    }
 
     return CompositedTransformTarget(
       link: _layerLink,
@@ -188,6 +227,7 @@ class _NotificationBellState extends ConsumerState<NotificationBell> {
             icon: UIcons.regular.bell,
             tooltip: 'Notifications',
             iconSize: 18,
+            color: widget.iconColor,
             onTap: () => ref.read(notificationProvider.notifier).toggleDropdown(),
           ),
           if (unreadCount > 0)
@@ -195,7 +235,7 @@ class _NotificationBellState extends ConsumerState<NotificationBell> {
               right: 4,
               top: 4,
               child: Container(
-                padding: const EdgeInsets.all(4),
+                padding: const EdgeInsets.all(3),
                 decoration: BoxDecoration(
                   color: Theme.of(context).colorScheme.error,
                   shape: BoxShape.circle,
@@ -211,6 +251,53 @@ class _NotificationBellState extends ConsumerState<NotificationBell> {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _TitleBarBellIconButton extends StatefulWidget {
+  final Color iconColor;
+  final VoidCallback onTap;
+
+  const _TitleBarBellIconButton({
+    required this.iconColor,
+    required this.onTap,
+  });
+
+  @override
+  State<_TitleBarBellIconButton> createState() => _TitleBarBellIconButtonState();
+}
+
+class _TitleBarBellIconButtonState extends State<_TitleBarBellIconButton> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDarkText = widget.iconColor.computeLuminance() > 0.5;
+    final hoverBgColor = isDarkText
+        ? Colors.white.withValues(alpha: 0.18)
+        : Colors.black.withValues(alpha: 0.08);
+    final hoverFgColor = isDarkText ? Colors.white : Colors.black;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: Tooltip(
+        message: 'Notifications',
+        child: GestureDetector(
+          onTap: widget.onTap,
+          child: Container(
+            width: 32,
+            height: 32,
+            color: _isHovered ? hoverBgColor : Colors.transparent,
+            child: Icon(
+              UIcons.regular.bell,
+              size: 13,
+              color: _isHovered ? hoverFgColor : widget.iconColor.withValues(alpha: 0.85),
+            ),
+          ),
+        ),
       ),
     );
   }

@@ -5,6 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/core/theme/theme_provider.dart';
+import 'package:resonance/features/dashboard/presentation/widgets/notification_bell.dart';
+import 'package:resonance/features/settings/application/app_behavior_provider.dart';
+import 'package:resonance/features/tray/application/tray_service.dart';
 class CustomTitleBar extends ConsumerStatefulWidget {
   final String? nowPlayingTitle;
   const CustomTitleBar({super.key, this.nowPlayingTitle});
@@ -149,32 +152,35 @@ class _CustomTitleBarState extends ConsumerState<CustomTitleBar> with WindowList
         children: [
           // Left side: Native-styled App Icon & Title Drag Area
           Expanded(
-            child: DragToMoveArea(
-              child: Padding(
-                padding: const EdgeInsets.only(left: 8, right: 12),
-                child: Row(
-                  children: [
-                    Image.asset(
-                      'assets/icons/app_icon.png',
-                      width: 16,
-                      height: 16,
-                      fit: BoxFit.contain,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        titleText,
-                        style: TextStyle(
-                          fontFamily: 'Segoe UI',
-                          fontSize: 12,
-                          fontWeight: FontWeight.normal,
-                          color: contentColor,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: DragToMoveArea(
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 8, right: 12),
+                  child: Row(
+                    children: [
+                      Image.asset(
+                        'assets/icons/app_icon.png',
+                        width: 16,
+                        height: 16,
+                        fit: BoxFit.contain,
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          titleText,
+                          style: TextStyle(
+                            fontFamily: 'Segoe UI',
+                            fontSize: 12,
+                            fontWeight: FontWeight.normal,
+                            color: contentColor,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -183,6 +189,11 @@ class _CustomTitleBarState extends ConsumerState<CustomTitleBar> with WindowList
           // Right side: Custom Toggles & Windows 11 styled Controls
           Row(
             children: [
+              // Notification Bell (UIcons.regular.bell)
+              NotificationBell(
+                isTitleBar: true,
+                iconColor: contentColor,
+              ),
               // Accent Color Cycle
               _TitleBarCompactButton(
                 icon: UIcons.regular.paint_brush,
@@ -234,7 +245,14 @@ class _CustomTitleBarState extends ConsumerState<CustomTitleBar> with WindowList
               ),
               _WindowControlButton(
                 tooltip: 'Close',
-                onTap: windowManager.close,
+                onTap: () {
+                  final closeToTray = ref.read(appBehaviorProvider).closeToTray;
+                  if (closeToTray) {
+                    windowManager.hide();
+                  } else {
+                    ref.read(trayServiceProvider).handleExit();
+                  }
+                },
                 contentColor: contentColor,
                 isClose: true,
                 child: Icon(
@@ -273,6 +291,12 @@ class _TitleBarCompactButtonState extends State<_TitleBarCompactButton> {
 
   @override
   Widget build(BuildContext context) {
+    final isLight = widget.contentColor.computeLuminance() > 0.5;
+    final hoverBgColor = isLight
+        ? Colors.white.withValues(alpha: 0.18)
+        : Colors.black.withValues(alpha: 0.08);
+    final hoverFgColor = isLight ? Colors.white : Colors.black;
+
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
@@ -283,11 +307,11 @@ class _TitleBarCompactButtonState extends State<_TitleBarCompactButton> {
           child: Container(
             width: 32,
             height: 32,
-            color: _isHovered ? Colors.white.withValues(alpha: 0.12) : Colors.transparent,
+            color: _isHovered ? hoverBgColor : Colors.transparent,
             child: Icon(
               widget.icon,
               size: 13,
-              color: _isHovered ? Colors.white : widget.contentColor.withValues(alpha: 0.85),
+              color: _isHovered ? hoverFgColor : widget.contentColor.withValues(alpha: 0.85),
             ),
           ),
         ),

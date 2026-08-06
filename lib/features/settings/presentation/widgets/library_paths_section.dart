@@ -27,8 +27,18 @@ class LibraryPathsSection extends ConsumerWidget {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey),
             ),
             ResonanceButton(
-              onPressed: () async {
-                await ref.read(libraryProvider.notifier).resetToDefaults();
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder: (dlg) => ResonanceConfirmDialog(
+                    title: 'Reset Library Paths',
+                    content: 'Reset all library folder paths to factory defaults?',
+                    confirmLabel: 'Reset',
+                    onConfirm: () async {
+                      await ref.read(libraryProvider.notifier).resetToDefaults();
+                    },
+                  ),
+                );
               },
               icon: UIcons.regular.undo_alt,
               label: 'Reset to Defaults',
@@ -37,45 +47,61 @@ class LibraryPathsSection extends ConsumerWidget {
           ],
         ),
         const SizedBox(height: 16),
-        _buildPathTile(
-          context,
-          icon: UIcons.regular.headphones,
-          title: 'Music Library',
-          path: libraryState.musicFolderPath,
-          onEdit: () async {
-            if (await PermissionService.requestStoragePermission()) {
-              String? selected = await FilePicker.platform.getDirectoryPath();
-              if (selected != null) libraryLogic.setMusicFolder(selected);
-            }
-          },
-        ),
-        const SizedBox(height: 12),
-        _buildPathTile(
-          context,
-          icon: UIcons.regular.microphone,
-          title: 'Lyrics Library',
-          path: libraryState.lyricsFolderPath,
-          onEdit: () async {
-            if (await PermissionService.requestStoragePermission()) {
-              String? selected = await FilePicker.platform.getDirectoryPath();
-              if (selected != null) libraryLogic.setLyricsFolder(selected);
-            }
-          },
-        ),
-        const SizedBox(height: 12),
-        _buildPathTile(
-          context,
-          icon: UIcons.regular.refresh,
-          title: 'Cache Directory',
-          path: libraryState.cacheFolderPath ?? 
-                (Platform.isWindows ? 'Default (%LocalAppData%\\ChronoTech\\Resonance\\cache)' : 'Default (Internal App Storage)'),
-          trailingIcon: UIcons.regular.pencil,
-          onEdit: () async {
-            if (await PermissionService.requestStoragePermission()) {
-              String? selected = await FilePicker.platform.getDirectoryPath();
-              if (selected != null) libraryLogic.setCacheFolder(selected);
-            }
-          },
+        // Grouped Library Paths Card Container
+        Material(
+          color: Theme.of(context).colorScheme.surface,
+          clipBehavior: Clip.antiAlias,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(color: Theme.of(context).dividerColor.withValues(alpha: 0.08)),
+          ),
+          child: Column(
+            children: [
+              _buildPathTile(
+                context,
+                icon: UIcons.regular.headphones,
+                title: 'Local Music Cache',
+                path: libraryState.musicFolderPath,
+                trailingIcon: UIcons.regular.pencil,
+                onEdit: () async {
+                  if (await PermissionService.requestStoragePermission()) {
+                    String? selected = await FilePicker.platform.getDirectoryPath();
+                    if (selected != null) libraryLogic.setMusicFolder(selected);
+                  }
+                },
+              ),
+              const Divider(height: 1),
+              _buildPathTile(
+                context,
+                icon: UIcons.regular.cloud_download,
+                title: 'Stream Music Cache',
+                path: libraryState.streamFolderPath ??
+                      (Platform.isWindows ? 'C:\\Users\\Batara\\AppData\\Local\\ChronoTech\\Resonance\\stream' : 'Default (Internal Stream Storage)'),
+                trailingIcon: UIcons.regular.pencil,
+                onEdit: () async {
+                  if (await PermissionService.requestStoragePermission()) {
+                    String? selected = await FilePicker.platform.getDirectoryPath();
+                    if (selected != null) libraryLogic.setStreamFolder(selected);
+                  }
+                },
+              ),
+              const Divider(height: 1),
+              _buildPathTile(
+                context,
+                icon: UIcons.regular.hdd,
+                title: 'System App Cache',
+                path: libraryState.cacheFolderPath ?? 
+                      (Platform.isWindows ? 'C:\\Users\\Batara\\AppData\\Local\\ChronoTech\\Resonance\\cache' : 'Default (Internal App Storage)'),
+                trailingIcon: UIcons.regular.pencil,
+                onEdit: () async {
+                  if (await PermissionService.requestStoragePermission()) {
+                    String? selected = await FilePicker.platform.getDirectoryPath();
+                    if (selected != null) libraryLogic.setCacheFolder(selected);
+                  }
+                },
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -90,7 +116,7 @@ class LibraryPathsSection extends ConsumerWidget {
     IconData? trailingIcon,
   }) {
     return ListTile(
-      leading: Icon(icon, size: 18),
+      leading: Icon(icon, size: 18, color: Theme.of(context).primaryColor),
       title: Text(title),
       subtitle: Text(path ?? 'Not configured'),
       trailing: ReusableHoverIconButton(
@@ -99,8 +125,6 @@ class LibraryPathsSection extends ConsumerWidget {
         onTap: onEdit,
         iconSize: 18,
       ),
-      tileColor: Theme.of(context).colorScheme.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
     );
   }
 }

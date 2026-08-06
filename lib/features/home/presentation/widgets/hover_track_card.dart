@@ -2,7 +2,6 @@ import 'package:resonance/core/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance/core/utils/uicons.dart';
-import 'package:resonance/core/utils/app_icons.dart';
 import 'package:resonance/features/library/data/models/media_item.dart';
 import 'package:resonance/features/library/application/library_provider.dart';
 import 'package:resonance/features/player/application/services/queue_orchestrator.dart';
@@ -49,9 +48,13 @@ class _HoverTrackCardState extends ConsumerState<HoverTrackCard> {
         onExit: (_) => setState(() => _isHovered = false),
         child: InkWell(
           onTap: () {
+            if (widget.track.isStreaming) {
+            ref.read(audioProvider.notifier).playYouTubeTrack(widget.track);
+          } else {
             final library = ref.read(libraryProvider);
             final audioTracks = library.allMedia.where((m) => m.type == 'audio').toList();
             ref.read(queueOrchestratorProvider).playWithLocalRadioFallback(widget.track, audioTracks);
+          }
           },
           onLongPress: () {
             showModalBottomSheet(
@@ -84,21 +87,12 @@ class _HoverTrackCardState extends ConsumerState<HoverTrackCard> {
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                IconButton(
-                                  icon: Icon(AppIcons.add, color: Colors.white),
-                                  iconSize: 22,
-                                  onPressed: () {
-                                    ref.read(audioProvider.notifier).addTrackToQueue(widget.track);
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text('Added "${widget.track.title}" to play queue', style: const TextStyle(color: Colors.white)),
-                                        duration: const Duration(seconds: 1),
-                                        behavior: SnackBarBehavior.floating,
-                                        backgroundColor: theme.primaryColor,
-                                      ),
-                                    );
-                                  },
-                                ),
+                                 IconButton(
+                                   icon: Icon(UIcons.regular.add, color: Colors.white),
+                                   iconSize: 22,
+                                   tooltip: 'Add to Playlist',
+                                   onPressed: () => MediaActionsBottomSheet.showPlaylistPicker(context, widget.track),
+                                 ),
                                 const SizedBox(width: 8),
                                 IconButton(
                                   icon: Icon(

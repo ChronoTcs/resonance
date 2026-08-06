@@ -2,18 +2,18 @@ import 'package:resonance/core/widgets/widgets.dart';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:resonance/features/player/application/providers/audio_provider.dart';
-import 'package:resonance/core/theme/theme_provider.dart';
 import 'package:resonance/features/lyrics/application/lyrics_provider.dart';
 import 'package:resonance/features/lyrics/application/lyrics_translation_provider.dart';
 import 'package:resonance/core/providers/overlay_provider.dart';
 import 'package:resonance/features/lyrics/presentation/widgets/lyrics_retry_button.dart';
+import 'package:resonance/features/lyrics/presentation/widgets/lyrics_offset_control.dart';
 
 import 'package:resonance/features/player/data/models/player_enums.dart';
 
 import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/features/lyrics/presentation/widgets/lyrics_translation_toggle.dart';
+import 'package:resonance/features/lyrics/presentation/widgets/lyrics_list_view.dart';
 
 class MetadataCard extends StatelessWidget {
   final dynamic track;
@@ -84,12 +84,8 @@ class _InfoLine extends StatelessWidget {
           Text(
             label,
             style: TextStyle(
-              color: Theme.of(
-                context,
-              ).colorScheme.onSurface.withValues(alpha: 0.54),
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1,
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+              fontSize: 12,
             ),
           ),
           const SizedBox(height: 2),
@@ -116,47 +112,10 @@ class MiniLyricsCard extends ConsumerStatefulWidget {
 }
 
 class _MiniLyricsCardState extends ConsumerState<MiniLyricsCard> {
-  final ItemScrollController _itemScrollController = ItemScrollController();
-  final ItemPositionsListener _itemPositionsListener =
-      ItemPositionsListener.create();
-
-  void _scrollToActiveLyric(int index) {
-    if (!mounted) return;
-    final lyrics = ref.read(displayLyricsProvider);
-    if (lyrics.isEmpty) return;
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      if (_itemScrollController.isAttached && index >= 0) {
-        try {
-          _itemScrollController.scrollTo(
-            index: index + 3,
-            duration: const Duration(milliseconds: 600),
-            curve: Curves.fastOutSlowIn,
-            alignment: 0.45,
-          );
-        } catch (e) {
-          debugPrint('MiniLyricsCard: Scroll suppressed - $e');
-        }
-      }
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final lyricsState = ref.watch(lyricsProvider);
     final translationState = ref.watch(lyricsTranslationProvider);
-    final lyrics = ref.watch(displayLyricsProvider);
-    final activeIndex = ref.watch(activeLyricIndexProvider);
-    final activeOpacity = ref.watch(lyricsActiveOpacityProvider);
-    final inactiveOpacity = ref.watch(lyricsInactiveOpacityProvider);
-
-    ref.listen<int>(activeLyricIndexProvider, (prev, next) {
-      if (next != -1 && next != prev) {
-        _scrollToActiveLyric(next);
-      }
-    });
-
     return RepaintBoundary(
       child: GestureDetector(
         onTap: () => ref.read(lyricsOverlayProvider.notifier).toggle(),
@@ -219,6 +178,9 @@ class _MiniLyricsCardState extends ConsumerState<MiniLyricsCard> {
                       ],
                     ],
                   ),
+                  const Spacer(),
+                  const LyricsOffsetControl(compact: true),
+                  const SizedBox(width: 12),
                   ReusableHoverIconButton(
                     icon: UIcons.regular.expand,
                     tooltip: 'Show Full Lyrics',
@@ -230,80 +192,7 @@ class _MiniLyricsCardState extends ConsumerState<MiniLyricsCard> {
               ),
               const SizedBox(height: 16),
               Expanded(
-                child: ShaderMask(
-                  shaderCallback: (Rect rect) {
-                    return const LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.transparent,
-                        Colors.white,
-                        Colors.white,
-                        Colors.transparent,
-                      ],
-                      stops: [0.0, 0.1, 0.9, 1.0],
-                    ).createShader(rect);
-                  },
-                  blendMode: BlendMode.dstIn,
-                  child: lyricsState.error != null && lyrics.isEmpty
-                      ? Center(
-                          child: Text(
-                            'Failed to load lyrics',
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.error,
-                              fontSize: 12,
-                            ),
-                          ),
-                        )
-                      : lyrics.isEmpty && !lyricsState.isLoading
-                      ? const Center(
-                          child: Text(
-                            'No lyrics found',
-                            style: TextStyle(
-                              color: Colors.white38,
-                              fontSize: 12,
-                            ),
-                          ),
-                        )
-                      : ScrollablePositionedList.builder(
-                          itemScrollController: _itemScrollController,
-                          itemPositionsListener: _itemPositionsListener,
-                          initialScrollIndex: activeIndex != -1
-                              ? activeIndex + 3
-                              : 0,
-                          initialAlignment: 0.45,
-                          itemCount: lyrics.length + 6,
-                          physics: const BouncingScrollPhysics(),
-                          itemBuilder: (context, index) {
-                            if (index < 3 || index >= lyrics.length + 3) {
-                              return const SizedBox(height: 48);
-                            }
-
-                            final lineIndex = index - 3;
-                            final line = lyrics[lineIndex];
-                            final isActive = lineIndex == activeIndex;
-
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(
-                                vertical: 8.0,
-                              ),
-                              child: AnimatedDefaultTextStyle(
-                                duration: const Duration(milliseconds: 300),
-                                style: TextStyle(
-                                  fontSize: isActive ? 18 : 14,
-                                  fontWeight: isActive
-                                      ? FontWeight.bold
-                                      : FontWeight.normal,
-                                  color: isActive
-                                      ? Theme.of(context).colorScheme.onSurface.withValues(alpha: activeOpacity)
-                                      : Theme.of(context).colorScheme.onSurface.withValues(alpha: inactiveOpacity),
-                                ),
-                                child: Text(line.text),
-                              ),
-                            );
-                          },
-                        ),
-                ),
+                child: const LyricsListView(compact: true),
               ),
             ],
           ),

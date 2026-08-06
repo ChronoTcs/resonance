@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:ui';
 import 'package:audio_service/audio_service.dart';
 import 'package:media_kit/media_kit.dart';
@@ -44,6 +45,10 @@ class ResonanceAudioHandler extends BaseAudioHandler with QueueHandler, SeekHand
     });
 
     player.stream.duration.listen((duration) {
+      // ponytail: duration is NOT sent to SMTC by audio_service_win. On Windows,
+      // emitting mediaItem.add() here creates a stale setMediaItem(prevTrack) call
+      // during gapless transitions that races with the correct thread.
+      if (Platform.isWindows) return;
       if (mediaItem.value != null) {
         mediaItem.add(mediaItem.value!.copyWith(duration: duration));
       }

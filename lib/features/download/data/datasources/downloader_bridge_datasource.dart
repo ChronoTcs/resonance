@@ -132,11 +132,16 @@ class DownloaderBridgeDatasource {
     if (projectRoot != null) {
       final devPy = p.join(projectRoot.path, 'python_engine', 'resonance_downloader.py');
       if (File(devPy).existsSync()) {
-        final condaPy = 'C:\\Users\\Batara\\miniconda3\\envs\\ml_ds_stable\\python.exe';
-        if (File(condaPy).existsSync()) {
-          return (exe: condaPy, args: ['-u', devPy]);
+        final customPy = Platform.environment['RESONANCE_PYTHON_EXE'];
+        final String pyExe;
+        if (customPy != null && File(customPy).existsSync()) {
+          pyExe = customPy;
+          debugPrint('[DownloaderBridge] Using Python from RESONANCE_PYTHON_EXE env: $pyExe');
+        } else {
+          pyExe = 'python';
+          debugPrint('[DownloaderBridge] RESONANCE_PYTHON_EXE not set or invalid. Falling back to system: $pyExe');
         }
-        return (exe: 'python', args: ['-u', devPy]);
+        return (exe: pyExe, args: ['-u', devPy]);
       }
     }
 
@@ -179,11 +184,16 @@ class DownloaderBridgeDatasource {
       // 2) Raw Python script — PREFERRED for active development
       final devPy = p.join(downloaderRoot, 'python_engine', 'resonance_downloader.py');
       if (File(devPy).existsSync()) {
-        final condaPy = 'C:\\Users\\Batara\\miniconda3\\envs\\ml_ds_stable\\python.exe';
-        if (File(condaPy).existsSync()) {
-          return (exe: condaPy, args: ['-u', devPy]);
+        final customPy = Platform.environment['RESONANCE_PYTHON_EXE'];
+        final String pyExe;
+        if (customPy != null && File(customPy).existsSync()) {
+          pyExe = customPy;
+          debugPrint('[DownloaderBridge] Initializing bridge via RESONANCE_PYTHON_EXE env: $pyExe');
+        } else {
+          pyExe = 'python';
+          debugPrint('[DownloaderBridge] Initializing bridge via system python fallback: $pyExe');
         }
-        return (exe: 'python', args: ['-u', devPy]);
+        return (exe: pyExe, args: ['-u', devPy]);
       }
 
       // 3) PyInstaller .exe already built — Fallback

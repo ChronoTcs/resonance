@@ -18,12 +18,14 @@ class MiniPlayerPopState {
   final MiniPlayerViewState viewState;
   final Size? originalSize;
   final Offset? originalPosition;
+  final bool wasMaximized;
 
   MiniPlayerPopState({
     this.isPopped = false,
     this.viewState = MiniPlayerViewState.normal,
     this.originalSize,
     this.originalPosition,
+    this.wasMaximized = false,
   });
 
   MiniPlayerPopState copyWith({
@@ -31,12 +33,14 @@ class MiniPlayerPopState {
     MiniPlayerViewState? viewState,
     Size? originalSize,
     Offset? originalPosition,
+    bool? wasMaximized,
   }) {
     return MiniPlayerPopState(
       isPopped: isPopped ?? this.isPopped,
       viewState: viewState ?? this.viewState,
       originalSize: originalSize ?? this.originalSize,
       originalPosition: originalPosition ?? this.originalPosition,
+      wasMaximized: wasMaximized ?? this.wasMaximized,
     );
   }
 }
@@ -96,16 +100,27 @@ class MiniPlayerPopNotifier extends Notifier<MiniPlayerPopState> {
   }
 
   Future<void> _openMiniPlayer() async {
-    final size = await windowManager.getSize();
-    final pos = await windowManager.getPosition();
+    final isMaximized = await windowManager.isMaximized();
+    Size? size;
+    Offset? pos;
+
+    if (isMaximized) {
+      await windowManager.unmaximize();
+      await Future.delayed(const Duration(milliseconds: 30));
+    }
+
+    size = await windowManager.getSize();
+    pos = await windowManager.getPosition();
 
     try {
-      final SharedPreferences prefs = await SharedPreferences.getInstance();
-      await prefs.setDouble('window_width', size.width);
-      await prefs.setDouble('window_height', size.height);
-      await prefs.setDouble('window_x', pos.dx);
-      await prefs.setDouble('window_y', pos.dy);
-      debugPrint('[MiniPlayer] Persisted normal size: ${size.width}x${size.height}');
+      if (!isMaximized) {
+        final SharedPreferences prefs = await SharedPreferences.getInstance();
+        await prefs.setDouble('window_width', size.width);
+        await prefs.setDouble('window_height', size.height);
+        await prefs.setDouble('window_x', pos.dx);
+        await prefs.setDouble('window_y', pos.dy);
+        debugPrint('[MiniPlayer] Persisted normal size: ${size.width}x${size.height}');
+      }
     } catch (e) {
       debugPrint('[MiniPlayer] Failed to persist normal size: $e');
     }
@@ -115,6 +130,7 @@ class MiniPlayerPopNotifier extends Notifier<MiniPlayerPopState> {
       viewState: MiniPlayerViewState.normal,
       originalSize: size,
       originalPosition: pos,
+      wasMaximized: isMaximized,
     );
 
     await Future.delayed(const Duration(milliseconds: 20));
@@ -138,8 +154,6 @@ class MiniPlayerPopNotifier extends Notifier<MiniPlayerPopState> {
     _idleTimer?.cancel();
 
     if (Platform.isWindows) {
-      // Ensure OS bounds are cleared and position is restored
-      // completely BEFORE changing state to popped = false.
       await windowManager.setAlwaysOnTop(false);
       await windowManager.setMinimumSize(const Size(0, 0));
       await windowManager.setMaximumSize(const Size(99999, 99999));
@@ -149,15 +163,18 @@ class MiniPlayerPopNotifier extends Notifier<MiniPlayerPopState> {
       
       await windowManager.setMinimumSize(const Size(800, 600));
 
-      if (state.originalSize != null) {
-        await windowManager.setSize(state.originalSize!);
-      }
-      
-      if (state.originalPosition != null) {
-        await windowManager.setPosition(state.originalPosition!);
+      if (state.wasMaximized) {
+        await windowManager.maximize();
+      } else {
+        if (state.originalSize != null) {
+          await windowManager.setSize(state.originalSize!);
+        }
+        if (state.originalPosition != null) {
+          await windowManager.setPosition(state.originalPosition!);
+        }
       }
 
-      await Future.delayed(const Duration(milliseconds: 50)); // OS stabilization buffer
+      await Future.delayed(const Duration(milliseconds: 50));
     }
     
     state = state.copyWith(

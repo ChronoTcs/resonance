@@ -6,10 +6,11 @@ import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/core/utils/app_icons.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart' as yt;
 import 'package:resonance/features/library/data/models/media_item.dart';
+import 'package:resonance/features/library/application/library_provider.dart';
 import 'package:resonance/features/playlist/application/playlist_provider.dart';
 import 'package:resonance/features/download/application/providers/download_provider.dart';
 import 'package:resonance/features/download/data/models/download_item.dart';
-import 'package:resonance/core/providers/navigation_provider.dart';
+import 'package:resonance/features/settings/application/notification_provider.dart';
 
 class MediaActionsBottomSheet extends ConsumerWidget {
   const MediaActionsBottomSheet({
@@ -48,37 +49,51 @@ class MediaActionsBottomSheet extends ConsumerWidget {
           ListTile(
             leading: ClipRRect(
               borderRadius: BorderRadius.circular(8),
-            child: item.albumArt != null
-                ? Image.memory(
-                    item.albumArt!,
-                    width: 48,
-                    height: 48,
-                    fit: BoxFit.cover,
-                  )
-                : (item.thumbnailUrl != null)
-                    ? CachedNetworkImage(
-                        imageUrl: item.thumbnailUrl!,
-                        width: 48,
-                        height: 48,
-                        fit: BoxFit.cover,
-                        placeholder: (c, u) => Container(color: theme.colorScheme.surfaceContainerHighest, child: Icon(AppIcons.music)),
-                        errorWidget: (c, u, e) => Container(color: theme.colorScheme.surfaceContainerHighest, child: Icon(AppIcons.music)),
-                      )
-                    : Container(
-                        width: 48,
-                        height: 48,
+              child: item.albumArt != null
+                  ? Image.memory(
+                      item.albumArt!,
+                      width: 48,
+                      height: 48,
+                      fit: BoxFit.cover,
+                    )
+                  : (item.thumbnailUrl != null)
+                  ? CachedNetworkImage(
+                      imageUrl: item.thumbnailUrl!,
+                      width: 48,
+                      height: 48,
+                      fit: BoxFit.cover,
+                      placeholder: (c, u) => Container(
                         color: theme.colorScheme.surfaceContainerHighest,
-                        child: Icon(
-                          isOnline ? UIcons.regular.world : AppIcons.music,
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
+                        child: Icon(AppIcons.music),
                       ),
+                      errorWidget: (c, u, e) => Container(
+                        color: theme.colorScheme.surfaceContainerHighest,
+                        child: Icon(AppIcons.music),
+                      ),
+                    )
+                  : Container(
+                      width: 48,
+                      height: 48,
+                      color: theme.colorScheme.surfaceContainerHighest,
+                      child: Icon(
+                        isOnline ? UIcons.regular.world : AppIcons.music,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
             ),
-            title: Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-            subtitle: Text(item.artist ?? 'Unknown Artist', maxLines: 1, overflow: TextOverflow.ellipsis),
+            title: Text(
+              item.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            subtitle: Text(
+              item.artist ?? 'Unknown Artist',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
           const Divider(),
-          
+
           // Action: Add to Playlist
           if (playlistId == null)
             ListTile(
@@ -86,40 +101,49 @@ class MediaActionsBottomSheet extends ConsumerWidget {
               title: const Text('Add to playlist'),
               onTap: () {
                 Navigator.pop(context);
-                _showPlaylistPicker(context);
+                showPlaylistPicker(context, item);
               },
             )
           else
             ListTile(
               leading: Icon(AppIcons.close, color: Colors.red),
-              title: const Text('Remove from this playlist', style: TextStyle(color: Colors.red)),
+              title: const Text(
+                'Remove from this playlist',
+                style: TextStyle(color: Colors.red),
+              ),
               onTap: () {
-                ref.read(playlistProvider.notifier).removeTrackFromPlaylist(playlistId!, item.id ?? item.path);
+                ref
+                    .read(playlistProvider.notifier)
+                    .removeTrackFromPlaylist(playlistId!, item.id ?? item.path);
                 Navigator.pop(context);
               },
             ),
 
-          // Action: Download (Online only)
-          if (isOnline)
+          // Action: Download (Online only & not already in library)
+          if (isOnline && !ref.watch(libraryProvider).isTrackDownloaded(item.id, title: item.title, artist: item.artist))
             ListTile(
               leading: Icon(AppIcons.download),
               title: const Text('Download to library'),
               onTap: () {
                 // 1. Add to download queue
-                ref.read(downloadProvider.notifier).addToQueue(
-                  [item.id!],
-                  type: DownloadType.audio,
-                  source: DownloadSource.ytmusic,
-                  video: video, // Metadata Passthrough
-                );
-                
-                // 2. Switch to download tab
-                Navigator.pop(context); // Close bottom sheet
-                ref.read(mainNavigationProvider.notifier).setIndex(4); // 4 is the Download tab index
-                
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Started download: ${item.title}')),
-                );
+                ref
+                    .read(downloadProvider.notifier)
+                    .addToQueue(
+                      [item.id!],
+                      type: DownloadType.audio,
+                      source: DownloadSource.ytmusic,
+                      video: video, // Metadata Passthrough
+                    );
+
+                // 2. Close bottom sheet & trigger notification
+                Navigator.pop(context);
+                ref
+                    .read(notificationProvider.notifier)
+                    .showNotification(
+                      'Download Started',
+                      'Downloading "${item.title}" to library...',
+                      target: 'target:download',
+                    );
               },
             ),
 
@@ -132,25 +156,28 @@ class MediaActionsBottomSheet extends ConsumerWidget {
               _showDetailsDialog(context);
             },
           ),
-          
+
           // Action: Delete (passed from local library, etc)
           if (onDelete != null)
             ListTile(
               leading: Icon(AppIcons.trash, color: Colors.red),
-              title: const Text('Delete from device', style: TextStyle(color: Colors.red)),
+              title: const Text(
+                'Delete from device',
+                style: TextStyle(color: Colors.red),
+              ),
               onTap: () {
                 Navigator.pop(context);
                 onDelete!();
               },
             ),
-          
+
           const SizedBox(height: 12),
         ],
       ),
     );
   }
 
-  void _showPlaylistPicker(BuildContext context) {
+  static void showPlaylistPicker(BuildContext context, MediaItem item) {
     final showOnline = item.isStreaming;
     showModalBottomSheet(
       context: context,
@@ -162,7 +189,9 @@ class MediaActionsBottomSheet extends ConsumerWidget {
           return playlistsAsync.when(
             data: (state) {
               final targetList = showOnline ? state.online : state.local;
-              final emptyMsg = showOnline ? 'No stream playlists found.' : 'No local playlists found.';
+              final emptyMsg = showOnline
+                  ? 'No stream playlists found.'
+                  : 'No local playlists found.';
 
               return Column(
                 mainAxisSize: MainAxisSize.min,
@@ -171,15 +200,32 @@ class MediaActionsBottomSheet extends ConsumerWidget {
                     title: const Text('Select Playlist'),
                     automaticallyImplyLeading: false,
                     actions: [
-                      IconButton(onPressed: () => Navigator.pop(context), icon: Icon(AppIcons.close))
+                      Padding(
+                        padding: const EdgeInsets.only(right: 12),
+                        child: ReusableHoverIconButton(
+                          icon: UIcons.regular.cross,
+                          tooltip: 'Close',
+                          iconSize: 16.0,
+                          onTap: () => Navigator.pop(context),
+                        ),
+                      ),
                     ],
                   ),
                   ListTile(
-                    leading: Icon(AppIcons.add, color: theme.colorScheme.primary),
-                    title: Text('Create New Playlist', style: TextStyle(color: theme.colorScheme.primary, fontWeight: FontWeight.bold)),
+                    leading: Icon(
+                      AppIcons.add,
+                      color: theme.colorScheme.primary,
+                    ),
+                    title: Text(
+                      'Create New Playlist',
+                      style: TextStyle(
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     onTap: () {
                       Navigator.pop(context);
-                      _showCreatePlaylistDialog(context);
+                      showCreatePlaylistDialog(context, item);
                     },
                   ),
                   const Divider(height: 1),
@@ -200,7 +246,9 @@ class MediaActionsBottomSheet extends ConsumerWidget {
                             title: Text(pl.name),
                             onTap: () {
                               final messenger = ScaffoldMessenger.of(ctx);
-                              ref.read(playlistProvider.notifier).addTrackToPlaylist(pl.id, item);
+                              ref
+                                  .read(playlistProvider.notifier)
+                                  .addTrackToPlaylist(pl.id, item);
                               Navigator.pop(ctx);
                               messenger.showSnackBar(
                                 SnackBar(content: Text('Added to ${pl.name}')),
@@ -221,7 +269,7 @@ class MediaActionsBottomSheet extends ConsumerWidget {
     );
   }
 
-  void _showCreatePlaylistDialog(BuildContext context) {
+  static void showCreatePlaylistDialog(BuildContext context, MediaItem item) {
     final controller = TextEditingController();
     showDialog(
       context: context,
@@ -266,8 +314,12 @@ class MediaActionsBottomSheet extends ConsumerWidget {
                         fontSize: 14,
                       ),
                       filled: true,
-                      fillColor: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      fillColor: theme.colorScheme.surfaceContainerHighest
+                          .withValues(alpha: 0.35),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                         borderSide: BorderSide.none,
@@ -281,7 +333,9 @@ class MediaActionsBottomSheet extends ConsumerWidget {
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                         borderSide: BorderSide(
-                          color: theme.colorScheme.primary.withValues(alpha: 0.5),
+                          color: theme.colorScheme.primary.withValues(
+                            alpha: 0.5,
+                          ),
                           width: 1.5,
                         ),
                       ),
@@ -304,20 +358,34 @@ class MediaActionsBottomSheet extends ConsumerWidget {
                           if (name.isNotEmpty) {
                             final messenger = ScaffoldMessenger.of(ctx);
                             // 1. Create the playlist
-                            await ref.read(playlistProvider.notifier).createPlaylist(name, isStream: isStream);
-                            
+                            await ref
+                                .read(playlistProvider.notifier)
+                                .createPlaylist(name, isStream: isStream);
+
                             // 2. Get the new playlist ID from correct list
-                            final stateObj = await ref.read(playlistProvider.future);
-                            final targetList = isStream ? stateObj.online : stateObj.local;
-                            final newPl = targetList.firstWhere((p) => p.name == name);
-                            
+                            final stateObj = await ref.read(
+                              playlistProvider.future,
+                            );
+                            final targetList = isStream
+                                ? stateObj.online
+                                : stateObj.local;
+                            final newPl = targetList.firstWhere(
+                              (p) => p.name == name,
+                            );
+
                             // 3. Add the track to it
-                            await ref.read(playlistProvider.notifier).addTrackToPlaylist(newPl.id, item);
-                            
+                            await ref
+                                .read(playlistProvider.notifier)
+                                .addTrackToPlaylist(newPl.id, item);
+
                             if (ctx.mounted) {
                               Navigator.pop(ctx);
                               messenger.showSnackBar(
-                                SnackBar(content: Text('Created "$name" and added song.')),
+                                SnackBar(
+                                  content: Text(
+                                    'Created "$name" and added song.',
+                                  ),
+                                ),
                               );
                             }
                           }
@@ -353,7 +421,10 @@ class MediaActionsBottomSheet extends ConsumerWidget {
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Close')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Close'),
+          ),
         ],
       ),
     );
@@ -365,7 +436,14 @@ class MediaActionsBottomSheet extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey)),
+          Text(
+            label,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
+              color: Colors.grey,
+            ),
+          ),
           Text(value, style: const TextStyle(fontSize: 14)),
         ],
       ),

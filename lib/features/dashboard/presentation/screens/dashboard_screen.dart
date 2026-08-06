@@ -20,6 +20,7 @@ import 'package:resonance/features/player/application/services/audio_orchestrato
 import 'package:resonance/features/player/application/providers/audio_provider.dart';
 import 'package:resonance/features/dashboard/presentation/widgets/app_sidebar.dart';
 import 'package:resonance/features/dashboard/presentation/widgets/app_bottom_nav_bar.dart';
+import 'package:resonance/features/dashboard/presentation/widgets/notification_banner_overlay.dart';
 
 class MainDashboard extends ConsumerStatefulWidget {
   const MainDashboard({super.key});
@@ -150,6 +151,9 @@ class _MainDashboardState extends ConsumerState<MainDashboard> {
                                   key: ValueKey('lyrics_empty'),
                                 ),
                         ),
+
+                        // 4. In-App Notification Toast Overlay (Top-Right Floating Banner)
+                        const NotificationBannerOverlay(),
                       ],
                     ),
                   ),

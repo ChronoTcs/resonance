@@ -3,14 +3,14 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../application/lyrics_provider.dart';
-import 'package:resonance/core/theme/theme_provider.dart';
 import '../../../player/application/providers/audio_provider.dart';
-import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 import 'package:resonance/core/providers/overlay_provider.dart';
 import '../../application/lyrics_translation_provider.dart';
 import '../widgets/lyrics_retry_button.dart';
 import '../widgets/lyrics_translation_toggle.dart';
+import '../widgets/lyrics_list_view.dart';
+import '../widgets/lyrics_offset_control.dart';
 
 class LyricsScreen extends ConsumerStatefulWidget {
   final bool isEmbedded;
@@ -21,25 +21,9 @@ class LyricsScreen extends ConsumerStatefulWidget {
 }
 
 class _LyricsScreenState extends ConsumerState<LyricsScreen> {
-  final ItemScrollController _itemScrollController = ItemScrollController();
-  final ItemPositionsListener _itemPositionsListener = ItemPositionsListener.create();
-  int _currentIndex = -1;
-  double _listHeight = 600.0; // Default fallback
-
   @override
   void dispose() {
     super.dispose();
-  }
-
-  void _scrollToActiveLyric(int index) {
-    if (_itemScrollController.isAttached && index >= 0) {
-      _itemScrollController.scrollTo(
-        index: index,
-        duration: const Duration(milliseconds: 600),
-        curve: Curves.fastOutSlowIn,
-        alignment: 0.5, // Precisely center the item
-      );
-    }
   }
 
   @override
@@ -49,8 +33,6 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
     final lyrics = ref.watch(displayLyricsProvider);
     final audioState = ref.watch(audioProvider);
     final track = audioState.currentTrack;
-    final activeOpacity = ref.watch(lyricsActiveOpacityProvider);
-    final inactiveOpacity = ref.watch(lyricsInactiveOpacityProvider);
 
     // 1. Determine Content based on state
     Widget content;
@@ -76,68 +58,7 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
         ),
       );
     } else {
-      // Success State: Calculate current index and build list
-      int newIndex = -1;
-      for (int i = 0; i < lyrics.length; i++) {
-        if (audioState.position >= lyrics[i].timestamp) {
-          newIndex = i;
-        } else {
-          break;
-        }
-      }
-
-      if (newIndex != _currentIndex) {
-        final bool isFirstLoad = _currentIndex == -1;
-        _currentIndex = newIndex;
-        
-        if (!isFirstLoad) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            _scrollToActiveLyric(_currentIndex);
-          });
-        }
-      }
-
-      content = LayoutBuilder(
-        builder: (context, constraints) {
-          _listHeight = constraints.maxHeight;
-          return RepaintBoundary(
-            child: ScrollablePositionedList.builder(
-              itemScrollController: _itemScrollController,
-              itemPositionsListener: _itemPositionsListener,
-              initialScrollIndex: _currentIndex != -1 ? _currentIndex : 0,
-              initialAlignment: 0.5,
-              physics: const BouncingScrollPhysics(),
-              padding: EdgeInsets.only(
-                top: _listHeight / 2 - 30,
-                bottom: _listHeight / 2,
-              ),
-              itemCount: lyrics.length,
-              itemBuilder: (context, index) {
-                final line = lyrics[index];
-                final isActive = index == _currentIndex;
-
-                return AnimatedContainer(
-                  duration: const Duration(milliseconds: 400),
-                  curve: Curves.easeOutCubic,
-                  padding: const EdgeInsets.symmetric(vertical: 12.0),
-                  child: Text(
-                    line.text,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: isActive ? 26 : 18,
-                      fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
-                      color: isActive
-                          ? Theme.of(context).colorScheme.onSurface.withValues(alpha: activeOpacity)
-                          : Theme.of(context).colorScheme.onSurface.withValues(alpha: inactiveOpacity),
-                      height: 1.4,
-                    ),
-                  ),
-                );
-              },
-            ),
-          );
-        },
-      );
+      content = const LyricsListView();
     }
 
     // 2. Build the unified Stack
@@ -210,11 +131,7 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
                             tooltip: 'Minimize',
                             onTap: () => Navigator.pop(context),
                           ),
-                          const Spacer(),
-                          const Text(
-                            'Lyrics',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                          ),
+                           const LyricsOffsetControl(),
                           const Spacer(),
                           if (translationState.isSystemEnabled && lyrics.isNotEmpty) ...[
                             if (translationState.error != null) ...[
@@ -285,6 +202,15 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
                   ],
                 ),
               ),
+            ),
+
+          // Overlay Offset Control (Only if embedded)
+          if (widget.isEmbedded)
+            Positioned(
+              bottom: MediaQuery.of(context).padding.bottom + 24,
+              left: 0,
+              right: 0,
+              child: const Center(child: LyricsOffsetControl()),
             ),
         ],
       ),

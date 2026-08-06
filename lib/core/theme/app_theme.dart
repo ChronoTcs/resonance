@@ -4,16 +4,16 @@ import 'package:system_theme/system_theme.dart';
 
 class AppTheme {
   // Palette 7 (Modern Glass - Light Mode Default) & Palette 8 (Deep Opulence - Dark Mode Default)
-  static const Color creamBackground = Color(0xFFFFFFFF); // White background
-  static const Color creamSurface = Color(0xFFF7F3E3); // Gilded Ivory surface / cards
-  static const Color textDark = Color(0xFF2E2A27); // Obsidian Brown
+  static const Color creamBackground = Color(0xFFF5F7FA); // Soft Slate Neutral background
+  static const Color creamSurface = Color(0xFFFFFFFF); // Pure Crisp White surface / cards
+  static const Color textDark = Color(0xFF0F172A); // Slate Obsidian text
 
-  static const Color darkBackground = Color(0xFF232D35); // Dark Slate Gold Glass
-  static const Color darkSurface = Color(0xFF2D3A45); // Slate Grey Glass
-  static const Color textLight = Color(0xFFF7F3E3); // Gilded Ivory
+  static const Color darkBackground = Color(0xFF121316); // Midnight Charcoal background
+  static const Color darkSurface = Color(0xFF1C1E23); // Dark Slate surface / cards
+  static const Color textLight = Color(0xFFF1F5F9); // Crisp Off-White Slate
 
-  static const Color accentGrey = Color(0xFF404041); // Obsidian Grey (Secondary Light text)
-  static const Color accentSoft = Color(0xFF707070); // Gilded Grey (Secondary Dark text)
+  static const Color accentGrey = Color(0xFF64748B); // Cool Slate Grey (Secondary Light text)
+  static const Color accentSoft = Color(0xFF94A3B8); // Muted Silver Slate (Secondary Dark text)
 
   static Color? _resolveAccent(String? mode, Brightness brightness) {
     if (mode == null) {
@@ -35,12 +35,12 @@ class AppTheme {
         return isLight ? const Color(0xFFDDD4C5) : const Color(0xFFFCFAF5);
       case 'palette3': // Sage & Slate Mint
         return isLight ? const Color(0xFFA3B5AE) : const Color(0xFFE4ECE8);
-      case 'palette4': // Glacier Steel
-        return isLight ? const Color(0xFFA5B6BD) : const Color(0xFFE2EBEE);
-      case 'palette5': // Nordic Blue
-        return isLight ? const Color(0xFF8A9EA9) : const Color(0xFFCBD8DF);
-      case 'palette6': // Deep Dusk Blue
-        return isLight ? const Color(0xFF738995) : const Color(0xFFB7C9D1);
+      case 'palette4': // Frost Cyan / Sky Blue
+        return isLight ? const Color(0xFF2563EB) : const Color(0xFF60A5FA);
+      case 'palette5': // Emerald Teal
+        return isLight ? const Color(0xFF059669) : const Color(0xFF34D399);
+      case 'palette6': // Royal Violet
+        return isLight ? const Color(0xFF7C3AED) : const Color(0xFFA78BFA);
       case 'palette7': // Auroral Glow
         return isLight ? const Color(0xFFE9AD71) : const Color(0xFFFFCEAA);
       case 'palette8': // Copper-Amber

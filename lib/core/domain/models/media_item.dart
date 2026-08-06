@@ -28,7 +28,9 @@ class MediaItem {
 
     // 4. If slashes exist, check if in cache/stream folder
     final normalizedPath = path.replaceAll('\\', '/');
-    if (normalizedPath.contains('/cache/stream/') || normalizedPath.contains('/stream/audio/')) {
+    if (normalizedPath.contains('/cache/stream/') ||
+        normalizedPath.contains('/stream/audio/') ||
+        normalizedPath.contains('/stream/images/')) {
       return false;
     }
 
@@ -37,6 +39,8 @@ class MediaItem {
   }
 
   bool get isStreaming => !isLocal;
+
+  final Duration lyricsOffset;
 
   MediaItem({
     this.id,
@@ -50,6 +54,7 @@ class MediaItem {
     this.date,
     required this.type,
     this.setVideoId,
+    this.lyricsOffset = Duration.zero,
   });
 
   MediaItem copyWith({
@@ -64,6 +69,7 @@ class MediaItem {
     String? date,
     String? type,
     String? setVideoId,
+    Duration? lyricsOffset,
     bool clearAlbumArt = false,
     bool clearThumbnailUrl = false,
   }) {
@@ -79,6 +85,7 @@ class MediaItem {
       date: date ?? this.date,
       type: type ?? this.type,
       setVideoId: setVideoId ?? this.setVideoId,
+      lyricsOffset: lyricsOffset ?? this.lyricsOffset,
     );
   }
 
@@ -94,6 +101,7 @@ class MediaItem {
       'date': date,
       'type': type,
       'setVideoId': setVideoId,
+      'lyricsOffsetMs': lyricsOffset.inMilliseconds,
       'albumArtBase64': (includeArt && albumArt != null) ? base64Encode(albumArt!) : null,
     };
   }
@@ -111,6 +119,9 @@ class MediaItem {
       albumArt: json['albumArtBase64'] != null ? base64Decode(json['albumArtBase64'] as String) : null,
       type: json['type'] ?? 'audio',
       setVideoId: json['setVideoId'],
+      lyricsOffset: json['lyricsOffsetMs'] != null
+          ? Duration(milliseconds: json['lyricsOffsetMs'] as int)
+          : Duration.zero,
     );
   }
 
@@ -126,7 +137,8 @@ class MediaItem {
         other.thumbnailUrl == thumbnailUrl &&
         other.duration == duration &&
         other.date == date &&
-        other.type == type;
+        other.type == type &&
+        other.lyricsOffset == lyricsOffset;
   }
 
   @override
@@ -141,11 +153,12 @@ class MediaItem {
       duration,
       date,
       type,
+      lyricsOffset,
     );
   }
 
   @override
   String toString() {
-    return 'MediaItem(id: $id, title: $title, path: $path, type: $type)';
+    return 'MediaItem(id: $id, title: $title, path: $path, type: $type, offset: ${lyricsOffset.inMilliseconds}ms)';
   }
 }

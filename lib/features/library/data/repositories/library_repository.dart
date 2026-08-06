@@ -105,7 +105,8 @@ class LibraryRepository {
     final List<String> pathsToParse = [];
     final List<MediaItem> finalItems = [...videoItems];
 
-    final imagesDir = await _cacheManager.getImagesDir();
+    final localImagesDir = await _cacheManager.getLocalImagesDir();
+    final streamImagesDir = await _cacheManager.getStreamImagesDir();
 
     for (var path in audioPaths) {
       MediaItem? existingItem = existingMapByPath[path];
@@ -123,26 +124,31 @@ class LibraryRepository {
         // Robust thumbnail check: Reconnect them whether they are null or pointing to a dead file
         if (item.thumbnailUrl == null || !item.thumbnailUrl!.startsWith('http')) {
           final id = item.id ?? p.basenameWithoutExtension(path);
-          final newThumbPath = p.join(imagesDir.path, 'art_$id.jpg');
-          
-          if (File(newThumbPath).existsSync()) {
+          // Check local/images/ first, then stream/images/ as fallback
+          final localThumb = p.join(localImagesDir.path, 'art_$id.jpg');
+          final streamThumb = p.join(streamImagesDir.path, 'art_$id.jpg');
+          final newThumbPath = File(localThumb).existsSync() ? localThumb
+              : File(streamThumb).existsSync() ? streamThumb : null;
+
+          if (newThumbPath != null) {
             if (item.thumbnailUrl != newThumbPath) {
               item = item.copyWith(thumbnailUrl: newThumbPath);
             }
           } else if (item.thumbnailUrl != null) {
-            // Check if the previous file simply migrated to the new central cache
+            // Check if thumb migrated — search both domains
             final oldThumbFileName = p.basename(item.thumbnailUrl!);
-            final exactMovedThumb = p.join(imagesDir.path, oldThumbFileName);
-            
-            if (File(exactMovedThumb).existsSync()) {
-              if (item.thumbnailUrl != exactMovedThumb) {
-                item = item.copyWith(thumbnailUrl: exactMovedThumb);
-              }
+            final movedLocal = p.join(localImagesDir.path, oldThumbFileName);
+            final movedStream = p.join(streamImagesDir.path, oldThumbFileName);
+
+            if (File(movedLocal).existsSync()) {
+              if (item.thumbnailUrl != movedLocal) item = item.copyWith(thumbnailUrl: movedLocal);
+            } else if (File(movedStream).existsSync()) {
+              if (item.thumbnailUrl != movedStream) item = item.copyWith(thumbnailUrl: movedStream);
             } else {
-               final oldThumbFile = File(item.thumbnailUrl!);
-               if (!oldThumbFile.existsSync()) {
-                 item = item.copyWith(clearThumbnailUrl: true);
-               }
+              final oldThumbFile = File(item.thumbnailUrl!);
+              if (!oldThumbFile.existsSync()) {
+                item = item.copyWith(clearThumbnailUrl: true);
+              }
             }
           }
         }
@@ -160,7 +166,8 @@ class LibraryRepository {
       _parseBatch,
       {
         'paths': pathsToParse,
-        'imagesDirPath': imagesDir.path,
+        'localImagesDirPath': localImagesDir.path,
+        'streamImagesDirPath': streamImagesDir.path,
       },
     );
 
@@ -184,7 +191,8 @@ String _generateLocId(String path) {
 
 Future<List<MediaItem>> _parseBatch(Map<String, dynamic> args) async {
   final List<String> paths = args['paths'] as List<String>;
-  final String imagesDirPath = args['imagesDirPath'] as String;
+  final String localImagesDirPath = args['localImagesDirPath'] as String;
+  final String streamImagesDirPath = args['streamImagesDirPath'] as String;
   final List<MediaItem> results = [];
   for (var path in paths) {
     String title = p.basenameWithoutExtension(path);
@@ -201,27 +209,49 @@ Future<List<MediaItem>> _parseBatch(Map<String, dynamic> args) async {
       id = _generateLocId(path);
     }
 
+    String? setVideoId;
     try {
       final file = File(path);
       if (file.existsSync()) {
-        final tag = readMetadata(file, getImage: false);
-        title = (tag.title != null && tag.title!.isNotEmpty) 
-            ? tag.title! 
-            : title;
-        artist = tag.artist;
+        final rawTag = readAllMetadata(file, getImage: false);
+        
+        // Populate setVideoId from container-specific frames
+        if (rawTag is Mp3Metadata) {
+          title = rawTag.songName?.isNotEmpty == true ? rawTag.songName! : title;
+          artist = rawTag.leadPerformer ?? rawTag.bandOrOrchestra;
+          setVideoId = rawTag.customMetadata['YT_ID'];
+        } else if (rawTag is VorbisMetadata) {
+          title = rawTag.title.firstOrNull?.isNotEmpty == true ? rawTag.title.first : title;
+          artist = rawTag.artist.firstOrNull;
+          final descTag = rawTag.description.firstWhere((d) => d.startsWith('YT_ID:'), orElse: () => '');
+          if (descTag.isNotEmpty) {
+            setVideoId = descTag.replaceFirst('YT_ID:', '');
+          }
+        } else if (rawTag is Mp4Metadata) {
+          title = rawTag.title?.isNotEmpty == true ? rawTag.title! : title;
+          artist = rawTag.artist;
+          final lyrics = rawTag.lyrics ?? '';
+          final match = RegExp(r'YT_ID:(.*)').firstMatch(lyrics);
+          if (match != null) {
+            setVideoId = match.group(1)?.trim();
+          }
+        }
       }
     } catch (e) {
       debugPrint('LibraryRepository Isolate: Metadata extraction error for $path: $e');
     }
 
-    // Attach local art cover if exists (New strict loc_ format)
+    // Attach local art cover — check local/images/ first, then stream/images/
     final dir = p.dirname(path);
-    final centralArtFile = File(p.join(imagesDirPath, 'art_$id.jpg'));
+    final localCentralArt = File(p.join(localImagesDirPath, 'art_$id.jpg'));
+    final streamCentralArt = File(p.join(streamImagesDirPath, 'art_$id.jpg'));
     final fallbackArtFile = File(p.join(dir, 'art_$id.jpg'));
     String? localThumbnailUrl;
-    
-    if (centralArtFile.existsSync()) {
-      localThumbnailUrl = centralArtFile.path;
+
+    if (localCentralArt.existsSync()) {
+      localThumbnailUrl = localCentralArt.path;
+    } else if (streamCentralArt.existsSync()) {
+      localThumbnailUrl = streamCentralArt.path;
     } else if (fallbackArtFile.existsSync()) {
       localThumbnailUrl = fallbackArtFile.path;
     } else {
@@ -249,6 +279,7 @@ Future<List<MediaItem>> _parseBatch(Map<String, dynamic> args) async {
       artist: artist,
       thumbnailUrl: localThumbnailUrl,
       type: 'audio',
+      setVideoId: setVideoId,
     ));
   }
   return results;

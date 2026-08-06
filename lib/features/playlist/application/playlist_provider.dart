@@ -47,6 +47,19 @@ final selectedPlaylistIdProvider = NotifierProvider<SelectedPlaylistIdNotifier, 
   return SelectedPlaylistIdNotifier();
 });
 
+class PlaylistTabIndexNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  void setTabIndex(int index) {
+    state = index;
+  }
+}
+
+final playlistTabIndexProvider = NotifierProvider<PlaylistTabIndexNotifier, int>(() {
+  return PlaylistTabIndexNotifier();
+});
+
 class PlaylistNotifier extends AsyncNotifier<PlaylistState> {
   @override
   Future<PlaylistState> build() async {
@@ -69,10 +82,11 @@ class PlaylistNotifier extends AsyncNotifier<PlaylistState> {
     await repo.persistPlaylists(allPlaylists);
   }
 
-  Future<void> createPlaylist(String name, {String description = '', bool isStream = false}) async {
-    if (state.value == null) return;
+  Future<String?> createPlaylist(String name, {String description = '', bool isStream = false}) async {
+    if (state.value == null) return null;
+    final id = '${isStream ? 'str_' : 'loc_'}${DateTime.now().millisecondsSinceEpoch}';
     final newPlaylist = Playlist(
-      id: '${isStream ? 'str_' : 'loc_'}${DateTime.now().millisecondsSinceEpoch}',
+      id: id,
       name: name,
       description: description,
       tracks: [],
@@ -88,6 +102,7 @@ class PlaylistNotifier extends AsyncNotifier<PlaylistState> {
       ));
     }
     await _saveState();
+    return id;
   }
 
   Future<void> deletePlaylist(String playlistId) async {

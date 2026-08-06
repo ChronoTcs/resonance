@@ -4,21 +4,25 @@ class ExploreItem {
   final String id;
   final String title;
   final String author;
+  final String? album;
   final String duration;
   final String thumbnailUrl;
   final String url;
   final String? setVideoId;
   final yt.Video? originalVideo; // Reusable metadata
+  final String type; // 'audio' or 'video'
 
   const ExploreItem({
     required this.id,
     required this.title,
     required this.author,
+    this.album,
     required this.duration,
     required this.thumbnailUrl,
     required this.url,
     this.setVideoId,
     this.originalVideo,
+    this.type = 'audio',
   });
 
   factory ExploreItem.fromVideo(yt.Video video) {
@@ -42,6 +46,7 @@ class ExploreItem {
       url: video.url,
       setVideoId: null,
       originalVideo: video,
+      type: 'audio',
     );
   }
 }

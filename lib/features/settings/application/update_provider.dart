@@ -5,48 +5,53 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:resonance/core/constants/app_constants.dart';
 import '../../../core/application/services/permission_service.dart';
+import '../data/models/release_model.dart';
 
 class UpdateState {
   final bool isChecking;
-  final bool updateAvailable;
-  final String latestVersion;
-  final String changelog;
+  final String currentVersion;
+  final List<AppRelease> releases;
+  final AppRelease? selectedRelease;
   final double downloadProgress;
   final bool isDownloading;
   final String? error;
-  final List<dynamic>? assets;
 
   UpdateState({
     this.isChecking = false,
-    this.updateAvailable = false,
-    this.latestVersion = '',
-    this.changelog = '',
+    this.currentVersion = '',
+    this.releases = const [],
+    this.selectedRelease,
     this.downloadProgress = 0.0,
     this.isDownloading = false,
     this.error,
-    this.assets,
   });
+
+  AppRelease? get latestRelease => releases.isNotEmpty ? releases.first : null;
+  List<AppRelease> get olderReleases => releases.length > 1 ? releases.sublist(1) : [];
+
+  bool get updateAvailable => latestRelease != null && !latestRelease!.isCurrentVersion;
+  String get latestVersion => latestRelease?.tagName ?? '';
+  String get changelog => latestRelease?.body ?? '';
 
   UpdateState copyWith({
     bool? isChecking,
-    bool? updateAvailable,
-    String? latestVersion,
-    String? changelog,
+    String? currentVersion,
+    List<AppRelease>? releases,
+    AppRelease? selectedRelease,
     double? downloadProgress,
     bool? isDownloading,
     String? error,
-    List<dynamic>? assets,
   }) {
     return UpdateState(
       isChecking: isChecking ?? this.isChecking,
-      updateAvailable: updateAvailable ?? this.updateAvailable,
-      latestVersion: latestVersion ?? this.latestVersion,
-      changelog: changelog ?? this.changelog,
+      currentVersion: currentVersion ?? this.currentVersion,
+      releases: releases ?? this.releases,
+      selectedRelease: selectedRelease ?? this.selectedRelease,
       downloadProgress: downloadProgress ?? this.downloadProgress,
       isDownloading: isDownloading ?? this.isDownloading,
       error: error,
-      assets: assets ?? this.assets,
     );
   }
 }
@@ -57,40 +62,34 @@ class UpdateNotifier extends Notifier<UpdateState> {
 
   final Dio _dio = Dio();
 
-  Future<void> checkForUpdate() async {
+  Future<void> fetchReleases() async {
     state = state.copyWith(isChecking: true, error: null);
     try {
       final packageInfo = await PackageInfo.fromPlatform();
       final currentVersion = packageInfo.version;
 
       final response = await _dio.get(
-        'https://api.github.com/repos/ChronoTechs/resonance/releases/latest',
+        AppConstants.githubReleasesApiUrl,
       );
 
       if (response.statusCode == 200) {
-        final data = response.data;
-        final latestVersion = data['tag_name'].toString().replaceAll('v', '');
-        final changelog = data['body'] ?? 'No changelog provided.';
-        final assets = data['assets'] as List<dynamic>;
-
-        final isAvailable = _isVersionNewer(currentVersion, latestVersion);
+        final List<dynamic> data = response.data as List<dynamic>;
+        final parsedReleases = data
+            .map((json) => AppRelease.fromJson(json as Map<String, dynamic>, currentVersion))
+            .toList();
 
         state = state.copyWith(
           isChecking: false,
-          updateAvailable: isAvailable,
-          latestVersion: latestVersion,
-          changelog: changelog,
-          assets: assets,
+          currentVersion: currentVersion,
+          releases: parsedReleases,
         );
       }
     } on DioException catch (e) {
       if (e.response?.statusCode == 404) {
-        // GitHub returns 404 if there are no releases yet
         state = state.copyWith(
-          isChecking: false, 
-          updateAvailable: false,
-          latestVersion: '0.0.0',
-          changelog: 'No releases found on GitHub.',
+          isChecking: false,
+          releases: [],
+          error: 'No releases found on GitHub.',
         );
       } else {
         state = state.copyWith(isChecking: false, error: e.message ?? e.toString());
@@ -100,16 +99,26 @@ class UpdateNotifier extends Notifier<UpdateState> {
     }
   }
 
-  Future<void> downloadUpdate() async {
-    if (state.assets == null || state.assets!.isEmpty) return;
+  Future<void> checkForUpdate() => fetchReleases();
 
-    state = state.copyWith(isDownloading: true, downloadProgress: 0.0, error: null);
+  Future<void> downloadRelease(AppRelease release) async {
+    if (release.assets.isEmpty) {
+      state = state.copyWith(error: 'No download assets attached to this release.');
+      return;
+    }
+
+    state = state.copyWith(
+      selectedRelease: release,
+      isDownloading: true,
+      downloadProgress: 0.0,
+      error: null,
+    );
 
     try {
       String? downloadUrl;
       String? fileName;
 
-      for (var asset in state.assets!) {
+      for (var asset in release.assets) {
         final name = asset['name'].toString().toLowerCase();
         if (Platform.isAndroid && name.endsWith('.apk')) {
           downloadUrl = asset['browser_download_url'];
@@ -123,14 +132,17 @@ class UpdateNotifier extends Notifier<UpdateState> {
       }
 
       if (downloadUrl == null) {
-        state = state.copyWith(isDownloading: false, error: 'Appropriate update asset not found.');
+        state = state.copyWith(
+          isDownloading: false,
+          error: 'Compatible installer (${Platform.isWindows ? ".exe" : ".apk"}) not found in release assets.',
+        );
         return;
       }
 
-      final directory = Platform.isAndroid 
-          ? await getTemporaryDirectory() 
+      final directory = Platform.isAndroid
+          ? await getTemporaryDirectory()
           : await getDownloadsDirectory() ?? await getTemporaryDirectory();
-      
+
       final filePath = '${directory.path}/$fileName';
 
       await _dio.download(
@@ -149,24 +161,29 @@ class UpdateNotifier extends Notifier<UpdateState> {
     }
   }
 
-  Future<void> installUpdate(BuildContext context) async {
-    if (state.assets == null || state.assets!.isEmpty) return;
-    
-    // Find the downloaded file path
+  Future<void> downloadUpdate() async {
+    if (state.latestRelease != null) {
+      await downloadRelease(state.latestRelease!);
+    }
+  }
+
+  Future<void> installRelease(BuildContext context, AppRelease release) async {
+    if (release.assets.isEmpty) return;
+
     String? fileName;
-    for (var asset in state.assets!) {
+    for (var asset in release.assets) {
       final name = asset['name'].toString().toLowerCase();
-      if ((Platform.isAndroid && name.endsWith('.apk')) || 
+      if ((Platform.isAndroid && name.endsWith('.apk')) ||
           (Platform.isWindows && name.endsWith('.exe'))) {
         fileName = asset['name'];
         break;
       }
     }
-    
+
     if (fileName == null) return;
 
-    final directory = Platform.isAndroid 
-        ? await getTemporaryDirectory() 
+    final directory = Platform.isAndroid
+        ? await getTemporaryDirectory()
         : await getDownloadsDirectory() ?? await getTemporaryDirectory();
     final filePath = '${directory.path}/$fileName';
 
@@ -177,18 +194,17 @@ class UpdateNotifier extends Notifier<UpdateState> {
 
     try {
       if (Platform.isAndroid) {
-        // --- NEW: Check for Install Packages Permission ---
         if (!context.mounted) return;
         final hasPermission = await PermissionService.checkAndRequestInstallPermission(context);
         if (!hasPermission) {
           state = state.copyWith(error: 'Permission to install unknown apps was denied.');
           return;
         }
-        
+
         await OpenFilex.open(filePath);
       } else if (Platform.isWindows) {
         await Process.start(
-          filePath, 
+          filePath,
           ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/FORCECLOSEAPPLICATIONS'],
           mode: ProcessStartMode.detached,
         );
@@ -199,22 +215,11 @@ class UpdateNotifier extends Notifier<UpdateState> {
     }
   }
 
-  bool _isVersionNewer(String current, String latest) {
-    try {
-      final currentClean = current.split('+')[0];
-      final latestClean = latest.split('+')[0];
-      
-      final currentParts = currentClean.split('.').map(int.parse).toList();
-      final latestParts = latestClean.split('.').map(int.parse).toList();
-
-      for (var i = 0; i < latestParts.length; i++) {
-        if (i >= currentParts.length) return true;
-        if (latestParts[i] > currentParts[i]) return true;
-        if (latestParts[i] < currentParts[i]) return false;
-      }
-      return false;
-    } catch (e) {
-      return latest != current;
+  Future<void> installUpdate(BuildContext context) async {
+    if (state.selectedRelease != null) {
+      await installRelease(context, state.selectedRelease!);
+    } else if (state.latestRelease != null) {
+      await installRelease(context, state.latestRelease!);
     }
   }
 }

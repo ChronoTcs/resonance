@@ -257,7 +257,9 @@ class _ResonanceAppState extends ConsumerState<ResonanceApp> {
     super.initState();
     _windowService = WindowPersistenceService(ref);
     _lifecycleService = AppLifecycleService(ref);
-    windowManager.addListener(_windowService);
+    if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+      windowManager.addListener(_windowService);
+    }
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await runStartupChecks(ref);
@@ -266,7 +268,9 @@ class _ResonanceAppState extends ConsumerState<ResonanceApp> {
 
   @override
   void dispose() {
-    windowManager.removeListener(_windowService);
+    if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+      windowManager.removeListener(_windowService);
+    }
     _lifecycleService.dispose();
     super.dispose();
   }

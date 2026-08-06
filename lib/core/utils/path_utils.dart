@@ -16,18 +16,39 @@ class PathUtils {
 
   static Future<String> getMusicDefault() async {
     if (Platform.isAndroid) {
-      return '/storage/emulated/0/Resonance/Music';
-    } else {
-      return p.join(_windowsBaseDir, 'Music');
+      final dirs = await getExternalStorageDirectories(type: StorageDirectory.music);
+      if (dirs != null && dirs.isNotEmpty) {
+        return p.join(dirs.first.path, 'Resonance', 'local', 'music');
+      }
+      final docDir = await getApplicationDocumentsDirectory();
+      return p.join(docDir.path, 'local', 'music');
     }
+    return p.join(_windowsBaseDir, 'local', 'music');
   }
 
   static Future<String> getLyricsDefault() async {
     if (Platform.isAndroid) {
-      return '/storage/emulated/0/Resonance/Lyrics';
-    } else {
-      return p.join(_windowsBaseDir, 'Lyrics');
+      final dirs = await getExternalStorageDirectories(type: StorageDirectory.music);
+      if (dirs != null && dirs.isNotEmpty) {
+        return p.join(dirs.first.path, 'Resonance', 'local', 'lyrics');
+      }
+      final docDir = await getApplicationDocumentsDirectory();
+      return p.join(docDir.path, 'local', 'lyrics');
     }
+    return p.join(_windowsBaseDir, 'local', 'lyrics');
+  }
+
+  /// Local downloaded thumbnails/art — separate from stream/system cache.
+  static Future<String> getLocalImagesDefault() async {
+    if (Platform.isAndroid) {
+      final dirs = await getExternalStorageDirectories(type: StorageDirectory.music);
+      if (dirs != null && dirs.isNotEmpty) {
+        return p.join(dirs.first.path, 'Resonance', 'local', 'images');
+      }
+      final docDir = await getApplicationDocumentsDirectory();
+      return p.join(docDir.path, 'local', 'images');
+    }
+    return p.join(_windowsBaseDir, 'local', 'images');
   }
 
   static Future<String> getCacheDefault() async {
@@ -36,6 +57,14 @@ class PathUtils {
     }
     final docDir = await getApplicationDocumentsDirectory();
     return p.join(docDir.path, 'resonance_cache');
+  }
+
+  static Future<String> getStreamDefault() async {
+    if (Platform.isWindows) {
+      return p.join(_windowsBaseDir, 'stream');
+    }
+    final docDir = await getApplicationDocumentsDirectory();
+    return p.join(docDir.path, 'stream');
   }
 
   /// Generates a stable unified ID matching the Python script perfectly:

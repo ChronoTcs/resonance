@@ -20,6 +20,7 @@ class ReusableHoverIconButton extends StatefulWidget {
   final TextStyle? labelStyle;
   final EdgeInsets? margin;
   final Widget? child;
+  final BorderRadius? borderRadius;
 
   const ReusableHoverIconButton({
     super.key,
@@ -40,6 +41,7 @@ class ReusableHoverIconButton extends StatefulWidget {
     this.labelStyle,
     this.margin,
     this.child,
+    this.borderRadius,
   });
 
   @override
@@ -132,10 +134,12 @@ class _ReusableHoverIconButtonState extends State<ReusableHoverIconButton> with 
             ? activeColor 
             : (widget.iconColor ?? widget.color ?? theme.colorScheme.onSurface));
 
-    // iconColor shouldn't change to activeColor on hover to prevent blending in.
+    // iconColor shouldn't change to activeColor on hover if a custom color/iconColor is specified.
     final finalIconColor = (widget.backgroundColor != null && _isHovered && !widget.isDisabled)
         ? (widget.iconColor ?? Colors.white)
-        : (_isHovered && !widget.isDisabled && _isWindows ? activeColor : baseColor);
+        : (_isHovered && !widget.isDisabled && _isWindows
+            ? (widget.iconColor ?? widget.color ?? activeColor)
+            : baseColor);
 
     Widget content;
     if (widget.icon == null && widget.label != null) {
@@ -195,7 +199,7 @@ class _ReusableHoverIconButtonState extends State<ReusableHoverIconButton> with 
     }
 
     // Bentuk standar Resonance: Rounded Rectangle
-    final borderRadius = BorderRadius.circular(8);
+    final borderRadius = widget.borderRadius ?? BorderRadius.circular(8);
 
     Widget buttonContent = GestureDetector(
       onTap: widget.isDisabled ? null : widget.onTap,

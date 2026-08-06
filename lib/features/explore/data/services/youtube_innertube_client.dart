@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:ui';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import '../../../../core/data/services/data_usage_service.dart';
@@ -71,7 +72,15 @@ class YoutubeInnerTubeClient {
       throw Exception('InnerTube error ($endpoint) [${profile.name}]: ${response.statusCode}');
     }
 
-    return jsonDecode(response.body);
+    final Map<String, dynamic> responseData = jsonDecode(response.body);
+    
+    // Automatically capture visitorData to maintain an anonymous preferences session
+    final String? responseVisitorData = responseData['responseContext']?['visitorData'];
+    if (responseVisitorData != null && responseVisitorData.isNotEmpty) {
+      _authService.cacheVisitorData(responseVisitorData);
+    }
+
+    return responseData;
   }
 
   Map<String, String> _buildHeaders(YoutubeClientProfile profile, bool useAuth) {
@@ -82,6 +91,12 @@ class YoutubeInnerTubeClient {
 
     if (useAuth) {
       headers.addAll(_authService.getAuthenticatedHeaders());
+    }
+    
+    // Attach visitorData to headers for all tracking requests if available
+    final cachedVisitor = _authService.visitorData;
+    if (cachedVisitor != null && cachedVisitor.isNotEmpty) {
+      headers['X-Goog-Visitor-Id'] = cachedVisitor;
     }
 
     int clientNameInt = 67; // Default Web Remix
@@ -115,10 +130,6 @@ class YoutubeInnerTubeClient {
 
     headers['X-YouTube-Client-Name'] = clientNameInt.toString();
     headers['X-YouTube-Client-Version'] = clientVersion;
-    
-    if (useAuth && _authService.visitorData != null) {
-      headers['X-Goog-Visitor-Id'] = _authService.visitorData!;
-    }
 
     return headers;
   }
@@ -155,17 +166,24 @@ class YoutubeInnerTubeClient {
         break;
     }
 
+    final locale = PlatformDispatcher.instance.locale;
+    final country = locale.countryCode?.isNotEmpty == true ? locale.countryCode! : "US";
+    final lang = locale.languageCode.isNotEmpty == true ? locale.languageCode : "en";
+
+    // Always attach visitorData if cached to persist the device guest session preferences
+    final visitorToken = _authService.visitorData;
+
     return <String, dynamic>{
       "client": <String, dynamic>{
         "clientName": clientName,
         "clientVersion": clientVersion,
-        if (useAuth && _authService.visitorData != null) "visitorData": _authService.visitorData,
-        "hl": "en",
-        "gl": "US",
+        if (visitorToken != null && visitorToken.isNotEmpty) "visitorData": visitorToken,
+        "hl": lang,
+        "gl": country,
         "utcOffsetMinutes": 0,
-        "osName": ?osName,
-        "osVersion": ?osVersion,
-        "androidSdkVersion": ?androidSdkVersion,
+        "osName": osName,
+        "osVersion": osVersion,
+        "androidSdkVersion": androidSdkVersion,
         if (profile != YoutubeClientProfile.webRemix && profile != YoutubeClientProfile.web) "platform": "MOBILE",
       }
     };

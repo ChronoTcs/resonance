@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/data/services/data_usage_service.dart';
 import '../../../core/data/services/media_cache_service.dart';
+import '../../../core/data/services/storage_service.dart';
 import '../../player/application/services/playback_architecture_service.dart';
 
 class MaintenanceState {
@@ -61,8 +62,31 @@ class MaintenanceNotifier extends Notifier<MaintenanceState> {
     state = state.copyWith(isLoading: true);
     if (category == 'all') {
       ref.read(playbackArchitectureServiceProvider).clearCache();
+      await _mediaCacheService.clearCategory('local_music');
+      await _mediaCacheService.clearCategory('local_lyrics');
+      await _mediaCacheService.clearCategory('local_images');
+      await _mediaCacheService.clearCategory('stream_audio');
+      await _mediaCacheService.clearCategory('stream_images');
+      await _mediaCacheService.clearCategory('stream_lyrics');
+      await _mediaCacheService.clearCategory('metadata');
+      await _mediaCacheService.clearCategory('translate');
+      await _mediaCacheService.clearCategory('images');
+    } else if (category == 'group_local') {
+      await _mediaCacheService.clearCategory('local_music');
+      await _mediaCacheService.clearCategory('local_lyrics');
+      await _mediaCacheService.clearCategory('local_images');
+    } else if (category == 'group_stream') {
+      ref.read(playbackArchitectureServiceProvider).clearCache();
+      await _mediaCacheService.clearCategory('stream_audio');
+      await _mediaCacheService.clearCategory('stream_images');
+      await _mediaCacheService.clearCategory('stream_lyrics');
+    } else if (category == 'group_system') {
+      await _mediaCacheService.clearCategory('metadata');
+      await _mediaCacheService.clearCategory('translate');
+      await _mediaCacheService.clearCategory('images');
+    } else {
+      await _mediaCacheService.clearCategory(category);
     }
-    await _mediaCacheService.clearCategory(category);
     await refresh();
   }
 
@@ -83,4 +107,57 @@ class MaintenanceNotifier extends Notifier<MaintenanceState> {
 
 final maintenanceProvider = NotifierProvider<MaintenanceNotifier, MaintenanceState>(() {
   return MaintenanceNotifier();
+});
+
+// ── Cache Config Providers (backed by SharedPreferences) ─────────────────────
+
+class StreamCacheLimitGbNotifier extends Notifier<int> {
+  @override
+  int build() {
+    final prefs = ref.watch(sharedPreferencesProvider);
+    return prefs.getInt('stream_cache_limit_gb') ?? 10; // Default: 10 GB
+  }
+
+  void setLimitGb(int limitGb) {
+    state = limitGb;
+    ref.read(sharedPreferencesProvider).setInt('stream_cache_limit_gb', limitGb);
+  }
+}
+
+final streamCacheLimitGbProvider = NotifierProvider<StreamCacheLimitGbNotifier, int>(() {
+  return StreamCacheLimitGbNotifier();
+});
+
+class StreamTrackRetentionDaysNotifier extends Notifier<int> {
+  @override
+  int build() {
+    final prefs = ref.watch(sharedPreferencesProvider);
+    return prefs.getInt('stream_track_retention_days') ?? 30; // Default: 30 days
+  }
+
+  void setDays(int days) {
+    state = days;
+    ref.read(sharedPreferencesProvider).setInt('stream_track_retention_days', days);
+  }
+}
+
+final streamTrackRetentionDaysProvider = NotifierProvider<StreamTrackRetentionDaysNotifier, int>(() {
+  return StreamTrackRetentionDaysNotifier();
+});
+
+class SecondaryCacheRetentionDaysNotifier extends Notifier<int> {
+  @override
+  int build() {
+    final prefs = ref.watch(sharedPreferencesProvider);
+    return prefs.getInt('secondary_cache_retention_days') ?? 7; // Default: 7 days
+  }
+
+  void setDays(int days) {
+    state = days;
+    ref.read(sharedPreferencesProvider).setInt('secondary_cache_retention_days', days);
+  }
+}
+
+final secondaryCacheRetentionDaysProvider = NotifierProvider<SecondaryCacheRetentionDaysNotifier, int>(() {
+  return SecondaryCacheRetentionDaysNotifier();
 });

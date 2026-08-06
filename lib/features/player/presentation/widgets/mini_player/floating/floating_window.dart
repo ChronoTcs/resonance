@@ -79,7 +79,10 @@ class _FloatingWindowState extends ConsumerState<FloatingWindow> {
             Expanded(
               child: MouseRegion(
                 onEnter: (_) {
-                  Future.microtask(() => popNotifier.setViewState(MiniPlayerViewState.hover));
+                  if (popState.viewState != MiniPlayerViewState.lyrics && 
+                      popState.viewState != MiniPlayerViewState.idleLyrics) {
+                    Future.microtask(() => popNotifier.setViewState(MiniPlayerViewState.hover));
+                  }
                 },
                 onExit: (_) {
                   if (popState.viewState != MiniPlayerViewState.lyrics && 

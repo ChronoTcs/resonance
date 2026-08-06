@@ -59,18 +59,30 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
             TopNavigationHeader(
               left: Row(
                 children: [
-                  IconButton(
-                    icon: Icon(UIcons.regular.angle_left),
-                    onPressed: () => ref.read(selectedHomePlaylistProvider.notifier).setSelectedId(null),
+                  ReusableHoverIconButton(
+                    icon: UIcons.regular.angle_small_left,
+                    tooltip: 'Back to Home',
+                    onTap: () => ref.read(selectedHomePlaylistProvider.notifier).setSelectedId(null),
+                    iconSize: 20,
                   ),
-                  const SizedBox(width: 8),
-                  const Text('Back to Home', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Back to Home',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.onSurface,
+                    ),
+                  ),
                 ],
               ),
               right: const SizedBox(),
             ),
             Expanded(
-              child: PlaylistDetailScreen(playlistId: selectedPlaylistId),
+              child: PlaylistDetailScreen(
+                playlistId: selectedPlaylistId,
+                showBackButton: false,
+              ),
             ),
           ],
         ),

@@ -58,7 +58,8 @@ class MusicRestoreService {
 
     final targetMusicDir = Directory(targetMusicPath);
     final targetLyricsDir = Directory(targetLyricsPath);
-    final targetImagesDir = Directory(p.join(targetCachePath, 'images'));
+    // Art goes to local/images/, not cache/images/
+    final targetImagesDir = Directory(await PathUtils.getLocalImagesDefault());
 
     if (!await targetMusicDir.exists()) await targetMusicDir.create(recursive: true);
     if (!await targetLyricsDir.exists()) await targetLyricsDir.create(recursive: true);
@@ -70,10 +71,11 @@ class MusicRestoreService {
     Directory? sourceImagesDir;
     final sourceParent = sourceDir.parent;
     final List<String> possibleImagePaths = [
+      p.join(sourcePath, 'local', 'images'),
       p.join(sourcePath, 'resonance_cache', 'images'),
       p.join(sourcePath, 'cache', 'images'),
-      p.join(sourcePath, 'metadata', 'images'),
       p.join(sourcePath, 'images'),
+      p.join(sourceParent.path, 'local', 'images'),
       p.join(sourceParent.path, 'resonance_cache', 'images'),
       p.join(sourceParent.path, 'cache', 'images'),
       p.join(sourceParent.path, 'images'),

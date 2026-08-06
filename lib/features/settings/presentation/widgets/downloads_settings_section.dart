@@ -40,52 +40,60 @@ class DownloadsSettingsSection extends ConsumerWidget {
               ],
             ),
 
-            const SizedBox(height: 12),
-
-            // Max Concurrent Downloads
-            _buildNumericTile(
-              context,
-              label: 'Max Concurrent Downloads',
-              value: settings.maxConcurrent,
-              min: 1,
-              max: 8,
-              onChanged: (v) => notifier.saveSettings(settings.copyWith(maxConcurrent: v)),
+            const SizedBox(height: 16),
+            const Text(
+              'Advanced Limits',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey),
             ),
-
             const SizedBox(height: 12),
 
-            // Max Retry Limit
-            _buildNumericTile(
-              context,
-              label: 'Max Retry Limit',
-              value: settings.maxRetries,
-              min: 0,
-              max: 10,
-              onChanged: (v) => notifier.saveSettings(settings.copyWith(maxRetries: v)),
-            ),
-
-            const SizedBox(height: 12),
-
-            // Connection Timeout
-            _buildNumericTile(
-              context,
-              label: 'Connection Timeout (seconds)',
-              value: settings.connectionTimeout,
-              min: 5,
-              max: 120,
-              onChanged: (v) => notifier.saveSettings(settings.copyWith(connectionTimeout: v)),
-            ),
-
-            const SizedBox(height: 12),
-
-            // Segments per Download
-            _buildNumericTile(
-              context,
-              label: 'Segments per Download',
-              value: settings.fragmentsPerDownload,
-              min: 1,
-              max: 16,
-              onChanged: (v) => notifier.saveSettings(settings.copyWith(fragmentsPerDownload: v)),
+            // Grouped Advanced Limits Container
+            Material(
+              color: Theme.of(context).colorScheme.surface,
+              clipBehavior: Clip.antiAlias,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(color: Theme.of(context).dividerColor.withValues(alpha: 0.08)),
+              ),
+              child: Column(
+                children: [
+                  _buildNumericTileRow(
+                    context,
+                    label: 'Max Concurrent Downloads',
+                    value: settings.maxConcurrent,
+                    min: 1,
+                    max: 8,
+                    onChanged: (v) => notifier.saveSettings(settings.copyWith(maxConcurrent: v)),
+                  ),
+                  const Divider(height: 1),
+                  _buildNumericTileRow(
+                    context,
+                    label: 'Max Retry Limit',
+                    value: settings.maxRetries,
+                    min: 0,
+                    max: 10,
+                    onChanged: (v) => notifier.saveSettings(settings.copyWith(maxRetries: v)),
+                  ),
+                  const Divider(height: 1),
+                  _buildNumericTileRow(
+                    context,
+                    label: 'Connection Timeout (seconds)',
+                    value: settings.connectionTimeout,
+                    min: 5,
+                    max: 120,
+                    onChanged: (v) => notifier.saveSettings(settings.copyWith(connectionTimeout: v)),
+                  ),
+                  const Divider(height: 1),
+                  _buildNumericTileRow(
+                    context,
+                    label: 'Segments per Download',
+                    value: settings.fragmentsPerDownload,
+                    min: 1,
+                    max: 16,
+                    onChanged: (v) => notifier.saveSettings(settings.copyWith(fragmentsPerDownload: v)),
+                  ),
+                ],
+              ),
             ),
           ],
         );
@@ -95,7 +103,7 @@ class DownloadsSettingsSection extends ConsumerWidget {
     );
   }
 
-  Widget _buildNumericTile(
+  Widget _buildNumericTileRow(
     BuildContext context, {
     required String label,
     required int value,
@@ -105,57 +113,49 @@ class DownloadsSettingsSection extends ConsumerWidget {
   }) {
     final theme = Theme.of(context);
 
-    return Material(
-      color: theme.colorScheme.surface,
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: theme.dividerColor.withValues(alpha: 0.08)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                label,
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-              ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
             ),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ReusableHoverIconButton(
-                  icon: UIcons.regular.minus,
-                  iconSize: 14,
-                  padding: 6,
-                  isDisabled: value <= min,
-                  onTap: () => onChanged(value - 1),
-                  tooltip: 'Decrease',
-                ),
-                SizedBox(
-                  width: 36,
-                  child: Text(
-                    '$value',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                    ),
+          ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ReusableHoverIconButton(
+                icon: UIcons.regular.minus,
+                iconSize: 14,
+                padding: 6,
+                isDisabled: value <= min,
+                onTap: () => onChanged(value - 1),
+                tooltip: 'Decrease',
+              ),
+              SizedBox(
+                width: 36,
+                child: Text(
+                  '$value',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
                   ),
                 ),
-                ReusableHoverIconButton(
-                  icon: UIcons.regular.add,
-                  iconSize: 14,
-                  padding: 6,
-                  isDisabled: value >= max,
-                  onTap: () => onChanged(value + 1),
-                  tooltip: 'Increase',
-                ),
-              ],
-            ),
-          ],
-        ),
+              ),
+              ReusableHoverIconButton(
+                icon: UIcons.regular.add,
+                iconSize: 14,
+                padding: 6,
+                isDisabled: value >= max,
+                onTap: () => onChanged(value + 1),
+                tooltip: 'Increase',
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

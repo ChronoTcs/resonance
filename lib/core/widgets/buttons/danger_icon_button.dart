@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:resonance/core/utils/app_icons.dart';
+import 'package:resonance/core/utils/uicons.dart';
 import 'reusable_hover_icon_button.dart';
 
 class DangerIconButton extends StatelessWidget {
@@ -16,10 +16,13 @@ class DangerIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final errorColor = Theme.of(context).colorScheme.error;
     return ReusableHoverIconButton(
-      icon: AppIcons.trash,
+      icon: UIcons.regular.trash,
       tooltip: tooltip,
-      color: Colors.red,
+      color: errorColor,
+      iconColor: errorColor,
+      hoverColor: errorColor.withValues(alpha: 0.15),
       iconSize: iconSize,
       onTap: onTap,
     );

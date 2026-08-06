@@ -6,20 +6,19 @@ import '../../../explore/data/repositories/youtube_stream_repository.dart';
 import '../../../library/application/library_provider.dart';
 import '../../../../core/data/services/media_cache_service.dart';
 
-
 class CachedStreamInfo {
   final String url;
   final DateTime fetchedAt;
   CachedStreamInfo(this.url, this.fetchedAt);
 
-  bool get isExpired => 
-    DateTime.now().difference(fetchedAt).inHours >= 2;
+  bool get isExpired => DateTime.now().difference(fetchedAt).inHours >= 2;
 }
 
-final playbackArchitectureServiceProvider = Provider<PlaybackArchitectureService>((ref) {
-  final youtubeRepo = ref.watch(youtubeStreamRepositoryProvider);
-  return PlaybackArchitectureService(youtubeRepo, ref);
-});
+final playbackArchitectureServiceProvider =
+    Provider<PlaybackArchitectureService>((ref) {
+      final youtubeRepo = ref.watch(youtubeStreamRepositoryProvider);
+      return PlaybackArchitectureService(youtubeRepo, ref);
+    });
 
 class PlaybackArchitectureService {
   final YoutubeStreamRepository _repository;
@@ -29,7 +28,7 @@ class PlaybackArchitectureService {
 
   // In-memory cache for audio URLs
   final Map<String, CachedStreamInfo> _urlCache = {};
-  
+
   // Ensures only 1 network request is ever active for a specific ID.
   final Map<String, Future<String?>> _activeRequests = {};
 
@@ -41,7 +40,10 @@ class PlaybackArchitectureService {
 
   /// Gets the stream URL for a video ID.
   /// Uses cache first, then calls the repository with atomic synchronization.
-  Future<String?> getStreamUrl(String videoId, {bool forceRefresh = false}) async {
+  Future<String?> getStreamUrl(
+    String videoId, {
+    bool forceRefresh = false,
+  }) async {
     // 0. MANDATORY CACHE-FIRST: Cek file lokal sebelum internet
     final localPath = await _checkLocalFile(videoId);
     if (localPath != null) {
@@ -50,7 +52,9 @@ class PlaybackArchitectureService {
     }
 
     // 0.5 Safety Guard: If it looks like a local path, don't even try
-    if (videoId.contains('/') || videoId.contains('\\') || (videoId.contains(':') && videoId.length > 2)) {
+    if (videoId.contains('/') ||
+        videoId.contains('\\') ||
+        (videoId.contains(':') && videoId.length > 2)) {
       return null;
     }
 
@@ -66,14 +70,16 @@ class PlaybackArchitectureService {
     // If there is an active request (prefetch or user action), join it.
     final existingRequest = _activeRequests[videoId];
     if (existingRequest != null) {
-      debugPrint('RateLimit Defender: Joining existing active request for $videoId');
+      debugPrint(
+        'RateLimit Defender: Joining existing active request for $videoId',
+      );
       return existingRequest;
     }
 
     // 3. Initiate New Atomic Request
     final requestFuture = _performFetch(videoId);
     _activeRequests[videoId] = requestFuture;
-    
+
     try {
       return await requestFuture;
     } finally {
@@ -107,7 +113,9 @@ class PlaybackArchitectureService {
           for (var f in files) {
             if (f is File && f.path.contains(videoId)) {
               if (f.existsSync()) {
-                debugPrint('PlaybackArchitecture: Physical file found for $videoId at ${f.path}');
+                debugPrint(
+                  'PlaybackArchitecture: Physical file found for $videoId at ${f.path}',
+                );
                 return f.path;
               }
             }
@@ -137,29 +145,38 @@ class PlaybackArchitectureService {
 
     // 3. Only fetch the next track
     final nextId = videoIds.first;
-    
+
     // 4. MANDATORY 15-SECOND DEBOUNCE:
     // If user moves before 15s, timer is canceled and
     // network request getStreamUrl is NEVER sent.
-    debugPrint('RateLimit Defender: Scheduling prefetch for $nextId in 15 seconds...');
+    debugPrint(
+      'RateLimit Defender: Scheduling prefetch for $nextId in 15 seconds...',
+    );
     _prefetchTimer = Timer(const Duration(seconds: 15), () async {
       // Check if session is still valid after 15s (user did not skip track)
       if (_prefetchSessionId != currentSession) {
-        debugPrint('RateLimit Defender: Aborted ghost prefetch for SESSION $currentSession');
+        debugPrint(
+          'RateLimit Defender: Aborted ghost prefetch for SESSION $currentSession',
+        );
         return;
       }
-      
-      if (!_urlCache.containsKey(nextId) && !_activeRequests.containsKey(nextId)) {
+
+      if (!_urlCache.containsKey(nextId) &&
+          !_activeRequests.containsKey(nextId)) {
         // Check local files first (no internet)
         final localPath = await _checkLocalFile(nextId);
         if (localPath != null) {
           _urlCache[nextId] = CachedStreamInfo(localPath, DateTime.now());
-          debugPrint('RateLimit Defender: Next track found in local. No internet request needed.');
+          debugPrint(
+            'RateLimit Defender: Next track found in local. No internet request needed.',
+          );
           return;
         }
 
         // If not found locally, fetch the URL via network
-        debugPrint('RateLimit Defender: [NETWORK] Prefetching next track URL from YouTube for SESSION $currentSession...');
+        debugPrint(
+          'RateLimit Defender: [NETWORK] Prefetching next track URL from YouTube for SESSION $currentSession...',
+        );
         final url = await getStreamUrl(nextId);
         if (url != null) {
           debugPrint('RateLimit Defender: URL Pre-warmed for ID: $nextId');

@@ -1,11 +1,12 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:resonance/core/constants/app_constants.dart';
 
 final supportRepositoryProvider = Provider((ref) => SupportRepository());
 
 class SupportRepository {
-  final String _configUrl = 'https://raw.githubusercontent.com/ChronoTechs/resonance/refs/heads/main/app_config.json';
+  final String _configUrl = AppConstants.githubRawConfigUrl;
   
   /// Fetches the donation URL from the GitHub repository asynchronously.
   Future<String?> getDonateUrl() async {
