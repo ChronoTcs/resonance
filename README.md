@@ -15,7 +15,7 @@
 
 <br/>
 
-[**Download**](#download-and-building) · [**Features**](#features) · [**Architecture**](#architecture) · [**Build Instructions**](#building) · [**Support**](#support-the-project)
+[**Download**](#download-now) · [**Features**](#features) · [**Architecture**](#architecture) · [**Build Instructions**](#building) · [**Support**](#support-the-project)
 
 </div>
 
@@ -24,6 +24,27 @@
 > [!NOTE]
 > **Solo Developer Project** — Resonance is designed, developed, and maintained independently by **ChronoTechs**.  
 > If YouTube Music is unavailable in your region, a **VPN or proxy** connected to a supported region may be required.
+
+---
+
+<div align="center">
+
+<h1><a id="download-now"></a>Download Now</h1>
+
+<table align="center">
+  <tr>
+    <th align="center">GitHub</th>
+  </tr>
+  <tr>
+    <td align="center">
+      <a href="https://github.com/ChronoTcs/resonance/releases">
+        <img src="assets/badge_github.png" alt="Download from GitHub" height="60" />
+      </a>
+    </td>
+  </tr>
+</table>
+
+</div>
 
 ---
 
@@ -103,7 +124,7 @@ lib/
 
 <div align="center">
 
-<h1><a id="download-and-building"></a><a id="building"></a>Download & Building</h1>
+<h1><a id="building"></a>Building & Compilation</h1>
 
 </div>
 
