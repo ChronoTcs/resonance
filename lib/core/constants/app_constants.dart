@@ -1,5 +1,5 @@
 abstract class AppConstants {
-  static const String githubOwner = 'ChronoTechs';
+  static const String githubOwner = 'ChronoTcs';
   static const String githubRepo = 'resonance';
 
   static const String githubRepoUrl = 'https://github.com/$githubOwner/$githubRepo';

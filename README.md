@@ -1,72 +1,148 @@
-# Resonance Music App
+<div align="center">
 
-Resonance is a premium, high-performance hybrid music and video streaming application designed for Windows Desktop and Android Mobile platforms. It combines native offline audio management with seamless YouTube search, resolver, sniffer, and caching architectures.
+<img src="assets/icons/app_icon.png" alt="Resonance Logo" width="160" />
 
----
+# Resonance
 
-## Key Features
+### Premium Hybrid Music Streaming App for Windows & Android
 
-### 🎵 1. Premium Audio & Video Playback
-*   **Dual Mode Player:** Seamlessly handles local audio files (MP3, FLAC, M4A, etc.) and online YouTube streams.
-*   **Aesthetic UI/UX:** Features dynamic artwork-based blur backgrounds, smooth transitions, standardized Flaticon UIcons, and custom responsive layouts.
-*   **Floating overlay / PiP:** Standardized floating player bubble and Picture-in-Picture capability on Windows and Android.
+<br/>
 
-### 🌐 2. SOTA YouTube Stream Resolving
-*   **Windows Subprocess Bridge:** Outsources heavy YouTube URL deciphering and downloading tasks to a lightweight Python IPC daemon (`resonance_downloader.py` running `yt-dlp`).
-*   **Android MethodChannel:** Decrypts signature cipher keys natively using a MethodChannel calling `com.zemer.cipher.CipherDeobfuscator` in Java/Kotlin.
-*   **Fast Cache-Bypass:** Eliminates network prefetch delays by automatically bypassing the cache layer during active downloads.
+[![Latest Release](https://img.shields.io/github/v/release/ChronoTcs/resonance?style=for-the-badge&labelColor=0d1117&color=6366f1)](https://github.com/ChronoTcs/resonance/releases)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-10b981.svg?style=for-the-badge&labelColor=0d1117)](LICENSE)
+[![Downloads](https://img.shields.io/github/downloads/ChronoTcs/resonance/total?style=for-the-badge&labelColor=0d1117&color=f59e0b)](https://github.com/ChronoTcs/resonance/releases)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Android-blue?style=for-the-badge&labelColor=0d1117&color=ec4899)](https://github.com/ChronoTcs/resonance)
 
-### 🎛️ 3. Equalizer & Audio Settings
-*   **9-Band Hardware Equalizer:** Custom frequency sliders with link-control settings to raise/lower adjacent bands smoothly.
-*   **Presets:** Built-in profiles ("Flat", "Bass Boost", "Vocal") and "Custom" memory slots.
-*   **Playback Speed & Pitch:** Dynamic real-time speed modifiers.
+<br/>
 
-### 💾 4. Cache & Database Management
-*   **SQLite Storage:** Offline-first caching of track metadata, local directories, search history, and lyrics translations.
-*   **Granular Cache Controls:** Settings module allowing users to selectively clear image cache, lyrics, or purge all storage.
+[**Download**](#download-and-building) · [**Features**](#features) · [**Architecture**](#architecture) · [**Build Instructions**](#building) · [**Support**](#support-the-project)
+
+</div>
 
 ---
 
-## Architecture Overview (Clean + Feature-First)
+> [!NOTE]
+> **Solo Developer Project** — Resonance is designed, developed, and maintained independently by **ChronoTechs**.  
+> If YouTube Music is unavailable in your region, a **VPN or proxy** connected to a supported region may be required.
 
-The project follows a **Feature-First + Clean Architecture** structure to ensure high testability, maintainability, and clear separation of concerns:
+---
+
+<div align="center">
+
+<h1><a id="features"></a>Features</h1>
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+
+#### 🎵 Playback & Audio System
+- **Dual-Engine Hybrid Playback**: Seamlessly handles local audio formats (`.mp3`, `.flac`, `.m4a`, `.wav`) and live online YouTube music streams.
+- **Hardware Equalizer**: 9-band hardware equalizer with custom presets ("Flat", "Bass Boost", "Vocal") and customizable sliders.
+- **Floating Overlay & Mini Player**: Standardized mini player & picture-in-picture floating overlay for desktop & mobile.
+
+</td>
+<td width="50%" valign="top">
+
+#### ⚡ YouTube Resolver
+- **Windows IPC Subprocess Bridge**: Outsources YouTube deciphering and audio stream fetching to a Python daemon (`resonance_downloader.py` running `yt-dlp`).
+- **Android Native Deobfuscation**: Decrypts signature cipher keys natively using a MethodChannel calling `CipherDeobfuscator` in Kotlin/Java.
+- **Automatic HD Cover Art**: Upgrades thumbnails to 1080p square artwork with 1:1 iTunes metadata enrichment.
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+#### 📜 Lyrics & Metadata
+- **LRCLIB Sync & Translation**: Synchronized lyrics scrolling with automatic multi-language translation caching.
+- **Sidecar JSON Metadata**: High-speed offline caching for track details, artwork, and album titles.
+
+</td>
+<td width="50%" valign="top">
+
+#### 💾 Storage & Caching
+- **Granular Domain Storage**: Partitioned local music, stream cache, and system app cache directories.
+- **SQLite Database**: Offline-first storage for track metadata, playlists, and playback history.
+
+</td>
+</tr>
+</table>
+
+</div>
+
+---
+
+<div align="center">
+
+<h1><a id="architecture"></a>Architecture</h1>
+
+</div>
+
+Resonance follows a **Feature-First + Clean Architecture** structure for optimal testability and maintainability:
 
 ```text
 lib/
-├── core/                  # Global utilities, global widgets, themes
-│   ├── utils/             # AppIcons constant map, theme systems
-│   └── widgets/           # AppBackButton, CollapseButton, PlayPauseButton
-└── features/              # Feature scopes
-    ├── player/            # Fullscreen and docked controllers, audio state
-    ├── download/          # Download queue, Python bridge bridge/datasource
-    ├── library/           # Local catalog parser, directory scanner
-    └── lyrics/            # Lyrics syncer, translation API wrappers
+├── core/                  # Shared utilities, constants, design widgets & global services
+│   ├── application/       # Global application providers (AppConfig, Permissions)
+│   ├── constants/         # AppConstants and remote repository endpoint configurations
+│   ├── data/              # Storage services, cache manager, RPC services
+│   ├── domain/            # Core domain models (MediaItem)
+│   ├── utils/             # AppIcons, PathUtils, ThumbnailUtils, Theme tokens
+│   └── widgets/           # Reusable UI controls (ResonanceButton, MediaArtworkWidget)
+└── features/              # Feature-isolated modules
+    ├── download/          # Download queue, Python IPC bridge, download notifier
+    ├── explore/           # YouTube search, community feed parsers, stream resolver
+    ├── library/           # Local file scanner, directory parser, SQLite store
+    ├── lyrics/            # Synced LRC parser, translation engine, LRCLIB API
+    ├── player/            # Fullscreen view, docked mini player, audio state notifier
+    ├── playlist/          # Custom playlist manager, track reordering
+    └── settings/          # System maintenance, cache manager UI, auto updates
 ```
-
-Each feature folder is divided into three layers:
-1.  `presentation/`: UI screens, components, and UI Notifier controllers.
-2.  `application/`: High-level business logic, orchestrators, and providers (Riverpod).
-3.  `data/`: Repositories, API datasources, and local models.
 
 ---
 
-## Development & Building
+<div align="center">
+
+<h1><a id="download-and-building"></a><a id="building"></a>Download & Building</h1>
+
+</div>
 
 ### Prerequisites
-*   Flutter SDK `^3.11.1`
-*   Python `3.10+` (Windows only for bridge development)
-*   FFmpeg (Placed inside `python_engine/bin/`)
+- **Flutter SDK**: `^3.11.1`
+- **Python**: `3.10+` (Windows bridge development)
+- **FFmpeg**: Placed inside `python_engine/bin/`
 
-### Production Build Commands
+---
 
-#### 🤖 Android Build (Optimized Size)
-To avoid bundling native `libmpv` libraries for unused CPU architectures (saving ~70MB of APK bloat):
+### Building for Production
+
+#### 🤖 Android (Optimized ABI Split)
+To produce size-optimized APKs without bundling unused native `libmpv` architectures (~70MB size reduction):
 ```bash
 flutter build apk --split-per-abi --obfuscate --split-debug-info=build/app/outputs/symbols
 ```
 
-#### 🪟 Windows Build
+#### 🪟 Windows Desktop
 ```bash
 flutter build windows --release
 ```
-*Note: Make sure to copy the Python `resonance_downloader.exe` and FFmpeg binaries (`bin/` directory containing `ffmpeg.exe` and `ffprobe.exe`) directly adjacent to the compiled `resonance_app.exe` in the release output folder.*
+*Note: Ensure `resonance_downloader.exe` and FFmpeg binaries (`bin/` directory with `ffmpeg.exe` and `ffprobe.exe`) are placed adjacent to `resonance.exe` in the release build folder.*
+
+---
+
+<div align="center">
+
+<h1><a id="support-the-project"></a>Support the Project</h1>
+
+If you enjoy using Resonance and would like to support development or report an issue:
+
+<br/>
+
+[![Donate](https://img.shields.io/badge/Donate-Linktree-10b981?style=for-the-badge&logo=linktree&logoColor=white&labelColor=0d1117)](https://linktr.ee/Chronosz)
+[![Report Bug](https://img.shields.io/badge/Report_Bug-GitHub_Issues-red?style=for-the-badge&logo=github&logoColor=white&labelColor=0d1117)](https://github.com/ChronoTcs/resonance/issues)
+
+<br/>
+
+### Developed with ❤️ by [ChronoTechs](https://github.com/ChronoTcs)
+
+</div>
