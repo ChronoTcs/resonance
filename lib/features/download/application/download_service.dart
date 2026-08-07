@@ -1066,6 +1066,7 @@ class DownloadService {
         bridge.exe,
         bridge.args,
         runInShell: Platform.isWindows,
+        environment: Platform.isWindows ? DownloaderBridgeDatasource.buildCleanEnvironment() : null,
       );
 
       final payload =

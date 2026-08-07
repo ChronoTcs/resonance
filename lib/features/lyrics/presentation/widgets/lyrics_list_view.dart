@@ -9,11 +9,13 @@ import '../../../../core/theme/theme_provider.dart';
 class LyricsListView extends ConsumerStatefulWidget {
   final bool compact;
   final ScrollPhysics? physics;
+  final Color textColor;
 
   const LyricsListView({
     super.key,
     this.compact = false,
     this.physics,
+    this.textColor = Colors.white,
   });
 
   @override
@@ -132,6 +134,7 @@ class _LyricsListViewState extends ConsumerState<LyricsListView> {
                 inactiveOpacity: inactiveOpacity,
                 fontSizeActive: 18,
                 fontSizeInactive: 14,
+                textColor: widget.textColor,
               ),
             );
           },
@@ -171,6 +174,7 @@ class _LyricsListViewState extends ConsumerState<LyricsListView> {
                   inactiveOpacity: inactiveOpacity,
                   fontSizeActive: 26,
                   fontSizeInactive: 18,
+                  textColor: widget.textColor,
                 ),
               );
             },

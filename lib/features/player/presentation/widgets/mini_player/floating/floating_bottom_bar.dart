@@ -15,10 +15,12 @@ class FloatingBottomBar extends ConsumerWidget {
 
     if (track == null) return const SizedBox.shrink();
 
+    final theme = Theme.of(context);
+
     return Container(
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.95),
-        border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.1), width: 0.5)),
+        color: theme.colorScheme.surface.withValues(alpha: 0.95),
+        border: Border(top: BorderSide(color: theme.colorScheme.onSurface.withValues(alpha: 0.1), width: 0.5)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -48,9 +50,10 @@ class FloatingBottomBar extends ConsumerWidget {
                         height: 18,
                         child: _MarqueeText(
                           text: track.title,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 13,
+                            color: theme.colorScheme.onSurface,
                           ),
                         ),
                       ),
@@ -59,7 +62,7 @@ class FloatingBottomBar extends ConsumerWidget {
                         maxLines: 1,
                         style: TextStyle(
                           fontSize: 11,
-                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                          color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -79,6 +82,7 @@ class FloatingBottomBar extends ConsumerWidget {
                       tooltip: 'Previous',
                       iconSize: 18,
                       padding: 4,
+                      color: theme.colorScheme.onSurface,
                       isDisabled: audioState.currentIndex <= 0,
                     ),
                     const SizedBox(width: 4),
@@ -95,6 +99,7 @@ class FloatingBottomBar extends ConsumerWidget {
                       tooltip: 'Next',
                       iconSize: 18,
                       padding: 4,
+                      color: theme.colorScheme.onSurface,
                       isDisabled: audioState.nextTrack == null,
                     ),
                   ],

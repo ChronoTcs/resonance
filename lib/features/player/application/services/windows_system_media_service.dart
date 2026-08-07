@@ -71,7 +71,6 @@ class WindowsSystemMediaService with WindowListener {
   String? _lastSMTCThumb;
   bool? _lastTaskbarPlayingState;
   DateTime? _lastSyncRequestTime;
-  bool _wasHiddenToTray = false;
 
   Future<void> updateMetadata(
     MediaItem? track,
@@ -92,7 +91,7 @@ class WindowsSystemMediaService with WindowListener {
         return;
       }
 
-      // --- LOGIKA CERDAS DETEKSI PATH THUMBNAIL ---
+      // Logic for thumbnail path
       String? formattedThumbnail;
       if (overrideThumbnailUrl != null &&
           overrideThumbnailUrl.startsWith('http')) {
@@ -107,7 +106,7 @@ class WindowsSystemMediaService with WindowListener {
         }
       }
 
-      // CEGAH UPDATE BERULANG (FLICKER)
+      // Prevent update loop (flicker)
       if (!force &&
           _lastSMTCTitle == track.title &&
           _lastSMTCArtist == track.artist &&
@@ -169,24 +168,20 @@ class WindowsSystemMediaService with WindowListener {
 
   // WINDOW LIFECYCLE HANDLERS
   void onWindowHide() {
-    // Windows destroys the Taskbar Button when the window is hidden (Close to Tray)
-    _wasHiddenToTray = true;
+    // ponytail: not a real WindowListener override — never called by window_manager.
+    // Tray restore is handled in TrayService._restoreWindow() directly.
   }
 
   @override
   void onWindowMinimize() {
-    // Windows retains the Taskbar Button when minimized.
-    // Set to false to prevent redundant re-syncing.
-    _wasHiddenToTray = false;
+    // Windows retains the Taskbar Button when minimized — no action needed.
   }
 
   @override
   void onWindowRestore() {
-    // Force sync only if the window is restored from 'Hidden' mode
-    if (_wasHiddenToTray) {
-      _syncTaskbarOnVisible();
-      _wasHiddenToTray = false;
-    }
+    // Fires only on minimize → restore (NOT hide → show).
+    // Tray hide → show is handled in TrayService._restoreWindow().
+    _syncTaskbarOnVisible();
   }
 
   @override
@@ -195,12 +190,15 @@ class WindowsSystemMediaService with WindowListener {
     // Stops log spam during normal minimize/restore events.
   }
 
+  /// Public entry point called by TrayService after windowManager.show().
+  Future<void> syncTaskbarOnVisible() => _syncTaskbarOnVisible();
+
   Future<void> _syncTaskbarOnVisible() async {
-    // Windows OS often fires Restore & Focus events concurrently (<100ms).
+    // Prevent concurrent execution while 600ms DWM timer is running
     final now = DateTime.now();
     if (_lastSyncRequestTime != null &&
-        now.difference(_lastSyncRequestTime!).inMilliseconds < 500) {
-      return; // Prevent duplicate execution within 500ms
+        now.difference(_lastSyncRequestTime!).inMilliseconds < 1000) {
+      return;
     }
     _lastSyncRequestTime = now;
 
@@ -208,8 +206,6 @@ class WindowsSystemMediaService with WindowListener {
     // HWND in the Taskbar BEFORE we inject the Thumbnail Toolbar.
     await Future.delayed(const Duration(milliseconds: 600));
 
-    // If the system is not ready yet (e.g. hidden right after start), wait
-    // until the initialization timer finishes instead of canceling sync.
     if (!_isTaskbarReady) {
       debugPrint(
         '[WindowsTaskbar] System not ready yet. Waiting for stabilization...',
@@ -219,21 +215,16 @@ class WindowsSystemMediaService with WindowListener {
         await Future.delayed(const Duration(milliseconds: 500));
         retryCount++;
       }
-      if (!_isTaskbarReady) return; // Menyerah setelah 5 detik
+      if (!_isTaskbarReady) return;
     }
 
     debugPrint(
       '[WindowsTaskbar] Window became visible. Re-syncing controls (Forced).',
     );
 
-    // We use the last known playing state to restore the buttons.
-    // If it was null, we default to false.
     final wasPlaying = _lastTaskbarPlayingState ?? false;
-
-    // Reset the internal cache to force the native SetThumbnailToolbar call
     _lastTaskbarPlayingState = null;
 
-    // Force update to bypass visibility guards during window restore transition.
     await _updateTaskbarThumbnail(wasPlaying, force: true);
   }
 
@@ -247,14 +238,13 @@ class WindowsSystemMediaService with WindowListener {
 
     if (!force && !(await windowManager.isVisible())) return;
 
-    // 3. Prevent redundant taskbar updates (Bypass if forced)
     if (!force && _lastTaskbarPlayingState == isPlaying) return;
     _lastTaskbarPlayingState = isPlaying;
 
     try {
-      // If forced (restored from hidden), clear the previous toolbar first
-      // to clean up 'Ghost State' in Windows memory.
       if (force) {
+        // Reset plugin internal button cache so ThumbBarAddButtons is called
+        // for the new Taskbar Tab created by Windows after SW_HIDE -> SW_SHOW
         await WindowsTaskbar.resetThumbnailToolbar();
       }
 
@@ -277,8 +267,9 @@ class WindowsSystemMediaService with WindowListener {
           () => _onNext?.call(),
         ),
       ]);
+      debugPrint('[WindowsTaskbar] setThumbnailToolbar complete');
     } catch (e) {
-      debugPrint('Taskbar update suppressed: $e');
+      debugPrint('[WindowsTaskbar] Taskbar update error: $e');
     }
   }
 

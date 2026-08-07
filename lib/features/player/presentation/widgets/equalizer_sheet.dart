@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance/core/utils/uicons.dart';
+import 'package:resonance/core/widgets/inputs/resonance_switch.dart';
 import '../../application/providers/equalizer_controller.dart';
 
-class EqualizerSheet extends ConsumerWidget {
+class EqualizerSheet extends ConsumerStatefulWidget {
   const EqualizerSheet({super.key});
 
   static const List<String> _bandLabels = [
@@ -19,7 +20,16 @@ class EqualizerSheet extends ConsumerWidget {
   ];
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<EqualizerSheet> createState() => _EqualizerSheetState();
+}
+
+class _EqualizerSheetState extends ConsumerState<EqualizerSheet> {
+  bool _isPresetHovered = false;
+  bool _isLinkHovered = false;
+  bool _isCloseHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
     final eqState = ref.watch(equalizerControllerProvider);
     final eqNotifier = ref.read(equalizerControllerProvider.notifier);
 
@@ -50,20 +60,21 @@ class EqualizerSheet extends ConsumerWidget {
                 'Equaliser',
                 style: TextStyle(
                   fontSize: 22,
-                  fontWeight: FontWeight.w400,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
               Row(
                 children: [
                   Text(
                     eqState.isEnabled ? 'On' : 'Off',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: eqState.isEnabled ? colorScheme.primary : onSurfaceVariant,
                     ),
                   ),
                   const SizedBox(width: 12),
-                  Switch(
+                  ResonanceSwitch(
                     value: eqState.isEnabled,
                     onChanged: (val) {
                       eqNotifier.toggleEqualizer(val);
@@ -80,46 +91,62 @@ class EqualizerSheet extends ConsumerWidget {
             children: [
               const Text(
                 'Preset',
-                style: TextStyle(fontSize: 16),
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
               ),
               const SizedBox(width: 16),
-              Container(
-                height: 36,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(
-                  color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: eqState.preset,
-                    dropdownColor: colorScheme.surfaceContainerHighest,
-                    icon: Icon(
-                      UIcons.regular.angle_small_down,
-                      color: onSurfaceVariant,
-                      size: 20,
+              MouseRegion(
+                cursor: SystemMouseCursors.click,
+                onEnter: (_) => setState(() => _isPresetHovered = true),
+                onExit: (_) => setState(() => _isPresetHovered = false),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  height: 36,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: _isPresetHovered
+                        ? colorScheme.surfaceContainerHighest.withValues(alpha: 0.8)
+                        : colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: _isPresetHovered
+                          ? colorScheme.outline.withValues(alpha: 0.3)
+                          : Colors.transparent,
                     ),
-                    items: ['Flat', 'Bass Boost', 'Vocal', 'Custom'].map((
-                      String value,
-                    ) {
-                      return DropdownMenuItem<String>(
-                        value: value,
-                        child: Text(
-                          value,
-                          style: TextStyle(
-                            color: eqState.preset == value
-                                ? colorScheme.primary
-                                : onSurface,
-                            fontSize: 14,
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: eqState.preset,
+                      dropdownColor: colorScheme.surfaceContainerHighest,
+                      icon: Icon(
+                        UIcons.regular.angle_small_down,
+                        color: onSurfaceVariant,
+                        size: 20,
+                      ),
+                      items: ['Flat', 'Bass Boost', 'Vocal', 'Custom'].map((
+                        String value,
+                      ) {
+                        return DropdownMenuItem<String>(
+                          value: value,
+                          child: Text(
+                            value,
+                            style: TextStyle(
+                              color: eqState.preset == value
+                                  ? colorScheme.primary
+                                  : onSurface,
+                              fontSize: 14,
+                              fontWeight: eqState.preset == value
+                                  ? FontWeight.w600
+                                  : FontWeight.normal,
+                            ),
                           ),
-                        ),
-                      );
-                    }).toList(),
-                    onChanged: (newValue) {
-                      if (newValue != null && newValue != 'Custom') {
-                        eqNotifier.setEqualizerPreset(newValue);
-                      }
-                    },
+                        );
+                      }).toList(),
+                      onChanged: (newValue) {
+                        if (newValue != null && newValue != 'Custom') {
+                          eqNotifier.setEqualizerPreset(newValue);
+                        }
+                      },
+                    ),
                   ),
                 ),
               ),
@@ -155,7 +182,7 @@ class EqualizerSheet extends ConsumerWidget {
                       '-12 dB',
                       style: TextStyle(color: onSurfaceVariant, fontSize: 12),
                     ),
-                    const SizedBox(height: 20), // Spacer for bottom labels alignment
+                    const SizedBox(height: 20),
                   ],
                 ),
                 const SizedBox(width: 16),
@@ -168,7 +195,7 @@ class EqualizerSheet extends ConsumerWidget {
                       mainAxisAlignment: MainAxisAlignment.start,
                       children: List.generate(9, (index) {
                         return SizedBox(
-                          width: 56, // Fixed width for each band to ensure scrollability
+                          width: 56,
                           child: Column(
                             children: [
                               Expanded(
@@ -224,7 +251,7 @@ class EqualizerSheet extends ConsumerWidget {
                               ),
                               const SizedBox(height: 12),
                               Text(
-                                _bandLabels[index],
+                                EqualizerSheet._bandLabels[index],
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: onSurfaceVariant,
@@ -248,55 +275,92 @@ class EqualizerSheet extends ConsumerWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Checkbox
+              // Checkbox + Label Row (Interactive & Hoverable)
               Expanded(
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: Checkbox(
-                        value: eqState.linkSliders,
-                        activeColor: colorScheme.primary,
-                        checkColor: colorScheme.onPrimary,
-                        side: BorderSide(color: onSurfaceVariant),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        onChanged: (val) {
-                          if (val != null) eqNotifier.toggleLinkSliders(val);
-                        },
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  onEnter: (_) => setState(() => _isLinkHovered = true),
+                  onExit: (_) => setState(() => _isLinkHovered = false),
+                  child: GestureDetector(
+                    onTap: () => eqNotifier.toggleLinkSliders(!eqState.linkSliders),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: _isLinkHovered
+                            ? colorScheme.onSurface.withValues(alpha: 0.06)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: Checkbox(
+                              value: eqState.linkSliders,
+                              activeColor: colorScheme.primary,
+                              checkColor: colorScheme.onPrimary,
+                              side: BorderSide(color: onSurfaceVariant),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              onChanged: (val) {
+                                if (val != null) eqNotifier.toggleLinkSliders(val);
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Move nearby sliders together',
+                              style: TextStyle(
+                                color: _isLinkHovered ? onSurface : onSurfaceVariant,
+                                fontSize: 14,
+                                fontWeight: _isLinkHovered ? FontWeight.w500 : FontWeight.normal,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 2,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'Move nearby sliders together',
-                        style: TextStyle(color: onSurfaceVariant, fontSize: 14),
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 2,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
-              const SizedBox(width: 8),
-              // Close Button
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: colorScheme.surfaceContainerHighest,
-                  foregroundColor: colorScheme.onSurfaceVariant,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 12,
+              const SizedBox(width: 16),
+              // Close Button (Interactive & Hoverable)
+              MouseRegion(
+                cursor: SystemMouseCursors.click,
+                onEnter: (_) => setState(() => _isCloseHovered = true),
+                onExit: (_) => setState(() => _isCloseHovered = false),
+                child: GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    decoration: BoxDecoration(
+                      color: _isCloseHovered
+                          ? colorScheme.primary
+                          : colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 10,
+                    ),
+                    child: Text(
+                      'Close',
+                      style: TextStyle(
+                        color: _isCloseHovered
+                            ? colorScheme.onPrimary
+                            : colorScheme.onSurface,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
                   ),
                 ),
-                child: const Text('Close'),
               ),
             ],
           ),

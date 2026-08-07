@@ -37,6 +37,7 @@ class DownloaderBridgeDatasource {
         bridge.exe,
         bridge.args,
         runInShell: Platform.isWindows,
+        environment: Platform.isWindows ? buildCleanEnvironment() : null,
       );
 
       _stdoutSub = _process!.stdout
@@ -230,5 +231,51 @@ class DownloaderBridgeDatasource {
     }
 
     return null;
+  }
+
+  /// Builds a sanitized PATH environment for Windows process spawning.
+  /// Strips directories that are NTFS reparse points (junctions/symlinks),
+  /// which cause WinError 448 when Windows traverses them during PATH resolution.
+  static Map<String, String> buildCleanEnvironment() {
+    final ffmpegDir = resolveFFmpegDir();
+    final exeDir = File(Platform.resolvedExecutable).parent.path;
+
+    // Essential base paths only — no user PATH junk
+    final essentialPaths = [
+      exeDir,
+      ?ffmpegDir,
+      r'C:\Windows\System32',
+      r'C:\Windows',
+      r'C:\Windows\System32\Wbem',
+    ];
+
+    // Whitelist safe entries from the original system PATH:
+    // Skip any entry that is an NTFS reparse point (junction / symlink)
+    final originalPath = Platform.environment['PATH'] ?? '';
+    for (final entry in originalPath.split(';')) {
+      final trimmed = entry.trim();
+      if (trimmed.isEmpty) continue;
+      try {
+        final stat = FileStat.statSync(trimmed);
+        if (stat.type == FileSystemEntityType.notFound) continue;
+        // Include only plain directories (not links/junctions)
+        if (stat.type == FileSystemEntityType.directory) {
+          final dir = Directory(trimmed);
+          // If resolveSymbolicLinks changes the path, it was a symlink/junction — skip it
+          final resolved = dir.resolveSymbolicLinksSync();
+          if (resolved.toLowerCase() == trimmed.toLowerCase() &&
+              !essentialPaths.any((p) => p.toLowerCase() == trimmed.toLowerCase())) {
+            essentialPaths.add(trimmed);
+          }
+        }
+      } catch (_) {
+        // ponytail: skip any entry that throws (untrusted mount, access denied, etc.)
+      }
+    }
+
+    return {
+      ...Platform.environment,
+      'PATH': essentialPaths.join(';'),
+    };
   }
 }

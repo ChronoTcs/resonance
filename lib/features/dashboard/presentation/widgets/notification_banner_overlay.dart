@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/features/settings/application/notification_provider.dart';
 
 /// Top-Right Floating Banner Overlay for immediate visual notification feedback.
@@ -83,14 +82,6 @@ class _NotificationBannerOverlayState extends ConsumerState<NotificationBannerOv
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  banner.isError ? UIcons.regular.exclamation : UIcons.regular.download,
-                  size: 20,
-                  color: banner.isError
-                      ? theme.colorScheme.error
-                      : theme.colorScheme.primary,
-                ),
-                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,

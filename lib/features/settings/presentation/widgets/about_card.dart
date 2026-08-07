@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:resonance/core/application/providers/app_config_provider.dart';
 import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/features/library/application/services/music_restore_service.dart';
 import '../providers/package_info_provider.dart';
@@ -205,7 +207,7 @@ class _AboutCardState extends ConsumerState<AboutCard> {
                           child: GestureDetector(
                             onTap: _handleTap,
                             child: Text(
-                              'An alternative, cross-platform media player',
+                              'Premium Hybrid Music Streaming App for Windows & Android',
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: theme.colorScheme.onSurfaceVariant,
                               ),
@@ -234,9 +236,20 @@ class _AboutCardState extends ConsumerState<AboutCard> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    _buildLink(context, 'Licence Terms'),
-                    _buildLink(context, 'Privacy Policy'),
-                    _buildLink(context, 'Third-Party Software Acknowledgements'),
+                    Builder(
+                      builder: (context) {
+                        final appConfig = ref.watch(appConfigProvider);
+                        final repoUrl = appConfig.repoUrl;
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildLink(context, 'Licence Terms', '$repoUrl/blob/main/LICENSE'),
+                            _buildLink(context, 'Project Documentation (README)', '$repoUrl#readme'),
+                            _buildLink(context, 'GitHub Repository', repoUrl),
+                          ],
+                        );
+                      },
+                    ),
                   ],
                 ),
               ),
@@ -247,14 +260,15 @@ class _AboutCardState extends ConsumerState<AboutCard> {
     );
   }
 
-  Widget _buildLink(BuildContext context, String text) {
+  Widget _buildLink(BuildContext context, String text, String url) {
     final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: InkWell(
-        onTap: () {
-          // Future implementation for links
-        },
+        onTap: () => launchUrl(
+          Uri.parse(url),
+          mode: LaunchMode.externalApplication,
+        ),
         child: Text(
           text,
           style: theme.textTheme.bodySmall?.copyWith(

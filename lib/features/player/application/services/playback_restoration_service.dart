@@ -64,7 +64,22 @@ class PlaybackRestorationService {
 
           final player = notifier.player;
           final resolver = _ref.read(streamResolutionServiceProvider);
-          await player.open(resolver.buildMedia(lastTrack.path), play: false);
+
+          String playablePath = lastTrack.path;
+          final isLocalFile = !lastTrack.isStreaming &&
+              (playablePath.contains('/') || playablePath.contains('\\')) &&
+              File(playablePath).existsSync();
+
+          if (!isLocalFile) {
+            // Streaming track or stale temp path: check stream cache or fetch URL
+            try {
+              playablePath = await resolver.resolve(lastTrack);
+            } catch (e) {
+              debugPrint('[PlaybackRestoration] Resolution failed on restore: $e');
+            }
+          }
+
+          await player.open(resolver.buildMedia(playablePath), play: false);
           
           // Wait for engine to be ready before seeking
           late StreamSubscription readinessSub;

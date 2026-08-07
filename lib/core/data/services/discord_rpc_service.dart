@@ -33,6 +33,8 @@ class DiscordRpcService {
   bool _lastPlayingState = false;
   // ponytail: single guard — prevents double iTunes fetch from concurrent callers
   bool _isResolvingArt = false;
+  // ponytail: throttle reconnect to once per 30s — handles Discord opening after app startup
+  int _lastInitAttemptMs = 0;
 
   Future<void> initialize() async {
     if (!DiscordRPC.isAvailable) return;
@@ -235,7 +237,16 @@ class DiscordRpcService {
   }
 
   Future<String?> updatePresence(MediaItem? track, Duration position, Duration duration, bool isPlaying) async {
-    if (!_isInitialized) return null;
+    // Lazy reconnect: Discord may have launched after app startup.
+    // Retry initialize() at most once every 30s to avoid IPC spam.
+    if (!_isInitialized) {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      if (now - _lastInitAttemptMs > 30000) {
+        _lastInitAttemptMs = now;
+        await initialize();
+      }
+      if (!_isInitialized) return null;
+    }
 
     if (track == null) {
       clearPresence();

@@ -61,3 +61,8 @@ graphify-out/
 
 # Machine-specific VS Code dev config
 .vscode/launch.json
+
+# Inno Setup compiled installer
+windows/Output/
+Output/
+*.exe

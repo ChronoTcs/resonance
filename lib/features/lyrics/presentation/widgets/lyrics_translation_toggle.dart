@@ -7,17 +7,21 @@ class LyricsTranslationToggle extends ConsumerWidget {
   final double iconSize;
   final double fontSize;
   final double padding;
+  final Color? color;
 
   const LyricsTranslationToggle({
     super.key,
     this.iconSize = 24.0,
     this.fontSize = 12.0,
     this.padding = 4.0,
+    this.color,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(lyricsTranslationProvider);
+    final theme = Theme.of(context);
+    final effectiveColor = color ?? theme.colorScheme.onSurface;
     
     String label = 'OFF';
     String tooltipMessage = 'Enable Translation';
@@ -41,9 +45,10 @@ class LyricsTranslationToggle extends ConsumerWidget {
       onTap: () => ref.read(lyricsTranslationProvider.notifier).cycleMode(),
       padding: padding,
       iconSize: iconSize,
+      color: effectiveColor,
       labelStyle: TextStyle(
         fontSize: fontSize, 
-        fontWeight: FontWeight.bold
+        fontWeight: FontWeight.bold,
       ),
     );
   }

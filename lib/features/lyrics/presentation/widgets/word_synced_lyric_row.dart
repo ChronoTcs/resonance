@@ -11,6 +11,7 @@ class WordSyncedLyricRow extends ConsumerWidget {
   final double inactiveOpacity;
   final double fontSizeActive;
   final double fontSizeInactive;
+  final Color textColor;
 
   const WordSyncedLyricRow({
     super.key,
@@ -21,11 +22,11 @@ class WordSyncedLyricRow extends ConsumerWidget {
     required this.inactiveOpacity,
     this.fontSizeActive = 26,
     this.fontSizeInactive = 18,
+    this.textColor = Colors.white,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
     final textStyle = TextStyle(
       fontSize: isActive ? fontSizeActive : fontSizeInactive,
       fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
@@ -42,7 +43,7 @@ class WordSyncedLyricRow extends ConsumerWidget {
         line.text,
         textAlign: TextAlign.center,
         style: textStyle.copyWith(
-          color: theme.colorScheme.onSurface.withValues(
+          color: textColor.withValues(
             alpha: isActive ? activeOpacity : inactiveOpacity,
           ),
         ),
@@ -76,7 +77,7 @@ class WordSyncedLyricRow extends ConsumerWidget {
         TextSpan(
           text: '${syllable.text} ',
           style: textStyle.copyWith(
-            color: theme.colorScheme.onSurface.withValues(alpha: opacity),
+            color: textColor.withValues(alpha: opacity),
           ),
         ),
       );

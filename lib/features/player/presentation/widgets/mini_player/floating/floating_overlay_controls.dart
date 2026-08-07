@@ -85,6 +85,7 @@ class _FloatingOverlayControlsState extends ConsumerState<FloatingOverlayControl
                           tooltip: audioState.volume > 0 ? 'Mute' : 'Unmute',
                           iconSize: 18,
                           padding: 4,
+                          color: Colors.white,
                         ),
                         const SizedBox(width: 8),
                         Expanded(
@@ -176,6 +177,7 @@ class _FloatingOverlayControlsState extends ConsumerState<FloatingOverlayControl
         notifier.setSpeed(speeds[nextIdx]);
       },
       padding: 4,
+      color: Colors.white,
       labelStyle: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
     );
   }

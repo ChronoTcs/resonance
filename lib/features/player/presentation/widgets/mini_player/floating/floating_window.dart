@@ -12,8 +12,7 @@ import 'package:resonance/features/player/presentation/widgets/mini_player/float
 import 'package:resonance/features/player/presentation/widgets/mini_player/floating/floating_lyrics_view.dart';
 import 'package:resonance/features/lyrics/presentation/widgets/lyrics_translation_toggle.dart';
 import 'package:resonance/core/utils/uicons.dart';
-import 'package:resonance/features/playlist/application/playlist_provider.dart';
-import 'package:resonance/features/playlist/data/models/playlist_model.dart';
+import 'package:resonance/features/player/presentation/widgets/mini_player/floating/mini_player_add_to_playlist_dialog.dart';
 
 class FloatingWindow extends ConsumerStatefulWidget {
   const FloatingWindow({super.key});
@@ -23,43 +22,33 @@ class FloatingWindow extends ConsumerStatefulWidget {
 }
 
 class _FloatingWindowState extends ConsumerState<FloatingWindow> {
-  Future<void> _handleAddToLibrary() async {
-    final track = ref.read(currentTrackProvider);
-    if (track == null) return;
-
-    final playlistState = ref.read(playlistProvider).value;
-    if (playlistState == null) return;
-    
-    final List<Playlist> localPlaylists = (playlistState.local as List).cast<Playlist>();
-    final notifier = ref.read(playlistProvider.notifier);
-    
-    String likedId;
-    try {
-      likedId = localPlaylists.firstWhere((p) => p.name == 'Liked Songs').id;
-    } catch (_) {
-      await notifier.createPlaylist('Liked Songs');
-      await Future.delayed(const Duration(milliseconds: 200));
-      final updatedState = ref.read(playlistProvider).value;
-      likedId = updatedState?.local.firstWhere((p) => p.name == 'Liked Songs').id ?? '';
-    }
-
-    if (likedId.isNotEmpty) {
-      await notifier.addTrackToPlaylist(likedId, track);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Added "${track.title}" to Liked Songs', style: const TextStyle(color: Colors.white)),
-            duration: const Duration(seconds: 2),
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: Theme.of(context).primaryColor,
-          ),
-        );
-      }
-    }
-  }
+  final GlobalKey<NavigatorState> _navKey = GlobalKey<NavigatorState>();
 
   @override
   Widget build(BuildContext context) {
+    return HeroControllerScope.none(
+      child: Navigator(
+        key: _navKey,
+        onGenerateRoute: (_) => MaterialPageRoute(
+          builder: (context) => _FloatingWindowContent(navKey: _navKey),
+        ),
+      ),
+    );
+  }
+}
+
+class _FloatingWindowContent extends ConsumerWidget {
+  final GlobalKey<NavigatorState> navKey;
+  const _FloatingWindowContent({required this.navKey});
+
+  void _handleAddToPlaylist(BuildContext context, WidgetRef ref) {
+    final track = ref.read(currentTrackProvider);
+    if (track == null) return;
+    showMiniplayerAddToPlaylistDialog(context, ref, track);
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
     final popState = ref.watch(miniPlayerPopProvider);
     final popNotifier = ref.read(miniPlayerPopProvider.notifier);
     final track = ref.watch(currentTrackProvider);
@@ -69,6 +58,10 @@ class _FloatingWindowState extends ConsumerState<FloatingWindow> {
     final viewState = popState.viewState;
     final bool isHeaderVisible = viewState != MiniPlayerViewState.idle && 
                                viewState != MiniPlayerViewState.idleLyrics;
+
+    final theme = Theme.of(context);
+    final headerColor = theme.colorScheme.surface.withValues(alpha: 0.9);
+    final headerIconColor = theme.colorScheme.onSurface;
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -150,6 +143,7 @@ class _FloatingWindowState extends ConsumerState<FloatingWindow> {
                         child: FloatingLyricsView(),
                       ),
 
+                    // E. Top Drag Header Bar
                     AnimatedPositioned(
                       duration: const Duration(milliseconds: 250),
                       curve: Curves.easeOutCubic,
@@ -158,12 +152,12 @@ class _FloatingWindowState extends ConsumerState<FloatingWindow> {
                       right: 0,
                       child: Container(
                         height: 32,
-                        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.9),
+                        color: headerColor,
                         child: Stack(
                           children: [
                             // 1. Icon Drag
                             Center(
-                              child: Icon(UIcons.regular.grip_lines, color: Colors.white38, size: 16),
+                              child: Icon(UIcons.regular.grip_lines, color: headerIconColor.withValues(alpha: 0.4), size: 16),
                             ),
                             // 2. Wrap Drag functionality
                             const Positioned.fill(child: DragToMoveArea(child: SizedBox())),
@@ -175,10 +169,11 @@ class _FloatingWindowState extends ConsumerState<FloatingWindow> {
                               child: Center(
                                 child: ReusableHoverIconButton(
                                   icon: UIcons.regular.add,
-                                  onTap: _handleAddToLibrary,
-                                  tooltip: 'Add to Library',
+                                  onTap: () => _handleAddToPlaylist(context, ref),
+                                  tooltip: 'Add to Playlist',
                                   iconSize: 16,
                                   padding: 4,
+                                  color: headerIconColor,
                                 ),
                               ),
                             ),
@@ -192,9 +187,10 @@ class _FloatingWindowState extends ConsumerState<FloatingWindow> {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   if (viewState == MiniPlayerViewState.lyrics || viewState == MiniPlayerViewState.idleLyrics)
-                                    const LyricsTranslationToggle(
+                                    LyricsTranslationToggle(
                                       fontSize: 10,
                                       padding: 4,
+                                      color: headerIconColor,
                                     ),
                                   ReusableHoverIconButton(
                                     icon: UIcons.regular.cross_small,
@@ -207,6 +203,7 @@ class _FloatingWindowState extends ConsumerState<FloatingWindow> {
                                     tooltip: (viewState == MiniPlayerViewState.lyrics || viewState == MiniPlayerViewState.idleLyrics) ? 'Close Lyrics' : 'Close Miniplayer',
                                     iconSize: 16,
                                     padding: 4,
+                                    color: headerIconColor,
                                   ),
                                 ],
                               ),

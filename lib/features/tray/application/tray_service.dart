@@ -7,6 +7,7 @@ import 'package:window_manager/window_manager.dart';
 import 'package:resonance/core/data/services/po_token_provider_service.dart';
 import 'package:resonance/features/player/application/providers/audio_provider.dart';
 import 'package:resonance/features/library/data/models/media_item.dart';
+import 'package:resonance/features/player/application/services/windows_system_media_service.dart';
 
 /// Manages System Tray integration for Windows using nativeapi.
 class TrayService {
@@ -171,6 +172,9 @@ class TrayService {
   Future<void> _restoreWindow() async {
     await windowManager.show();
     await windowManager.focus();
+    // Rebuild thumbnail toolbar — Windows DWM destroys it when HWND is hidden.
+    // syncTaskbarOnVisible() handles the 600ms DWM stabilization delay internally.
+    _ref.read(windowsSystemMediaServiceProvider).syncTaskbarOnVisible();
   }
 
   Future<void> handleExit() async {

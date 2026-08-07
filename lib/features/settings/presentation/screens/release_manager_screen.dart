@@ -256,23 +256,8 @@ class _ReleaseManagerScreenState extends ConsumerState<ReleaseManagerScreen> {
             ),
             const SizedBox(height: 12),
 
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: theme.scaffoldBackgroundColor.withValues(alpha: 0.5),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                release.body,
-                maxLines: 8,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: theme.colorScheme.onSurfaceVariant,
-                  height: 1.4,
-                ),
-              ),
+            FormattedMarkdownText(
+              markdown: release.body,
             ),
             const SizedBox(height: 16),
 
@@ -330,17 +315,8 @@ class _ReleaseManagerScreenState extends ConsumerState<ReleaseManagerScreen> {
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         expandedCrossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: theme.scaffoldBackgroundColor.withValues(alpha: 0.5),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              release.body,
-              style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant, height: 1.4),
-            ),
+          FormattedMarkdownText(
+            markdown: release.body,
           ),
           const SizedBox(height: 12),
           _buildActionSection(context, release: release, updateState: updateState, updateNotifier: updateNotifier),
@@ -432,5 +408,311 @@ class _ReleaseManagerScreenState extends ConsumerState<ReleaseManagerScreen> {
         ),
       ),
     );
+  }
+}
+
+/// Renders raw release notes Markdown with uniform collapsed height (140px)
+/// and interactive expand/collapse toggle for long notes.
+class FormattedMarkdownText extends StatefulWidget {
+  final String markdown;
+  final double collapsedHeight;
+  final double expandedHeight;
+
+  const FormattedMarkdownText({
+    super.key,
+    required this.markdown,
+    this.collapsedHeight = 140.0,
+    this.expandedHeight = 450.0,
+  });
+
+  @override
+  State<FormattedMarkdownText> createState() => _FormattedMarkdownTextState();
+}
+
+class _FormattedMarkdownTextState extends State<FormattedMarkdownText> {
+  bool _isExpanded = false;
+  bool _isHovered = false;
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    final lines = widget.markdown.split('\n');
+    final List<Widget> widgets = [];
+
+    for (var i = 0; i < lines.length; i++) {
+      final line = lines[i].trimRight();
+
+      if (line.trim().isEmpty) {
+        widgets.add(const SizedBox(height: 6));
+        continue;
+      }
+
+      // Divider / HR
+      if (line.trim() == '---' || line.trim() == '***') {
+        widgets.add(Divider(color: colorScheme.outline.withValues(alpha: 0.2), height: 16));
+        continue;
+      }
+
+      // Blockquote
+      if (line.trim().startsWith('>')) {
+        final quoteText = line.trim().substring(1).trim();
+        widgets.add(
+          Container(
+            margin: const EdgeInsets.symmetric(vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: colorScheme.primaryContainer.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(6),
+              border: Border(
+                left: BorderSide(color: colorScheme.primary, width: 3),
+              ),
+            ),
+            child: _buildRichText(context, quoteText, style: TextStyle(fontSize: 13, color: colorScheme.onSurface)),
+          ),
+        );
+        continue;
+      }
+
+      // Headings
+      if (line.startsWith('# ')) {
+        widgets.add(
+          Padding(
+            padding: const EdgeInsets.only(top: 8, bottom: 4),
+            child: Text(
+              line.substring(2).trim(),
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.bold,
+                color: colorScheme.onSurface,
+              ),
+            ),
+          ),
+        );
+        continue;
+      }
+      if (line.startsWith('## ')) {
+        widgets.add(
+          Padding(
+            padding: const EdgeInsets.only(top: 8, bottom: 4),
+            child: Text(
+              line.substring(3).trim(),
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+                color: colorScheme.primary,
+              ),
+            ),
+          ),
+        );
+        continue;
+      }
+      if (line.startsWith('### ')) {
+        widgets.add(
+          Padding(
+            padding: const EdgeInsets.only(top: 6, bottom: 2),
+            child: Text(
+              line.substring(4).trim(),
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: colorScheme.onSurface,
+              ),
+            ),
+          ),
+        );
+        continue;
+      }
+
+      // Bullet items
+      if (line.trim().startsWith('- ') || line.trim().startsWith('* ')) {
+        final bulletContent = line.trim().substring(2).trim();
+        widgets.add(
+          Padding(
+            padding: const EdgeInsets.only(left: 4, top: 2, bottom: 2),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '• ',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: colorScheme.primary,
+                  ),
+                ),
+                Expanded(
+                  child: _buildRichText(
+                    context,
+                    bulletContent,
+                    style: TextStyle(fontSize: 13, color: colorScheme.onSurfaceVariant, height: 1.4),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+        continue;
+      }
+
+      // Regular Paragraph line
+      widgets.add(
+        Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: _buildRichText(
+            context,
+            line,
+            style: TextStyle(fontSize: 13, color: colorScheme.onSurfaceVariant, height: 1.4),
+          ),
+        ),
+      );
+    }
+
+    final double currentMaxHeight = _isExpanded ? widget.expandedHeight : widget.collapsedHeight;
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: GestureDetector(
+        onTap: () => setState(() => _isExpanded = !_isExpanded),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeInOut,
+          width: double.infinity,
+          constraints: BoxConstraints(maxHeight: currentMaxHeight),
+          decoration: BoxDecoration(
+            color: _isHovered
+                ? colorScheme.surfaceContainerHighest.withValues(alpha: 0.5)
+                : colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: _isHovered
+                  ? colorScheme.primary.withValues(alpha: 0.4)
+                  : colorScheme.outline.withValues(alpha: 0.1),
+            ),
+          ),
+          child: Column(
+            children: [
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Scrollbar(
+                    controller: _scrollController,
+                    child: SingleChildScrollView(
+                      controller: _scrollController,
+                      physics: _isExpanded ? const BouncingScrollPhysics() : const ClampingScrollPhysics(),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: widgets,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              // Expand / Collapse Bar
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                decoration: BoxDecoration(
+                  color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
+                  borderRadius: const BorderRadius.vertical(bottom: Radius.circular(7)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      _isExpanded ? 'Show Less' : 'Show More',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: _isHovered ? colorScheme.primary : colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      _isExpanded ? UIcons.regular.angle_small_up : UIcons.regular.angle_small_down,
+                      size: 14,
+                      color: _isHovered ? colorScheme.primary : colorScheme.onSurfaceVariant,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRichText(BuildContext context, String text, {required TextStyle style}) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final List<InlineSpan> spans = [];
+
+    final regex = RegExp(r'(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)');
+    int start = 0;
+
+    for (final match in regex.allMatches(text)) {
+      if (match.start > start) {
+        spans.add(TextSpan(text: text.substring(start, match.start), style: style));
+      }
+      final matchText = match.group(0)!;
+      if (matchText.startsWith('**') && matchText.endsWith('**')) {
+        spans.add(
+          TextSpan(
+            text: matchText.substring(2, matchText.length - 2),
+            style: style.copyWith(
+              fontWeight: FontWeight.bold,
+              color: colorScheme.onSurface,
+            ),
+          ),
+        );
+      } else if (matchText.startsWith('*') && matchText.endsWith('*')) {
+        spans.add(
+          TextSpan(
+            text: matchText.substring(1, matchText.length - 1),
+            style: style.copyWith(fontStyle: FontStyle.italic),
+          ),
+        );
+      } else if (matchText.startsWith('`') && matchText.endsWith('`')) {
+        spans.add(
+          WidgetSpan(
+            alignment: PlaceholderAlignment.middle,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                matchText.substring(1, matchText.length - 1),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontFamily: 'monospace',
+                  color: colorScheme.primary,
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+      start = match.end;
+    }
+
+    if (start < text.length) {
+      spans.add(TextSpan(text: text.substring(start), style: style));
+    }
+
+    return RichText(text: TextSpan(children: spans));
   }
 }
