@@ -13,8 +13,11 @@ class ExploreRecentPlaysSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final recentAsync = ref.watch(recentlyPlayedProvider).whenData(
-          (items) => items.where((item) => item.id != null && !item.isLocal).toList(),
+    final recentAsync = ref
+        .watch(recentlyPlayedProvider)
+        .whenData(
+          (items) =>
+              items.where((item) => item.id != null && !item.isLocal).toList(),
         );
 
     return recentAsync.when(
@@ -48,11 +51,14 @@ class ExploreRecentPlaysSection extends ConsumerWidget {
                           context: context,
                           builder: (dlg) => ResonanceConfirmDialog(
                             title: 'Clear History',
-                            content: 'Remove all recently played tracks from your history? This cannot be undone.',
+                            content:
+                                'Remove all recently played tracks from your history? This cannot be undone.',
                             confirmLabel: 'Clear',
                             isDanger: true,
                             onConfirm: () {
-                              ref.read(recentlyPlayedProvider.notifier).clearHistory();
+                              ref
+                                  .read(recentlyPlayedProvider.notifier)
+                                  .clearHistory();
                             },
                           ),
                         );
@@ -77,7 +83,9 @@ class ExploreRecentPlaysSection extends ConsumerWidget {
                       margin: const EdgeInsets.symmetric(horizontal: 4),
                       child: InkWell(
                         onTap: () {
-                          ref.read(audioProvider.notifier).playYouTubeTrack(item);
+                          ref
+                              .read(audioProvider.notifier)
+                              .playYouTubeTrack(item);
                         },
                         borderRadius: BorderRadius.circular(8),
                         child: Column(
@@ -91,12 +99,20 @@ class ExploreRecentPlaysSection extends ConsumerWidget {
                                 height: 140,
                                 fit: BoxFit.cover,
                                 placeholder: (context, url) => Container(
-                                  color: theme.colorScheme.surfaceContainerHighest,
-                                  child: Icon(AppIcons.music, color: Colors.grey),
+                                  color:
+                                      theme.colorScheme.surfaceContainerHighest,
+                                  child: Icon(
+                                    AppIcons.music,
+                                    color: Colors.grey,
+                                  ),
                                 ),
                                 errorWidget: (context, url, error) => Container(
-                                  color: theme.colorScheme.surfaceContainerHighest,
-                                  child: const Icon(Icons.music_note, color: Colors.grey),
+                                  color:
+                                      theme.colorScheme.surfaceContainerHighest,
+                                  child: const Icon(
+                                    Icons.music_note,
+                                    color: Colors.grey,
+                                  ),
                                 ),
                               ),
                             ),

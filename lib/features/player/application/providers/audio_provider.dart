@@ -319,7 +319,7 @@ class AudioNotifier extends Notifier<AudioState> {
       }
     }
 
-    // ponytail: pass original item (not resolved-URL trackToPlay) so state.currentTrack
+    // pass original item (not resolved-URL trackToPlay) so state.currentTrack
     // keeps the video-ID path. Prevents orchestrator from seeing a fake "track change"
     // when the URL is resolved, which would re-trigger a duplicate radio fetch.
     _onTrackChanged(item, index);
@@ -358,7 +358,7 @@ class AudioNotifier extends Notifier<AudioState> {
     if (state.queue.isEmpty) {
       playPlaylist([item]);
     } else {
-      // ponytail: appendTrack preserves cursor — avoids setQueue cursor reset
+      // appendTrack preserves cursor — avoids setQueue cursor reset
       _queue.appendTrack(item);
       state = state.copyWith(queue: [...state.queue, item]);
       _updateNextTrack();

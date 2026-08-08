@@ -146,7 +146,7 @@ class PermissionService {
 
   static Future<bool> requestStoragePermission() async {
     if (!Platform.isAndroid) return true;
-    // ponytail: delegate to download permissions — same logic
+    // delegate to download permissions — same logic
     return requestDownloadPermissions();
   }
 

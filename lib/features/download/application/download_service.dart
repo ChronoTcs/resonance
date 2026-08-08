@@ -380,7 +380,7 @@ class DownloadService {
         await File(cachedLrc).copy(p.join(lrcDir.path, '$locId.lrc'));
       }
 
-      // ponytail: local art goes to local/images/, not cache/images/
+      // local art goes to local/images/, not cache/images/
       final imagesDir = await _ref
           .read(cacheManagerProvider)
           .getLocalImagesDir();
@@ -1123,7 +1123,7 @@ class DownloadService {
 }
 
 final downloadServiceProvider = Provider<DownloadService>((ref) {
-  // ponytail: keepAlive prevents Riverpod from destroying Python process on rebuild
+  // keepAlive prevents Riverpod from destroying Python process on rebuild
   ref.keepAlive();
   return DownloadService(ref);
 });

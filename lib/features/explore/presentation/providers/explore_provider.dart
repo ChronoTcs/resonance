@@ -7,7 +7,7 @@ import '../../data/models/explore_home.dart';
 import '../../../player/application/providers/audio_provider.dart';
 import '../../../library/data/models/media_item.dart';
 
-// ponytail: re-export from core so existing callers of explore_provider don't break
+// re-export from core so existing callers of explore_provider don't break
 export 'package:resonance/core/providers/search_provider.dart'
     show searchQueryProvider, searchStateProvider, SearchQueryNotifier, SearchStateNotifier;
 

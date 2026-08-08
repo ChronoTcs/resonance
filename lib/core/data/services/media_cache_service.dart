@@ -57,7 +57,7 @@ class MediaCacheService {
 
   final Map<String, Future<void>> _activeDownloads = {};
   final Set<String> _activeArtworkDownloads = {};
-  // ponytail: cooldown map prevents retry deadlock on network flicker
+  // cooldown map prevents retry deadlock on network flicker
   final Map<String, DateTime> _failedDownloads = {};
   static const _kFailureCooldown = Duration(seconds: 60);
 
@@ -291,7 +291,7 @@ class MediaCacheService {
   Future<String?> cacheArtwork(String songId, String? url, {bool forceOverwrite = false}) async {
     if (url == null || !url.startsWith('http')) return null;
     final upgradedUrl = ThumbnailUtils.upgradeResolution(url);
-    // ponytail: in-flight guard prevents 3 concurrent callers downloading same file
+    // in-flight guard prevents 3 concurrent callers downloading same file
     if (_activeArtworkDownloads.contains(songId)) return null;
 
     try {
@@ -393,7 +393,7 @@ class MediaCacheService {
 
   /// Bypasses the 1-hour freshness guard when iTunes enrichment provides a
   /// better [album] or [thumbnailUrl] than what the sidecar JSON already has.
-  /// ponytail: only writes when enriched fields differ from stored values.
+  /// only writes when enriched fields differ from stored values.
   Future<void> saveMetadataForced(String songId, MediaItem item) async {
     try {
       final dir = await _cacheManager.getMetadataDir();

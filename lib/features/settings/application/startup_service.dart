@@ -13,7 +13,7 @@ Future<void> runStartupChecks(WidgetRef ref) async {
 
   // Pre-warm the DownloaderBridge Python process so it's ready before the user
   // navigates to the Download page or triggers stream URL resolution.
-  // ponytail: downloadServiceProvider is lazy by default — read here to boot it at startup.
+  // downloadServiceProvider is lazy by default — read here to boot it at startup.
   ref.read(downloadServiceProvider);
 
   // Fetch remote app config asynchronously (URLs, donate link, bug report URL)

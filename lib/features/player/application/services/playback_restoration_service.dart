@@ -47,7 +47,7 @@ class PlaybackRestorationService {
 
           // [Radio bloat guard] Cap restored queue: keep current track + max 20 ahead.
           // Prevents radio-inflated queues (80+ songs) from persisting across sessions.
-          // ponytail: simple slice, no extra state needed.
+          // simple slice, no extra state needed.
           const int maxQueueAhead = 20;
           final int savedIndex = s.lastIndex.clamp(0, fullQueue.length - 1);
           final int endIdx = (savedIndex + maxQueueAhead + 1).clamp(0, fullQueue.length);

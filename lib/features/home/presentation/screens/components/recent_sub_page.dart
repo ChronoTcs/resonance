@@ -35,7 +35,8 @@ class RecentSubPage extends ConsumerWidget {
                   context: context,
                   builder: (dlg) => ResonanceConfirmDialog(
                     title: 'Clear History',
-                    content: 'Remove all recently played tracks from your history? This cannot be undone.',
+                    content:
+                        'Remove all recently played tracks from your history? This cannot be undone.',
                     confirmLabel: 'Clear',
                     isDanger: true,
                     onConfirm: () {

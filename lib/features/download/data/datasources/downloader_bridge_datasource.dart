@@ -269,7 +269,7 @@ class DownloaderBridgeDatasource {
           }
         }
       } catch (_) {
-        // ponytail: skip any entry that throws (untrusted mount, access denied, etc.)
+        // skip any entry that throws (untrusted mount, access denied, etc.)
       }
     }
 

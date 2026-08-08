@@ -31,9 +31,9 @@ class DiscordRpcService {
   int _lastUpdateTime = 0;
   int _requestSessionId = 0;
   bool _lastPlayingState = false;
-  // ponytail: single guard — prevents double iTunes fetch from concurrent callers
+  // single guard — prevents double iTunes fetch from concurrent callers
   bool _isResolvingArt = false;
-  // ponytail: throttle reconnect to once per 30s — handles Discord opening after app startup
+  // throttle reconnect to once per 30s — handles Discord opening after app startup
   int _lastInitAttemptMs = 0;
 
   Future<void> initialize() async {
@@ -334,7 +334,7 @@ class DiscordRpcService {
         resolvedVideoId,
       );
 
-      // ponytail: skip if another caller already kicked off resolution for this track
+      // skip if another caller already kicked off resolution for this track
       if (!_isResolvingArt) {
         _isResolvingArt = true;
         final artworkUrl = await _resolveArtwork(track);

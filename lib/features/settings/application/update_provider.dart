@@ -31,7 +31,7 @@ class UpdateState {
   AppRelease? get latestRelease => releases.isNotEmpty ? releases.first : null;
   List<AppRelease> get olderReleases => releases.length > 1 ? releases.sublist(1) : [];
 
-  bool get updateAvailable => latestRelease != null && !latestRelease!.isCurrentVersion;
+  bool get updateAvailable => latestRelease != null && latestRelease!.isNewerThanCurrent;
   String get latestVersion => latestRelease?.tagName ?? '';
   String get changelog => latestRelease?.body ?? '';
 
@@ -68,22 +68,51 @@ class UpdateNotifier extends Notifier<UpdateState> {
       final packageInfo = await PackageInfo.fromPlatform();
       final currentVersion = packageInfo.version;
 
-      final response = await _dio.get(
-        AppConstants.githubReleasesApiUrl,
+      final options = Options(
+        headers: {
+          'User-Agent': 'ResonanceApp',
+          'Accept': 'application/vnd.github+json',
+        },
       );
 
-      if (response.statusCode == 200) {
-        final List<dynamic> data = response.data as List<dynamic>;
-        final parsedReleases = data
-            .map((json) => AppRelease.fromJson(json as Map<String, dynamic>, currentVersion))
-            .toList();
-
-        state = state.copyWith(
-          isChecking: false,
-          currentVersion: currentVersion,
-          releases: parsedReleases,
+      List<dynamic> data = [];
+      try {
+        final response = await _dio.get(
+          AppConstants.githubReleasesApiUrl,
+          options: options,
         );
+        if (response.statusCode == 200 && response.data is List) {
+          data = response.data as List<dynamic>;
+        }
+      } catch (e) {
+        debugPrint('[UpdateNotifier] List releases failed, trying latest: $e');
       }
+
+      // Fallback to /releases/latest if list endpoint is empty
+      if (data.isEmpty) {
+        try {
+          final latestResponse = await _dio.get(
+            '${AppConstants.githubReleasesApiUrl}/latest',
+            options: options,
+          );
+          if (latestResponse.statusCode == 200 && latestResponse.data is Map) {
+            data = [latestResponse.data];
+          }
+        } catch (e) {
+          debugPrint('[UpdateNotifier] Latest release fetch failed: $e');
+        }
+      }
+
+      final parsedReleases = data
+          .map((json) => AppRelease.fromJson(json as Map<String, dynamic>, currentVersion))
+          .toList();
+
+      state = state.copyWith(
+        isChecking: false,
+        currentVersion: currentVersion,
+        releases: parsedReleases,
+        error: parsedReleases.isEmpty ? 'No releases found on GitHub.' : null,
+      );
     } on DioException catch (e) {
       if (e.response?.statusCode == 404) {
         state = state.copyWith(

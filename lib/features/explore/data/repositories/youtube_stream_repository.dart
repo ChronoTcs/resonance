@@ -19,7 +19,7 @@ final youtubeStreamRepositoryProvider = Provider<YoutubeStreamRepository>((ref) 
   
   final repo = YoutubeStreamRepository(ref, client, cacheService, prefs);
   ref.onDispose(() => repo.dispose());
-  // ponytail: warm-up only needed on Android (no native cookie sync like Windows)
+  // warm-up only needed on Android (no native cookie sync like Windows)
   if (Platform.isAndroid) repo.warmUpSession();
   return repo;
 });
@@ -53,7 +53,7 @@ class YoutubeStreamRepository {
       final resolvedUrl = await _ref.read(downloadServiceProvider).resolveStreamUrl(videoId);
       if (resolvedUrl != null) {
         debugPrint('YoutubeStreamRepository: Stream resolved successfully via Windows IPC.');
-        // ponytail: yt-dlp uses ANDROID_VR client — URL is UA-locked, must match
+        // yt-dlp uses ANDROID_VR client — URL is UA-locked, must match
         const userAgent = 'com.google.android.apps.youtube.vr.oculus/1.56.21 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip';
         return await _cacheService.getAudioPath(videoId, resolvedUrl, userAgent: userAgent);
       }

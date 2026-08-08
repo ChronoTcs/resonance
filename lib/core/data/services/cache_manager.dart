@@ -113,7 +113,7 @@ class CacheManager {
       }
     } catch (_) {}
 
-    // ponytail: stream/ is top-level next to cache/, not nested inside it
+    // stream/ is top-level next to cache/, not nested inside it
     final base = await _baseCacheDir;
     final streamPath = p.join(p.dirname(base.path), 'stream');
     final dir = Directory(streamPath);

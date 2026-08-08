@@ -45,7 +45,7 @@ class ResonanceAudioHandler extends BaseAudioHandler with QueueHandler, SeekHand
     });
 
     player.stream.duration.listen((duration) {
-      // ponytail: duration is NOT sent to SMTC by audio_service_win. On Windows,
+      // duration is NOT sent to SMTC by audio_service_win. On Windows,
       // emitting mediaItem.add() here creates a stale setMediaItem(prevTrack) call
       // during gapless transitions that races with the correct thread.
       if (Platform.isWindows) return;

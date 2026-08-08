@@ -137,7 +137,7 @@ class AudioOrchestrator {
           .map((t) => t.id ?? t.path)
           .toSet();
 
-      // ponytail: batch-append to fire _updateNextTrack once, not once per track
+      // batch-append to fire _updateNextTrack once, not once per track
       final newTracks = <MediaItem>[];
       for (final track in recs) {
         final id = track.id ?? track.path;

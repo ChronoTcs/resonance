@@ -13,6 +13,8 @@
 static bool g_subclassed = false;
 static bool g_child_subclassed = false;
 static bool g_is_hovered_state = false;
+// Unique ID avoids collision with window_manager's internal subclass (ID=1).
+static constexpr UINT_PTR kSubclassId = 100;
 
 std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> g_hover_channel = nullptr;
 
@@ -46,14 +48,25 @@ static LRESULT CALLBACK ChildSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, L
     double dpi_scale = dpi / 96.0;
     
     double title_bar_height = 32.0 * dpi_scale;
-    double button_width = 46.0 * dpi_scale;
+    double button_width     = 46.0 * dpi_scale;
+    double resize_border    = 8.0  * dpi_scale;
     
-    double max_btn_left = rect.right - (button_width * 2);
+    double max_btn_left  = rect.right - (button_width * 2);
     double max_btn_right = rect.right - button_width;
 
+    // Top resize border: return HTTRANSPARENT so parent's WindowSubclassProc
+    // can return HTTOP/HTTOPLEFT/HTTOPRIGHT. Without this, HTCLIENT swallows the hit.
+    WINDOWPLACEMENT wp;
+    wp.length = sizeof(WINDOWPLACEMENT);
+    bool is_maximized = GetWindowPlacement(parent, &wp) && wp.showCmd == SW_SHOWMAXIMIZED;
+    if (!is_maximized && pt.y >= 0 && pt.y < resize_border) {
+      return HTTRANSPARENT;
+    }
+
+    // Maximize button zone: let parent handle Snap Layouts hover.
     if (pt.y >= 0 && pt.y <= title_bar_height && pt.x >= max_btn_left && pt.x <= max_btn_right) {
       UpdateHoverState(parent, true);
-      return HTTRANSPARENT; // Let hit testing pass to the parent window
+      return HTTRANSPARENT;
     } else {
       UpdateHoverState(parent, false);
     }
@@ -61,8 +74,9 @@ static LRESULT CALLBACK ChildSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, L
   return DefSubclassProc(hwnd, uMsg, wParam, lParam);
 }
 
+
 // Helper: check if hwnd currently covers its monitor (i.e. is truly fullscreen).
-// ponytail: O(1), called from NCHITTEST and NCLBUTTONDOWN guards.
+// O(1), called from NCHITTEST and NCLBUTTONDOWN guards.
 static bool IsWindowFullscreen(HWND hwnd) {
   RECT wr;
   if (!GetWindowRect(hwnd, &wr)) return false;
@@ -82,7 +96,7 @@ static LRESULT CALLBACK WindowSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, 
 
       // Use the PROPOSED new rect (sz->rgrc[0]) — not GetWindowRect — to avoid a
       // timing race where GetWindowRect still holds the old position during SetWindowPos.
-      // ponytail: MonitorFromRect resolves multi-monitor correctly on the proposed bounds.
+      // MonitorFromRect resolves multi-monitor correctly on the proposed bounds.
       HMONITOR mon = MonitorFromRect(&sz->rgrc[0], MONITOR_DEFAULTTONEAREST);
       if (mon) {
         MONITORINFO mi;
@@ -153,15 +167,31 @@ static LRESULT CALLBACK WindowSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, 
 
       double title_bar_height = 32.0 * dpi_scale;
       double button_width = 46.0 * dpi_scale;
+      // 8px top resize border (matches left/right/bottom), 16px corner zones.
+      double resize_border = 8.0 * dpi_scale;
+      double corner_width  = 16.0 * dpi_scale;
 
       double max_btn_left  = rect.right - (button_width * 2);
       double max_btn_right = rect.right - button_width;
 
+      // Top resize border — skip when maximized (no resize possible).
+      WINDOWPLACEMENT wp_chk;
+      wp_chk.length = sizeof(WINDOWPLACEMENT);
+      bool is_maximized = GetWindowPlacement(hwnd, &wp_chk) && wp_chk.showCmd == SW_SHOWMAXIMIZED;
+
+      if (!is_maximized && pt.y >= 0 && pt.y < resize_border) {
+        if (pt.x < corner_width)                   return HTTOPLEFT;
+        if (pt.x > rect.right - corner_width)      return HTTOPRIGHT;
+        return HTTOP;
+      }
+
+      // Maximize button zone — Windows 11 Snap Layouts hover.
       if (pt.y >= 0 && pt.y <= title_bar_height &&
           pt.x >= max_btn_left && pt.x <= max_btn_right) {
         return HTMAXBUTTON;
       }
     }
+
   }
   return DefSubclassProc(hwnd, uMsg, wParam, lParam);
 }
@@ -189,15 +219,18 @@ bool FlutterWindow::OnCreate() {
   RegisterPlugins(flutter_controller_->engine());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
+  // Install subclasses with unique ID so window_manager's ID=1 never collides.
+  SetWindowSubclass(GetHandle(), WindowSubclassProc, kSubclassId, 0);
+  SetWindowSubclass(flutter_controller_->view()->GetNativeWindow(), ChildSubclassProc, kSubclassId, 0);
+  g_subclassed = true;
+  g_child_subclassed = true;
+
   // Initialize MethodChannel for hover events
   g_hover_channel = std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
       flutter_controller_->engine()->messenger(),
       "resonance/titlebar_hover",
       &flutter::StandardMethodCodec::GetInstance());
 
-  // Reset subclass status on creation
-  g_subclassed = false;
-  g_child_subclassed = false;
   g_is_hovered_state = false;
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
@@ -214,11 +247,11 @@ bool FlutterWindow::OnCreate() {
 
 void FlutterWindow::OnDestroy() {
   if (g_subclassed) {
-    RemoveWindowSubclass(GetHandle(), WindowSubclassProc, 1);
+    RemoveWindowSubclass(GetHandle(), WindowSubclassProc, kSubclassId);
     g_subclassed = false;
   }
   if (g_child_subclassed && flutter_controller_ && flutter_controller_->view()) {
-    RemoveWindowSubclass(flutter_controller_->view()->GetNativeWindow(), ChildSubclassProc, 1);
+    RemoveWindowSubclass(flutter_controller_->view()->GetNativeWindow(), ChildSubclassProc, kSubclassId);
     g_child_subclassed = false;
   }
 
@@ -235,25 +268,25 @@ LRESULT
 FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                               WPARAM const wparam,
                               LPARAM const lparam) noexcept {
+  // 1. Let window_manager process messages first (it may install its own subclass on WM_SHOWWINDOW).
+  std::optional<LRESULT> flutter_result;
+  if (flutter_controller_) {
+    flutter_result = flutter_controller_->HandleTopLevelWindowProc(hwnd, message, wparam, lparam);
+  }
+
+  // 2. After window_manager has had its turn, re-install our subclass with unique ID
+  //    so we are LAST in the chain (= FIRST to run), surviving style transitions.
   if (message == WM_SHOWWINDOW) {
-    if (!g_subclassed) {
-      SetWindowSubclass(hwnd, WindowSubclassProc, 1, 0);
-      g_subclassed = true;
-    }
-    if (!g_child_subclassed && flutter_controller_ && flutter_controller_->view()) {
-      SetWindowSubclass(flutter_controller_->view()->GetNativeWindow(), ChildSubclassProc, 1, 0);
+    SetWindowSubclass(hwnd, WindowSubclassProc, kSubclassId, 0);
+    g_subclassed = true;
+    if (flutter_controller_ && flutter_controller_->view()) {
+      SetWindowSubclass(flutter_controller_->view()->GetNativeWindow(), ChildSubclassProc, kSubclassId, 0);
       g_child_subclassed = true;
     }
   }
 
-  // Give Flutter, including plugins, an opportunity to handle window messages.
-  if (flutter_controller_) {
-    std::optional<LRESULT> result =
-        flutter_controller_->HandleTopLevelWindowProc(hwnd, message, wparam,
-                                                      lparam);
-    if (result) {
-      return *result;
-    }
+  if (flutter_result) {
+    return *flutter_result;
   }
 
   switch (message) {

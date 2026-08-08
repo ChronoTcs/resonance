@@ -58,10 +58,7 @@ class _EqualizerSheetState extends ConsumerState<EqualizerSheet> {
             children: [
               const Text(
                 'Equaliser',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w500,
-                ),
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w500),
               ),
               Row(
                 children: [
@@ -70,7 +67,9 @@ class _EqualizerSheetState extends ConsumerState<EqualizerSheet> {
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
-                      color: eqState.isEnabled ? colorScheme.primary : onSurfaceVariant,
+                      color: eqState.isEnabled
+                          ? colorScheme.primary
+                          : onSurfaceVariant,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -104,8 +103,12 @@ class _EqualizerSheetState extends ConsumerState<EqualizerSheet> {
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   decoration: BoxDecoration(
                     color: _isPresetHovered
-                        ? colorScheme.surfaceContainerHighest.withValues(alpha: 0.8)
-                        : colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                        ? colorScheme.surfaceContainerHighest.withValues(
+                            alpha: 0.8,
+                          )
+                        : colorScheme.surfaceContainerHighest.withValues(
+                            alpha: 0.5,
+                          ),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
                       color: _isPresetHovered
@@ -211,7 +214,8 @@ class _EqualizerSheetState extends ConsumerState<EqualizerSheet> {
                                         (_) => Container(
                                           width: 24,
                                           height: 1,
-                                          color: colorScheme.onSurface.withValues(alpha: 0.1),
+                                          color: colorScheme.onSurface
+                                              .withValues(alpha: 0.1),
                                         ),
                                       ),
                                     ),
@@ -222,12 +226,14 @@ class _EqualizerSheetState extends ConsumerState<EqualizerSheet> {
                                         data: SliderTheme.of(context).copyWith(
                                           trackHeight: 4,
                                           activeTrackColor: colorScheme.primary,
-                                          inactiveTrackColor: colorScheme.surfaceContainerHighest,
+                                          inactiveTrackColor: colorScheme
+                                              .surfaceContainerHighest,
                                           thumbColor: colorScheme.primary,
-                                          thumbShape: const RoundSliderThumbShape(
-                                            enabledThumbRadius: 9,
-                                            elevation: 2,
-                                          ),
+                                          thumbShape:
+                                              const RoundSliderThumbShape(
+                                                enabledThumbRadius: 9,
+                                                elevation: 2,
+                                              ),
                                           overlayShape:
                                               SliderComponentShape.noOverlay,
                                         ),
@@ -282,10 +288,14 @@ class _EqualizerSheetState extends ConsumerState<EqualizerSheet> {
                   onEnter: (_) => setState(() => _isLinkHovered = true),
                   onExit: (_) => setState(() => _isLinkHovered = false),
                   child: GestureDetector(
-                    onTap: () => eqNotifier.toggleLinkSliders(!eqState.linkSliders),
+                    onTap: () =>
+                        eqNotifier.toggleLinkSliders(!eqState.linkSliders),
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 150),
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
                         color: _isLinkHovered
                             ? colorScheme.onSurface.withValues(alpha: 0.06)
@@ -306,7 +316,8 @@ class _EqualizerSheetState extends ConsumerState<EqualizerSheet> {
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               onChanged: (val) {
-                                if (val != null) eqNotifier.toggleLinkSliders(val);
+                                if (val != null)
+                                  eqNotifier.toggleLinkSliders(val);
                               },
                             ),
                           ),
@@ -315,9 +326,13 @@ class _EqualizerSheetState extends ConsumerState<EqualizerSheet> {
                             child: Text(
                               'Move nearby sliders together',
                               style: TextStyle(
-                                color: _isLinkHovered ? onSurface : onSurfaceVariant,
+                                color: _isLinkHovered
+                                    ? onSurface
+                                    : onSurfaceVariant,
                                 fontSize: 14,
-                                fontWeight: _isLinkHovered ? FontWeight.w500 : FontWeight.normal,
+                                fontWeight: _isLinkHovered
+                                    ? FontWeight.w500
+                                    : FontWeight.normal,
                               ),
                               overflow: TextOverflow.ellipsis,
                               maxLines: 2,

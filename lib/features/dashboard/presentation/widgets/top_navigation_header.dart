@@ -145,8 +145,9 @@ class _TopNavigationHeaderState extends ConsumerState<TopNavigationHeader> {
                                 final history = ref.watch(
                                   searchHistoryProvider,
                                 );
-                                if (history.isEmpty)
+                                if (history.isEmpty) {
                                   return const SizedBox.shrink();
+                                }
 
                                 return Align(
                                   alignment: Alignment.topLeft,

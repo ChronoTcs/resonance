@@ -168,7 +168,7 @@ class WindowsSystemMediaService with WindowListener {
 
   // WINDOW LIFECYCLE HANDLERS
   void onWindowHide() {
-    // ponytail: not a real WindowListener override — never called by window_manager.
+    // not a real WindowListener override — never called by window_manager.
     // Tray restore is handled in TrayService._restoreWindow() directly.
   }
 

@@ -1,3 +1,4 @@
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -204,10 +205,23 @@ void main() async {
     windowManager.addListener(AppWindowStyleListener());
     final prefs = await SharedPreferences.getInstance();
 
-    final width = prefs.getDouble('window_width') ?? 1280;
-    final height = prefs.getDouble('window_height') ?? 720;
+    // clamp saved/default size to 90% of physical screen to prevent
+    // overflow on first install launch (Inno Setup) or on smaller monitors.
+    final display = ui.PlatformDispatcher.instance.displays.firstOrNull;
+    final dpr = display?.devicePixelRatio ?? 1.0;
+    final physW = (display?.size.width ?? 1920) / dpr;
+    final physH = (display?.size.height ?? 1080) / dpr;
+    final maxW = physW * 0.90;
+    final maxH = physH * 0.90;
+
+    final savedWidth = prefs.getDouble('window_width');
+    final savedHeight = prefs.getDouble('window_height');
     final x = prefs.getDouble('window_x');
     final y = prefs.getDouble('window_y');
+
+    // First launch: no saved size → open at minimum size (800×600), clamped to screen
+    final width = (savedWidth ?? 800.0).clamp(800.0, maxW);
+    final height = (savedHeight ?? 600.0).clamp(600.0, maxH);
 
     WindowOptions windowOptions = WindowOptions(
       size: Size(width, height),

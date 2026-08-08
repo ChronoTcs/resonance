@@ -3,7 +3,8 @@
 ; Build command: flutter build windows --release
 
 #define MyAppName "Resonance"
-#define MyAppVersion "0.1.0-beta"
+#define MyAppVersion "0.1.2-beta"
+#define MyAppNumericVersion "0.1.2.0"
 #define MyAppPublisher "ChronoTech"
 #define MyAppURL "https://github.com/ChronoTcs/Resonance"
 #define MyAppExeName "Resonance.exe"
@@ -31,6 +32,15 @@ SetupIconFile=..\windows\runner\resources\app_icon.ico
 SolidCompression=yes
 WizardStyle=modern
 
+; Version Info properties for Windows PE resource header
+VersionInfoVersion={#MyAppNumericVersion}
+VersionInfoTextVersion={#MyAppVersion}
+VersionInfoCompany={#MyAppPublisher}
+VersionInfoDescription={#MyAppName} Setup
+VersionInfoProductName={#MyAppName}
+VersionInfoProductVersion={#MyAppNumericVersion}
+VersionInfoProductTextVersion={#MyAppVersion}
+
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
@@ -43,8 +53,8 @@ Source: "..\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignore
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 
 [Icons]
-Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; AppUserModelID: "com.chronostudio.Resonance"
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; AppUserModelID: "com.chronostudio.Resonance"
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent

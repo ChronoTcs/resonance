@@ -1,4 +1,4 @@
-// ponytail: single source of truth for icon constants used in 3+ places
+// single source of truth for icon constants used in 3+ places
 import 'package:resonance/core/utils/uicons.dart';
 import 'package:flutter/material.dart';
 

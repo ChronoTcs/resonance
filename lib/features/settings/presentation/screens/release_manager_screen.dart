@@ -334,7 +334,7 @@ class _ReleaseManagerScreenState extends ConsumerState<ReleaseManagerScreen> {
     final theme = Theme.of(context);
     final isSelected = updateState.selectedRelease?.tagName == release.tagName;
 
-    if (release.isCurrentVersion) {
+    if (release.isCurrentVersion || release.isOlderThanCurrent) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
@@ -347,7 +347,9 @@ class _ReleaseManagerScreenState extends ConsumerState<ReleaseManagerScreen> {
             Icon(UIcons.regular.check, size: 14, color: theme.primaryColor),
             const SizedBox(width: 6),
             Text(
-              'You are running this version',
+              release.isOlderThanCurrent
+                  ? 'You are running a newer version'
+                  : 'You are running this version',
               style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: theme.primaryColor),
             ),
           ],

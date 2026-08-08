@@ -6,6 +6,8 @@ class AppRelease {
   final DateTime publishedAt;
   final List<dynamic> assets;
   final bool isCurrentVersion;
+  final bool isNewerThanCurrent;
+  final bool isOlderThanCurrent;
 
   AppRelease({
     required this.tagName,
@@ -15,6 +17,8 @@ class AppRelease {
     required this.publishedAt,
     required this.assets,
     this.isCurrentVersion = false,
+    this.isNewerThanCurrent = false,
+    this.isOlderThanCurrent = false,
   });
 
   bool get isBeta {
@@ -28,10 +32,51 @@ class AppRelease {
         lowerName.contains('pre-release');
   }
 
+  /// Compares two version strings (e.g. '0.1.2-beta+3' vs '0.1.1-beta').
+  /// Returns > 0 if v1 is newer than v2, < 0 if v1 is older than v2, and 0 if equal.
+  static int compareSemVer(String v1, String v2) {
+    List<int> parseNumeric(String v) {
+      final sanitized = v.replaceAll(RegExp(r'^[vV]'), '').split('-')[0].split('+')[0];
+      final parts = sanitized.split('.');
+      return parts.map((p) => int.tryParse(p) ?? 0).toList();
+    }
+
+    final nums1 = parseNumeric(v1);
+    final nums2 = parseNumeric(v2);
+
+    final maxLen = nums1.length > nums2.length ? nums1.length : nums2.length;
+    for (int i = 0; i < maxLen; i++) {
+      final n1 = i < nums1.length ? nums1[i] : 0;
+      final n2 = i < nums2.length ? nums2[i] : 0;
+      if (n1 != n2) {
+        return n1.compareTo(n2);
+      }
+    }
+
+    // If base numeric parts (0.1.2 == 0.1.2) match, compare build numbers if present (+2 vs +3)
+    int extractBuild(String v) {
+      if (v.contains('+')) {
+        final buildStr = v.split('+').last;
+        return int.tryParse(buildStr) ?? 0;
+      }
+      return 0;
+    }
+
+    final b1 = extractBuild(v1);
+    final b2 = extractBuild(v2);
+    if (b1 != b2) {
+      return b1.compareTo(b2);
+    }
+
+    return 0;
+  }
+
   factory AppRelease.fromJson(Map<String, dynamic> json, String currentAppVersion) {
     final rawTag = json['tag_name'].toString();
-    final cleanTag = rawTag.replaceAll('v', '').split('+')[0].trim();
-    final cleanCurrent = currentAppVersion.replaceAll('v', '').split('+')[0].trim();
+    final cmp = compareSemVer(rawTag, currentAppVersion);
+    final isCurrent = cmp == 0;
+    final isNewer = cmp > 0;
+    final isOlder = cmp < 0;
 
     return AppRelease(
       tagName: rawTag,
@@ -42,11 +87,17 @@ class AppRelease {
       isPrerelease: json['prerelease'] == true,
       publishedAt: DateTime.tryParse(json['published_at']?.toString() ?? '') ?? DateTime.now(),
       assets: json['assets'] as List<dynamic>? ?? [],
-      isCurrentVersion: cleanTag == cleanCurrent,
+      isCurrentVersion: isCurrent,
+      isNewerThanCurrent: isNewer,
+      isOlderThanCurrent: isOlder,
     );
   }
 
-  AppRelease copyWith({bool? isCurrentVersion}) {
+  AppRelease copyWith({
+    bool? isCurrentVersion,
+    bool? isNewerThanCurrent,
+    bool? isOlderThanCurrent,
+  }) {
     return AppRelease(
       tagName: tagName,
       name: name,
@@ -55,6 +106,8 @@ class AppRelease {
       publishedAt: publishedAt,
       assets: assets,
       isCurrentVersion: isCurrentVersion ?? this.isCurrentVersion,
+      isNewerThanCurrent: isNewerThanCurrent ?? this.isNewerThanCurrent,
+      isOlderThanCurrent: isOlderThanCurrent ?? this.isOlderThanCurrent,
     );
   }
 }

@@ -119,13 +119,19 @@ class _MainDashboardState extends ConsumerState<MainDashboard> {
 
                         // 2. Mid Layer: Now Playing (Slide transition)
                         AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 400),
+                          duration: const Duration(milliseconds: 280),
+                          reverseDuration: const Duration(milliseconds: 220),
                           transitionBuilder: (child, animation) {
+                            final curved = CurvedAnimation(
+                              parent: animation,
+                              curve: Curves.easeOutCubic,
+                              reverseCurve: Curves.easeInCubic,
+                            );
                             return SlideTransition(
                               position: Tween<Offset>(
                                 begin: const Offset(0, 1),
                                 end: Offset.zero,
-                              ).animate(animation),
+                              ).animate(curved),
                               child: child,
                             );
                           },

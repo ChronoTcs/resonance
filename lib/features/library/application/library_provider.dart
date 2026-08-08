@@ -95,7 +95,7 @@ class LibraryNotifier extends Notifier<LibraryState> {
   LibraryState build() {
     final prefs = ref.watch(sharedPreferencesProvider);
     
-    // ponytail: load saved paths synchronously or trigger post-frame if async
+    // load saved paths synchronously or trigger post-frame if async
     _loadSavedPaths(prefs);
 
     ref.onDispose(() => _saveDebouncer?.cancel());

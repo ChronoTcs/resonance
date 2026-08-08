@@ -86,7 +86,7 @@ class AudioMetadataService {
       audioNotifier.updateCurrentTrack(upgradedTrack);
 
       // Persist enriched album + thumbnailUrl to sidecar JSON so downloads read correct metadata.
-      // ponytail: fire-and-forget — does not block SMTC/AudioService sync below.
+      // fire-and-forget — does not block SMTC/AudioService sync below.
       final songId = track.id ?? track.path;
       _ref.read(mediaCacheServiceProvider).saveMetadataForced(songId, upgradedTrack);
 
@@ -210,7 +210,7 @@ class AudioMetadataService {
     required Duration duration,
     required bool isPlaying,
   }) async {
-    if (Platform.isAndroid) return; // ponytail: Discord IPC not available on Android
+    if (Platform.isAndroid) return; // Discord IPC not available on Android
     try {
       final artworkUrl = await _ref.read(discordRpcServiceProvider).updatePresence(
         track,
