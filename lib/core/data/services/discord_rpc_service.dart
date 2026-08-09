@@ -67,9 +67,6 @@ class DiscordRpcService {
     // Tier 1: file-based ID cache (MediaCacheService) — zero network, instant
     final cachedPath = await _ref.read(mediaCacheServiceProvider).getCachedArtPath(songId);
     if (cachedPath != null && cachedPath.isNotEmpty) {
-      // Convert local path to file URI for Discord (needs http or resonance_logo key)
-      // Local cached path cannot be used as Discord large image key — treat as miss for Discord
-      // but return the path so callers (SMTC/AudioService) can use it.
       debugPrint('Discord RPC: Art cache hit (file) for $songId');
       // Fall through to Tier 2 which may have a network URL cached
     }
@@ -83,8 +80,8 @@ class DiscordRpcService {
         final res = await _fetchAlbumArtAndMetadata(track.title, track.artist);
         final url = res.artworkUrl;
         if (url != null && url.isNotEmpty) {
-          // Back-fill into MediaCacheService so next lookup for this ID is instant
-          _ref.read(mediaCacheServiceProvider).cacheArtwork(songId, url).ignore();
+          // Back-fill into MediaCacheService with forceOverwrite so it replaces low-res art
+          _ref.read(mediaCacheServiceProvider).cacheArtwork(songId, url, forceOverwrite: true).ignore();
         }
         return url;
       },
@@ -105,7 +102,7 @@ class DiscordRpcService {
     final songId = track.id ?? track.path;
     final res = await _fetchAlbumArtAndMetadata(track.title, track.artist);
     if (res.artworkUrl != null && res.artworkUrl!.isNotEmpty) {
-      _ref.read(mediaCacheServiceProvider).cacheArtwork(songId, res.artworkUrl!).ignore();
+      _ref.read(mediaCacheServiceProvider).cacheArtwork(songId, res.artworkUrl!, forceOverwrite: true).ignore();
     }
     return res;
   }

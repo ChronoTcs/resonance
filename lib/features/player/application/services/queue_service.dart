@@ -175,6 +175,14 @@ class QueueService {
     return nextTrack;
   }
 
+  /// Returns the track at [index] without mutating any state.
+  /// Returns null if index is out of bounds.
+  // ponytail: simple direct lookup, no shuffle awareness needed for N+2 peek
+  MediaItem? peekTrackAt(int index) {
+    if (index < 0 || index >= _queue.length) return null;
+    return _queue[index];
+  }
+
   void _resetShuffleQueue() {
     if (_queue.isEmpty) return;
     

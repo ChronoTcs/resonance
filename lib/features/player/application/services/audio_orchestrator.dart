@@ -113,13 +113,12 @@ class AudioOrchestrator {
     });
 
     // --- Gapless Pre-fetch ORCHESTRATION ---
+    // Edge trigger: fires exactly once when position crosses 5s after track start.
+    // prev < 5s && next >= 5s ensures it fires once per track, not on every position tick.
     _ref.listen(audioProvider.select((s) => s.position), (prev, next) {
-      final state = _ref.read(audioProvider);
-      if (state.duration > Duration.zero && state.duration.inSeconds > 20) {
-        final remaining = state.duration - next;
-        if (remaining.inSeconds <= 15 && remaining.inSeconds > 0) {
-          _ref.read(gaplessPrefetchServiceProvider).proactiveFetch();
-        }
+      final prevSec = prev?.inSeconds ?? 0;
+      if (next.inSeconds >= 5 && prevSec < 5) {
+        _ref.read(gaplessPrefetchServiceProvider).proactiveFetch();
       }
     });
   }

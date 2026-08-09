@@ -54,4 +54,14 @@ Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; AppUserM
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; AppUserModelID: "com.chronostudio.Resonance"
 
 [Run]
+; Always relaunch after silent in-app update (/VERYSILENT mode)
+Filename: "{app}\{#MyAppExeName}"; Flags: nowait runasoriginaluser; Check: WasInAppUpdate
+; Show "Launch Resonance" checkbox in wizard for fresh/manual installs
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+
+[Code]
+// Returns true when installer was launched with /RELAUNCH switch (in-app update)
+function WasInAppUpdate: Boolean;
+begin
+  Result := ExpandConstant('{param:RELAUNCH|0}') = '1';
+end;

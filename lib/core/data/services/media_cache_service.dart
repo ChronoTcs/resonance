@@ -291,8 +291,8 @@ class MediaCacheService {
   Future<String?> cacheArtwork(String songId, String? url, {bool forceOverwrite = false}) async {
     if (url == null || !url.startsWith('http')) return null;
     final upgradedUrl = ThumbnailUtils.upgradeResolution(url);
-    // in-flight guard prevents 3 concurrent callers downloading same file
-    if (_activeArtworkDownloads.contains(songId)) return null;
+    // in-flight guard prevents duplicate concurrent downloads unless forceOverwrite is requested
+    if (!forceOverwrite && _activeArtworkDownloads.contains(songId)) return null;
 
     try {
       final dir = await _cacheManager.getStreamImagesDir();
@@ -305,12 +305,8 @@ class MediaCacheService {
 
       final file = File(p.join(dir.path, 'art_$safeId$ext'));
 
-      if (file.existsSync()) {
-        if (!forceOverwrite) return file.path;
-        // forceOverwrite: delete stale low-res file so high-res art replaces it
-        try {
-          await file.delete();
-        } catch (_) {}
+      if (file.existsSync() && !forceOverwrite) {
+        return file.path;
       }
 
       _activeArtworkDownloads.add(songId);
@@ -357,13 +353,17 @@ class MediaCacheService {
     try {
       final streamDir = await _cacheManager.getStreamImagesDir();
       final safeId = getSafeFilename(songId);
-      final streamFile = File(p.join(streamDir.path, 'art_$safeId.jpg'));
-      if (streamFile.existsSync()) return streamFile.path;
+      for (final ext in ['.jpg', '.webp', '.png']) {
+        final streamFile = File(p.join(streamDir.path, 'art_$safeId$ext'));
+        if (streamFile.existsSync()) return streamFile.path;
+      }
 
       // Fallback: check local/images/ for downloaded songs
       final localDir = await _cacheManager.getLocalImagesDir();
-      final localFile = File(p.join(localDir.path, 'art_$safeId.jpg'));
-      if (localFile.existsSync()) return localFile.path;
+      for (final ext in ['.jpg', '.webp', '.png']) {
+        final localFile = File(p.join(localDir.path, 'art_$safeId$ext'));
+        if (localFile.existsSync()) return localFile.path;
+      }
 
       return null;
     } catch (e) {

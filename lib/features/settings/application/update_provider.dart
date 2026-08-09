@@ -6,8 +6,12 @@ import 'package:open_filex/open_filex.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:resonance/core/constants/app_constants.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/application/services/permission_service.dart';
 import '../data/models/release_model.dart';
+
+const _kDownloadedTag = 'update_downloaded_tag';
+const _kDownloadedPath = 'update_downloaded_path';
 
 class UpdateState {
   final bool isChecking;
@@ -61,6 +65,7 @@ class UpdateNotifier extends Notifier<UpdateState> {
   UpdateState build() => UpdateState();
 
   final Dio _dio = Dio();
+  CancelToken? _cancelToken;
 
   Future<void> fetchReleases() async {
     state = state.copyWith(isChecking: true, error: null);
@@ -113,6 +118,9 @@ class UpdateNotifier extends Notifier<UpdateState> {
         releases: parsedReleases,
         error: parsedReleases.isEmpty ? 'No releases found on GitHub.' : null,
       );
+      if (parsedReleases.isNotEmpty) {
+        await _checkExistingDownload(parsedReleases);
+      }
     } on DioException catch (e) {
       if (e.response?.statusCode == 404) {
         state = state.copyWith(
@@ -136,6 +144,7 @@ class UpdateNotifier extends Notifier<UpdateState> {
       return;
     }
 
+    _cancelToken = CancelToken();
     state = state.copyWith(
       selectedRelease: release,
       isDownloading: true,
@@ -177,6 +186,7 @@ class UpdateNotifier extends Notifier<UpdateState> {
       await _dio.download(
         downloadUrl,
         filePath,
+        cancelToken: _cancelToken,
         onReceiveProgress: (count, total) {
           if (total > 0) {
             state = state.copyWith(downloadProgress: count / total);
@@ -184,10 +194,95 @@ class UpdateNotifier extends Notifier<UpdateState> {
         },
       );
 
+      // Persist download so Install button survives app restart
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_kDownloadedTag, release.tagName);
+      await prefs.setString(_kDownloadedPath, filePath);
+
       state = state.copyWith(isDownloading: false, downloadProgress: 1.0);
+    } on DioException catch (e) {
+      if (CancelToken.isCancel(e)) {
+        state = state.copyWith(isDownloading: false, downloadProgress: 0.0, error: null);
+      } else {
+        state = state.copyWith(isDownloading: false, error: e.message ?? e.toString());
+      }
     } catch (e) {
       state = state.copyWith(isDownloading: false, error: e.toString());
+    } finally {
+      _cancelToken = null;
     }
+  }
+
+  void cancelDownload() {
+    _cancelToken?.cancel('User cancelled download');
+  }
+
+  /// Deletes the downloaded installer file from disk and resets download state.
+  Future<void> deleteDownloadedRelease(AppRelease release) async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedPath = prefs.getString(_kDownloadedPath);
+
+    if (savedPath != null && File(savedPath).existsSync()) {
+      try {
+        await File(savedPath).delete();
+      } catch (e) {
+        debugPrint('[UpdateNotifier] Failed to delete installer: $e');
+      }
+    } else {
+      String? fileName;
+      for (var asset in release.assets) {
+        final name = asset['name'].toString().toLowerCase();
+        if ((Platform.isAndroid && name.endsWith('.apk')) ||
+            (Platform.isWindows && name.endsWith('.exe'))) {
+          fileName = asset['name'];
+          break;
+        }
+      }
+      if (fileName != null) {
+        final directory = Platform.isAndroid
+            ? await getTemporaryDirectory()
+            : await getDownloadsDirectory() ?? await getTemporaryDirectory();
+        final filePath = '${directory.path}/$fileName';
+        if (File(filePath).existsSync()) {
+          try {
+            await File(filePath).delete();
+          } catch (_) {}
+        }
+      }
+    }
+
+    await prefs.remove(_kDownloadedTag);
+    await prefs.remove(_kDownloadedPath);
+
+    state = state.copyWith(
+      downloadProgress: 0.0,
+      selectedRelease: null,
+    );
+  }
+
+  /// On startup: if a download was previously completed, restore state so
+  /// Install button appears. Clears prefs if file is gone (fallback).
+  Future<void> _checkExistingDownload(List<AppRelease> releases) async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedTag = prefs.getString(_kDownloadedTag);
+    final savedPath = prefs.getString(_kDownloadedPath);
+    if (savedTag == null || savedPath == null) return;
+
+    // Fallback: if file no longer exists, clear stored prefs
+    if (!File(savedPath).existsSync()) {
+      await prefs.remove(_kDownloadedTag);
+      await prefs.remove(_kDownloadedPath);
+      return;
+    }
+
+    // Match the saved tag to a release in the current list
+    final match = releases.where((r) => r.tagName == savedTag).firstOrNull;
+    if (match == null) return;
+
+    state = state.copyWith(
+      selectedRelease: match,
+      downloadProgress: 1.0,
+    );
   }
 
   Future<void> downloadUpdate() async {
@@ -234,7 +329,7 @@ class UpdateNotifier extends Notifier<UpdateState> {
       } else if (Platform.isWindows) {
         await Process.start(
           filePath,
-          ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/FORCECLOSEAPPLICATIONS'],
+          ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/FORCECLOSEAPPLICATIONS', '/RELAUNCH=1'],
           mode: ProcessStartMode.detached,
         );
         exit(0);

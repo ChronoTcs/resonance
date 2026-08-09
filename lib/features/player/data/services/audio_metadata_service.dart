@@ -93,9 +93,8 @@ class AudioMetadataService {
       // Force-overwrite stream art cache with high-res iTunes image, replacing the
       // low-res YouTube thumbnail that was cached when the track first started playing.
       if (needsArtUpgrade) {
-        _ref.read(mediaCacheServiceProvider).cacheArtwork(songId, highResUrl, forceOverwrite: true).ignore();
+        await _ref.read(mediaCacheServiceProvider).cacheArtwork(songId, highResUrl, forceOverwrite: true);
       }
-
 
       if (_pendingUpgradeTrackKey != trackKey) return;
       await Future.wait([
@@ -157,16 +156,15 @@ class AudioMetadataService {
     if (!Platform.isAndroid && !Platform.isWindows) return;
     try {
       final songId = track.id ?? track.path;
-      String? artUriString = track.thumbnailUrl;
-      // 1. If track has an explicit HTTP 1:1 high-res URL (e.g. iTunes), use it directly!
-      if (track.thumbnailUrl != null && track.thumbnailUrl!.startsWith('http')) {
+      String? artUriString;
+
+      // 1. Check for local cached artwork file first (most reliable & offline on Windows/Android)
+      final cachedPath = await _ref.read(mediaCacheServiceProvider).getCachedArtPath(songId);
+      if (cachedPath != null && File(cachedPath).existsSync()) {
+        artUriString = cachedPath;
+      } else if (track.thumbnailUrl != null && track.thumbnailUrl!.isNotEmpty) {
+        // 2. Fallback to online HTTP URL
         artUriString = track.thumbnailUrl;
-      } else {
-        // 2. Otherwise check for local cached artwork file
-        final cachedPath = await _ref.read(mediaCacheServiceProvider).getCachedArtPath(songId);
-        if (cachedPath != null && File(cachedPath).existsSync()) {
-          artUriString = cachedPath;
-        }
       }
 
       // Use real player duration if track.duration is null (common for local files

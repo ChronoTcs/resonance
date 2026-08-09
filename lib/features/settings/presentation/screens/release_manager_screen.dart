@@ -334,7 +334,8 @@ class _ReleaseManagerScreenState extends ConsumerState<ReleaseManagerScreen> {
     final theme = Theme.of(context);
     final isSelected = updateState.selectedRelease?.tagName == release.tagName;
 
-    if (release.isCurrentVersion || release.isOlderThanCurrent) {
+    // Current version: only show badge container, no download action
+    if (release.isCurrentVersion) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
@@ -347,9 +348,7 @@ class _ReleaseManagerScreenState extends ConsumerState<ReleaseManagerScreen> {
             Icon(UIcons.regular.check, size: 14, color: theme.primaryColor),
             const SizedBox(width: 6),
             Text(
-              release.isOlderThanCurrent
-                  ? 'You are running a newer version'
-                  : 'You are running this version',
+              'You are running this version',
               style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: theme.primaryColor),
             ),
           ],
@@ -357,38 +356,106 @@ class _ReleaseManagerScreenState extends ConsumerState<ReleaseManagerScreen> {
       );
     }
 
+    // Show in-progress download bar with cancel button
     if (isSelected && updateState.isDownloading) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          LinearProgressIndicator(
-            value: updateState.downloadProgress,
-            color: theme.primaryColor,
-            backgroundColor: theme.dividerColor.withValues(alpha: 0.1),
+          Row(
+            children: [
+              Expanded(
+                child: LinearProgressIndicator(
+                  value: updateState.downloadProgress,
+                  color: theme.primaryColor,
+                  backgroundColor: theme.dividerColor.withValues(alpha: 0.1),
+                ),
+              ),
+              const SizedBox(width: 8),
+              InkWell(
+                onTap: () => updateNotifier.cancelDownload(),
+                borderRadius: BorderRadius.circular(12),
+                child: Icon(Icons.close, size: 16, color: theme.colorScheme.onSurfaceVariant),
+              ),
+            ],
           ),
           const SizedBox(height: 6),
           Text(
-            'Downloading update: ${(updateState.downloadProgress * 100).toInt()}%',
+            'Downloading ${release.tagName}: ${(updateState.downloadProgress * 100).toInt()}%',
             style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
           ),
         ],
       );
     }
 
+    // Show Install and Delete buttons when download is complete
     if (isSelected && updateState.downloadProgress >= 1.0) {
-      return ResonanceButton(
-        icon: UIcons.regular.download,
-        label: 'Install Version ${release.tagName}',
-        style: ResonanceButtonStyle.primary,
-        onPressed: () => updateNotifier.installRelease(context, release),
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ResonanceButton(
+            icon: UIcons.regular.download,
+            label: 'Install Version ${release.tagName}',
+            style: ResonanceButtonStyle.primary,
+            onPressed: () => updateNotifier.installRelease(context, release),
+          ),
+          const SizedBox(width: 8),
+          ResonanceButton(
+            icon: UIcons.regular.trash,
+            label: 'Delete',
+            style: ResonanceButtonStyle.danger,
+            onPressed: () => _confirmDeleteInstaller(context, release, updateNotifier),
+          ),
+        ],
       );
     }
 
-    return ResonanceButton(
-      icon: UIcons.regular.download,
-      label: 'Download & Install ${release.tagName}',
-      style: ResonanceButtonStyle.secondary,
-      onPressed: () => updateNotifier.downloadRelease(release),
+    // Download button — shown for upgrade (newer) or downgrade (older)
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (release.isOlderThanCurrent)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.info_outline, size: 14, color: theme.colorScheme.onSurfaceVariant),
+                const SizedBox(width: 6),
+                Text(
+                  'Older than installed version — downgrade at your own risk',
+                  style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                ),
+              ],
+            ),
+          ),
+        ResonanceButton(
+          icon: UIcons.regular.download,
+          label: 'Download & Install ${release.tagName}',
+          style: release.isNewerThanCurrent
+              ? ResonanceButtonStyle.primary
+              : ResonanceButtonStyle.secondary,
+          onPressed: () => updateNotifier.downloadRelease(release),
+        ),
+      ],
+    );
+  }
+
+  void _confirmDeleteInstaller(
+    BuildContext context,
+    AppRelease release,
+    UpdateNotifier updateNotifier,
+  ) {
+    showDialog(
+      context: context,
+      builder: (ctx) => ResonanceConfirmDialog(
+        title: 'Delete Installer for ${release.tagName}?',
+        content: 'Are you sure you want to delete the downloaded installer file from your device? You can download it again anytime.',
+        confirmLabel: 'Delete',
+        isDanger: true,
+        onConfirm: () {
+          updateNotifier.deleteDownloadedRelease(release);
+        },
+      ),
     );
   }
 
