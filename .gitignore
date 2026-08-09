@@ -21,31 +21,57 @@ migrate_working_dir/
 # Visual Studio Code related
 .vscode/
 !.vscode/extensions.json
+.vscode/launch.json
 
-# Flutter/Dart/Pub related
+# Flutter & Dart builds
 **/doc/api/
 **/ios/Flutter/.last_build_id
 .dart_tool/
 .flutter-plugins-dependencies
 .pub-cache/
 .pub/
-/build/
+build/
+**/build/
+coverage/
 /coverage/
 
-# Symbolication related
+# Symbolication & Obfuscation
 app.*.symbols
-
-# Obfuscation related
 app.*.map.json
 
-# Android Studio related
+# Android build outputs & Gradle
+.gradle/
+**/android/.gradle/
+**/android/build/
+**/android/app/build/
 /android/app/debug
 /android/app/profile
 /android/app/release
+*.apk
+*.aab
 
-# Windows desktop build files
+# Windows desktop build files & Installers
 **/windows/flutter/ephemeral/
 **/windows/CMakeLists.txt.user
+windows/Output/
+Output/
+*.exe
+*.dll
+*.pdb
+*.msix
+
+# Python Engine build outputs & temp cache
+python_engine/__pycache__/
+python_engine/build_tmp/
+python_engine/dist/
+python_engine/bin/
+python_engine/music/
+python_engine/lyrics/
+**/__pycache__/
+*.pyo
+
+# Node.js
+node_modules/
 
 # Local configuration
 .env
@@ -58,11 +84,3 @@ app.*.map.json
 .agents/
 .graphifyignore
 graphify-out/
-
-# Machine-specific VS Code dev config
-.vscode/launch.json
-
-# Inno Setup compiled installer
-windows/Output/
-Output/
-*.exe
