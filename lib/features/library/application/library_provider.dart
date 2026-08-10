@@ -1,8 +1,11 @@
 import 'dart:io';
 import 'dart:async';
+import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../core/data/services/discord_rpc_service.dart';
 import '../../../core/data/services/storage_service.dart';
 import '../../../core/data/services/media_cache_service.dart';
 import '../data/models/media_item.dart';
@@ -351,6 +354,79 @@ class LibraryNotifier extends Notifier<LibraryState> {
       cachedMedia.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
       state = state.copyWith(allMedia: cachedMedia);
       debugPrint('LibraryNotifier: Instant Awakening! Loaded ${cachedMedia.length} items.');
+    }
+  }
+
+  /// Opens file picker and imports external audio files with automatic metadata/artwork enrichment.
+  Future<void> importAudioFiles(BuildContext context) async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['mp3', 'm4a', 'wav', 'flac', 'ogg', 'opus', 'aac'],
+        allowMultiple: true,
+        dialogTitle: 'Select Audio Files to Add to Library',
+      );
+
+      if (result == null || result.paths.isEmpty) return;
+
+      final validPaths = result.paths.whereType<String>().toList();
+      if (validPaths.isEmpty) return;
+
+      state = state.copyWith(isLoading: true);
+
+      final repo = ref.read(libraryRepositoryProvider);
+      final rpcService = ref.read(discordRpcServiceProvider);
+      final mediaCacheService = ref.read(mediaCacheServiceProvider);
+
+      final importedItems = await repo.importExternalAudioFiles(
+        sourcePaths: validPaths,
+        musicFolderPath: state.musicFolderPath,
+        rpcService: rpcService,
+        mediaCacheService: mediaCacheService,
+      );
+
+      if (importedItems.isEmpty) {
+        state = state.copyWith(isLoading: false);
+        return;
+      }
+
+      // Merge and deduplicate by path
+      final existingPaths = state.allMedia.map((m) => m.path).toSet();
+      final updatedList = List<MediaItem>.from(state.allMedia);
+
+      for (final item in importedItems) {
+        if (existingPaths.contains(item.path)) {
+          final idx = updatedList.indexWhere((m) => m.path == item.path);
+          if (idx != -1) updatedList[idx] = item;
+        } else {
+          updatedList.add(item);
+          existingPaths.add(item.path);
+        }
+      }
+
+      updatedList.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+      state = state.copyWith(allMedia: updatedList, isLoading: false);
+
+      // Save updated cache
+      await repo.saveLibraryCache(updatedList);
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Added ${importedItems.length} song${importedItems.length > 1 ? 's' : ''} to Library.',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('LibraryNotifier: Failed to import audio files: $e');
+      state = state.copyWith(isLoading: false);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to import audio files.')),
+        );
+      }
     }
   }
 }

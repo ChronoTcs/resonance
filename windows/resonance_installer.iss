@@ -3,8 +3,8 @@
 ; Build command: flutter build windows --release
 
 #define MyAppName "Resonance"
-#define MyAppVersion "0.1.2-beta"
-#define MyAppNumericVersion "0.1.2.0"
+#define MyAppVersion "0.1.3-beta"
+#define MyAppNumericVersion "0.1.3.0"
 #define MyAppPublisher "ChronoTech"
 #define MyAppURL "https://github.com/ChronoTcs/Resonance"
 #define MyAppExeName "Resonance.exe"
@@ -50,6 +50,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 [Files]
 Source: "..\build\windows\x64\runner\Release\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "tools\*"; DestDir: "{app}\tools"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 
 [Icons]

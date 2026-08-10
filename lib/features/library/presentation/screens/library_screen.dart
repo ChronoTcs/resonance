@@ -163,6 +163,15 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
               mainAxisSize: MainAxisSize.min,
               children: [
                 ReusableHoverIconButton(
+                  icon: UIcons.regular.add,
+                  tooltip: 'Add audio files',
+                  iconSize: 18,
+                  onTap: () {
+                    ref.read(libraryProvider.notifier).importAudioFiles(context);
+                  },
+                ),
+                const SizedBox(width: 8),
+                ReusableHoverIconButton(
                   icon: _isSearching ? UIcons.regular.cross_small : UIcons.regular.search,
                   tooltip: _isSearching ? 'Close search' : 'Search library',
                   iconSize: 18,

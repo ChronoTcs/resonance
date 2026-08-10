@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:silky_scroll/silky_scroll.dart';
 import 'package:resonance/core/utils/app_icons.dart';
 import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/core/widgets/widgets.dart';
@@ -28,8 +29,9 @@ class _ExploreHomeFeedSectionState
 
     return homeFeedAsync.when(
       data: (sections) {
-        if (sections.isEmpty)
+        if (sections.isEmpty) {
           return const SliverToBoxAdapter(child: SizedBox.shrink());
+        }
 
         return SliverList(
           delegate: SliverChildBuilderDelegate((context, sectionIndex) {
@@ -75,7 +77,7 @@ class _ExploreHomeFeedSectionState
                 ),
                 SizedBox(
                   height: 230,
-                  child: ListView.builder(
+                  child: SilkyListView.builder(
                     scrollDirection: Axis.horizontal,
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     itemCount: section.items.length,
@@ -272,7 +274,7 @@ class _ExploreHomeFeedSectionState
                 type: 'audio',
               ),
             )
-            .toList();
+              .toList();
         await ref
             .read(playlistProvider.notifier)
             .addTracksToPlaylist(newId, mediaItems);
@@ -311,7 +313,7 @@ class ExploreFeedSkeleton extends StatelessWidget {
           ),
           SizedBox(
             height: 200,
-            child: ListView.builder(
+            child: SilkyListView.builder(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 20),
               itemCount: 5,

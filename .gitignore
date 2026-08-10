@@ -20,8 +20,7 @@ migrate_working_dir/
 
 # Visual Studio Code related
 .vscode/
-!.vscode/extensions.json
-.vscode/launch.json
+**/.vscode/
 
 # Flutter & Dart builds
 **/doc/api/
@@ -59,6 +58,12 @@ Output/
 *.dll
 *.pdb
 *.msix
+
+# Release outputs & OTA delta packages
+Releases/
+/Releases/
+**/Releases/
+*.patch
 
 # Python Engine build outputs & temp cache
 python_engine/__pycache__/

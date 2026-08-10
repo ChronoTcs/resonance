@@ -8,6 +8,7 @@ import 'package:audio_metadata_reader/audio_metadata_reader.dart' as audio_meta;
 import 'package:audio_metadata_reader/audio_metadata_reader.dart'
     show Mp3Metadata, VorbisMetadata, Mp4Metadata;
 import 'package:mime/mime.dart';
+import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import '../data/models/download_item.dart';
 import '../data/datasources/downloader_bridge_datasource.dart';
@@ -387,22 +388,86 @@ class DownloadService {
       final targetArtPath = p.join(imagesDir.path, 'art_$locId.jpg');
       Uint8List? artBytes;
 
-      // Ensure high-resolution HTTP artwork is downloaded to cache if available
-      final currentTrack = _ref.read(audioProvider).currentTrack;
-      final httpArtUrl = (currentTrack?.id == videoId || currentTrack?.setVideoId == videoId)
-          ? currentTrack?.thumbnailUrl
-          : (cachedMedia?.thumbnailUrl ?? item.video?.thumbnails.highResUrl);
+      // Resolve clean title/artist from enriched metadata (avoids karaoke/channel name contamination)
+      final rawTitle = cachedMedia?.title ?? item.displayTitle;
+      final rawArtist =
+          cachedMedia?.artist ?? item.video?.author ?? 'Unknown Artist';
+      // same sanitization as _fetchEnhancedMetadata to prevent "ZZangKARAOKE" style iTunes mismatches
+      final cleanArtist = rawArtist
+          .replaceAll(
+            RegExp(
+              r'\s*-\s*topic$|\s*vevo$|\s*official$|\s*music$|\s*tv$',
+              caseSensitive: false,
+            ),
+            '',
+          )
+          .trim()
+          .split(',')
+          .first
+          .trim();
 
-      if (httpArtUrl != null && httpArtUrl.startsWith('http')) {
-        await cacheService.cacheArtwork(songId, httpArtUrl);
-      }
+      // 1. Try iTunes high-res art first with sanitized artist (prevents karaoke cover bleed-through)
+      bool itunesArtSuccess = false;
+      try {
+        final itunesRes = await HttpClient()
+            .getUrl(
+              Uri.parse(
+                'https://itunes.apple.com/search?term=${Uri.encodeComponent("$rawTitle $cleanArtist")}&media=music&limit=1',
+              ),
+            )
+            .then((req) => req.close());
+        final itunesData = jsonDecode(
+          await itunesRes.transform(utf8.decoder).join(),
+        );
+        if (itunesData['results']?.isNotEmpty == true) {
+          final artworkUrl100 =
+              itunesData['results'][0]['artworkUrl100'] as String?;
+          if (artworkUrl100 != null) {
+            final highResUrl = artworkUrl100.replaceAll(
+              '100x100bb',
+              '600x600bb',
+            );
+            final httpClient = http.Client();
+            try {
+              final response = await httpClient.get(Uri.parse(highResUrl));
+              if (response.statusCode == 200) {
+                final bytes = response.bodyBytes;
+                await File(targetArtPath).writeAsBytes(bytes);
+                artBytes = Uint8List.fromList(bytes);
+                // Also overwrite stream/images/ cache so SMTC/Discord get correct art immediately
+                await cacheService.cacheArtwork(
+                  songId,
+                  highResUrl,
+                  forceOverwrite: true,
+                );
+                itunesArtSuccess = true;
+              }
+            } finally {
+              httpClient.close();
+            }
+          }
+        }
+      } catch (_) {}
 
-      final artPath = await cacheService.getCachedArtPath(songId);
-      if (artPath != null) {
-        final artFile = File(artPath);
-        if (await artFile.exists()) {
-          await artFile.copy(targetArtPath);
-          artBytes = await artFile.readAsBytes();
+      // 2. Fallback to YouTube thumbnail if iTunes lookup failed
+      if (!itunesArtSuccess) {
+        final currentTrack = _ref.read(audioProvider).currentTrack;
+        final httpArtUrl =
+            (currentTrack?.id == videoId || currentTrack?.setVideoId == videoId)
+            ? currentTrack?.thumbnailUrl
+            : (cachedMedia?.thumbnailUrl ?? item.video?.thumbnails.highResUrl);
+
+        if (httpArtUrl != null && httpArtUrl.startsWith('http')) {
+          await cacheService.cacheArtwork(songId, httpArtUrl);
+        }
+
+        final artPath = await cacheService.getCachedArtPath(songId);
+        if (artPath != null) {
+          final artFile = File(artPath);
+          if (await artFile.exists()) {
+            await artFile.copy(targetArtPath);
+            artBytes = await artFile.readAsBytes();
+          }
         }
       }
 
@@ -543,8 +608,9 @@ class DownloadService {
             final searchResult = await ytClient.search
                 .search(item.url)
                 .timeout(Duration(seconds: settings.connectionTimeout));
-            if (searchResult.isEmpty)
+            if (searchResult.isEmpty) {
               throw Exception('Video not playable and search fallback failed.');
+            }
             video = searchResult.first;
           }
         }
@@ -659,8 +725,9 @@ class DownloadService {
               .read(cacheManagerProvider)
               .getLocalImagesDir();
           final targetArt = p.join(localImagesDir.path, 'art_$locId.jpg');
-          if (imageBytes.isNotEmpty)
+          if (imageBytes.isNotEmpty) {
             await File(targetArt).writeAsBytes(imageBytes);
+          }
           _ref
               .read(libraryProvider.notifier)
               .addMediaItem(
@@ -846,8 +913,9 @@ class DownloadService {
                   '$locId.lrc',
                 );
                 final lrcFile = File(lrcPath);
-                if (!await lrcFile.parent.exists())
+                if (!await lrcFile.parent.exists()) {
                   await lrcFile.parent.create(recursive: true);
+                }
                 await lrcFile.writeAsString(lyrics.toString());
                 _emitUpdate(
                   updateId,
@@ -913,20 +981,52 @@ class DownloadService {
     try {
       String? artworkUrl;
       try {
+        // Strip movie/show subtitle to broaden iTunes search (prevents karaoke over-match)
+        final cleanTitle = title
+            .replaceAll(
+              RegExp(
+                r'\s*\([^)]*(?:verse|movie|film|soundtrack|ost|part|vol\.|from the|spider|into|the)[^)]*\)',
+                caseSensitive: false,
+              ),
+              '',
+            )
+            .trim();
         final itunesRes = await HttpClient()
             .getUrl(
               Uri.parse(
-                'https://itunes.apple.com/search?term=${Uri.encodeComponent("$title $artist")}&media=music&limit=1',
+                'https://itunes.apple.com/search?term=${Uri.encodeComponent("$cleanTitle $artist")}&media=music&limit=5',
               ),
             )
             .then((req) => req.close());
         final itunesData = jsonDecode(
           await itunesRes.transform(utf8.decoder).join(),
         );
-        if (itunesData['results']?.isNotEmpty == true)
-          artworkUrl = itunesData['results'][0]['artworkUrl100']
-              ?.toString()
-              .replaceAll('100x100bb', '600x600bb');
+        final results = itunesData['results'] as List?;
+        if (results != null) {
+          for (final r in results) {
+            final album = r['collectionName']?.toString().toLowerCase() ?? '';
+            // skip karaoke/tribute/compilation art same as discord_rpc_service
+            if ([
+              'karaoke',
+              'tribute',
+              'instrumental',
+              'singalong',
+              'sing along',
+              'cover',
+              'megatunez',
+              'zzang',
+              'best pop vol',
+              'best hits vol',
+            ].any(album.contains)) {
+              continue;
+            }
+            artworkUrl = r['artworkUrl100']?.toString().replaceAll(
+              '100x100bb',
+              '600x600bb',
+            );
+            break;
+          }
+        }
       } catch (_) {}
 
       artworkUrl ??= video.thumbnails.maxResUrl.isNotEmpty
@@ -963,7 +1063,9 @@ class DownloadService {
     // audio_metadata_reader corrupts MP4 atom offsets (stco/co64/moov) when writing to .m4a/.mp4.
     // Skip binary mutation — all metadata is stored in LibraryProvider + resonance_library.json.
     if (ext == '.m4a' || ext == '.mp4') {
-      debugPrint('[DownloadService] Skipping binary tag mutation for M4A/MP4 container to prevent atom table corruption.');
+      debugPrint(
+        '[DownloadService] Skipping binary tag mutation for M4A/MP4 container to prevent atom table corruption.',
+      );
       return;
     }
     try {
@@ -993,7 +1095,6 @@ class DownloadService {
     } catch (_) {}
   }
 
-
   bool _is429(dynamic e) {
     final errStr = e.toString().toLowerCase();
     return errStr.contains('requestlimitexceeded') ||
@@ -1010,8 +1111,9 @@ class DownloadService {
       case DownloadSource.auto:
         final uri = Uri.tryParse(item.url);
         if (uri?.host.contains('youtube.com') == true ||
-            uri?.host.contains('youtu.be') == true)
+            uri?.host.contains('youtu.be') == true) {
           return 'youtube';
+        }
         if (item.url.startsWith('http')) return 'url';
         return 'ytmusic';
     }
@@ -1066,7 +1168,9 @@ class DownloadService {
         bridge.exe,
         bridge.args,
         runInShell: Platform.isWindows,
-        environment: Platform.isWindows ? DownloaderBridgeDatasource.buildCleanEnvironment() : null,
+        environment: Platform.isWindows
+            ? DownloaderBridgeDatasource.buildCleanEnvironment()
+            : null,
       );
 
       final payload =
@@ -1081,8 +1185,9 @@ class DownloadService {
         sb.write(data);
         if (data.contains('"type": "resolved"') ||
             data.contains('"type": "error"')) {
-          if (!stdoutCompleter.isCompleted)
+          if (!stdoutCompleter.isCompleted) {
             stdoutCompleter.complete(sb.toString());
+          }
         }
       });
 

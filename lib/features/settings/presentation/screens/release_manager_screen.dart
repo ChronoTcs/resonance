@@ -387,21 +387,44 @@ class _ReleaseManagerScreenState extends ConsumerState<ReleaseManagerScreen> {
       );
     }
 
-    // Show Install and Delete buttons when download is complete
-    if (isSelected && updateState.downloadProgress >= 1.0) {
+    // Show in-progress patching/staging
+    if (isSelected && updateState.isPatching) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          LinearProgressIndicator(
+            color: theme.primaryColor,
+            backgroundColor: theme.dividerColor.withValues(alpha: 0.1),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Staging delta update for ${release.tagName}...',
+            style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+          ),
+        ],
+      );
+    }
+
+    // Show Restart & Apply if update is staged, or Install if full installer downloaded
+    if (isSelected && (updateState.isUpdateReadyToRestart || updateState.downloadProgress >= 1.0)) {
+      final isStaged = updateState.isUpdateReadyToRestart;
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           ResonanceButton(
-            icon: UIcons.regular.download,
-            label: 'Install Version ${release.tagName}',
+            icon: isStaged ? UIcons.regular.refresh : UIcons.regular.download,
+            label: isStaged
+                ? 'Restart & Apply Update (${release.tagName})'
+                : 'Install Version ${release.tagName}',
             style: ResonanceButtonStyle.primary,
-            onPressed: () => updateNotifier.installRelease(context, release),
+            onPressed: () => isStaged
+                ? updateNotifier.applyAndRestart()
+                : updateNotifier.installRelease(context, release),
           ),
           const SizedBox(width: 8),
           ResonanceButton(
             icon: UIcons.regular.trash,
-            label: 'Delete',
+            label: isStaged ? 'Discard' : 'Delete',
             style: ResonanceButtonStyle.danger,
             onPressed: () => _confirmDeleteInstaller(context, release, updateNotifier),
           ),

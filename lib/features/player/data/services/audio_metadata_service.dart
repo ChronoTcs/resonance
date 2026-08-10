@@ -60,6 +60,10 @@ class AudioMetadataService {
 
   /// Asynchronously fetches 1:1 high-res album art & album metadata from iTunes and upgrades SMTC/AudioService & AudioState.
   Future<void> _upgradeToHighResArt(MediaItem track, {required bool isPlaying}) async {
+    if (track.isLocal && (track.albumArt != null || (track.thumbnailUrl != null && !track.thumbnailUrl!.startsWith('http')))) {
+      return;
+    }
+
     final trackKey = '${track.title}-${track.artist}';
     try {
       final res = await _ref.read(discordRpcServiceProvider).resolveArtworkAndMetadata(track);

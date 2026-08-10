@@ -6,12 +6,14 @@ import 'package:open_filex/open_filex.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:resonance/core/constants/app_constants.dart';
+import 'package:resonance/core/application/services/delta_update_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/application/services/permission_service.dart';
 import '../data/models/release_model.dart';
 
 const _kDownloadedTag = 'update_downloaded_tag';
 const _kDownloadedPath = 'update_downloaded_path';
+const _kStagedVersionTag = 'update_staged_version';
 
 class UpdateState {
   final bool isChecking;
@@ -20,6 +22,9 @@ class UpdateState {
   final AppRelease? selectedRelease;
   final double downloadProgress;
   final bool isDownloading;
+  final bool isPatching;
+  final bool isUpdateReadyToRestart;
+  final String? stagedVersion;
   final String? error;
 
   UpdateState({
@@ -29,6 +34,9 @@ class UpdateState {
     this.selectedRelease,
     this.downloadProgress = 0.0,
     this.isDownloading = false,
+    this.isPatching = false,
+    this.isUpdateReadyToRestart = false,
+    this.stagedVersion,
     this.error,
   });
 
@@ -46,6 +54,9 @@ class UpdateState {
     AppRelease? selectedRelease,
     double? downloadProgress,
     bool? isDownloading,
+    bool? isPatching,
+    bool? isUpdateReadyToRestart,
+    String? stagedVersion,
     String? error,
   }) {
     return UpdateState(
@@ -55,6 +66,9 @@ class UpdateState {
       selectedRelease: selectedRelease ?? this.selectedRelease,
       downloadProgress: downloadProgress ?? this.downloadProgress,
       isDownloading: isDownloading ?? this.isDownloading,
+      isPatching: isPatching ?? this.isPatching,
+      isUpdateReadyToRestart: isUpdateReadyToRestart ?? this.isUpdateReadyToRestart,
+      stagedVersion: stagedVersion ?? this.stagedVersion,
       error: error,
     );
   }
@@ -62,10 +76,50 @@ class UpdateState {
 
 class UpdateNotifier extends Notifier<UpdateState> {
   @override
-  UpdateState build() => UpdateState();
+  UpdateState build() {
+    _initPendingCheck();
+    return UpdateState();
+  }
 
   final Dio _dio = Dio();
   CancelToken? _cancelToken;
+
+  Future<void> _initPendingCheck() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedStagedTag = prefs.getString(_kStagedVersionTag);
+    final packageInfo = await PackageInfo.fromPlatform();
+    final currentVersion = packageInfo.version;
+
+    if (savedStagedTag != null) {
+      // If currently running version already matches or exceeds the staged version, clear the flag and staging folder!
+      if (AppRelease.compareSemVer(currentVersion, savedStagedTag) >= 0) {
+        await prefs.remove(_kStagedVersionTag);
+        await prefs.remove(_kDownloadedTag);
+        await prefs.remove(_kDownloadedPath);
+        await ref.read(deltaUpdateServiceProvider).clearStagingDirectory();
+        state = state.copyWith(
+          isUpdateReadyToRestart: false,
+          stagedVersion: null,
+        );
+        return;
+      }
+
+      final hasPending = await ref.read(deltaUpdateServiceProvider).hasPendingStagedUpdate();
+      if (hasPending) {
+        state = state.copyWith(
+          isUpdateReadyToRestart: true,
+          stagedVersion: savedStagedTag,
+        );
+      } else {
+        // Staging directory does not exist on disk -> clear phantom preference!
+        await prefs.remove(_kStagedVersionTag);
+        state = state.copyWith(
+          isUpdateReadyToRestart: false,
+          stagedVersion: null,
+        );
+      }
+    }
+  }
 
   Future<void> fetchReleases() async {
     state = state.copyWith(isChecking: true, error: null);
@@ -148,11 +202,54 @@ class UpdateNotifier extends Notifier<UpdateState> {
     state = state.copyWith(
       selectedRelease: release,
       isDownloading: true,
+      isPatching: false,
       downloadProgress: 0.0,
       error: null,
     );
 
     try {
+      // 1. Try Discord-style Delta Patching on Windows first
+      final deltaAsset = Platform.isWindows ? release.getDeltaPatchAsset(state.currentVersion) : null;
+      if (deltaAsset != null) {
+        final deltaUrl = deltaAsset['browser_download_url'] as String?;
+        final patchName = deltaAsset['name'] as String?;
+
+        if (deltaUrl != null && patchName != null) {
+          debugPrint('[UpdateNotifier] Found delta patch asset: $patchName (~${((deltaAsset['size'] ?? 0) / 1024 / 1024).toStringAsFixed(1)} MB). Downloading...');
+          
+          final deltaService = ref.read(deltaUpdateServiceProvider);
+          final downloadedPatch = await deltaService.downloadDeltaPatch(
+            downloadUrl: deltaUrl,
+            fileName: patchName,
+            cancelToken: _cancelToken,
+            onProgress: (prog) => state = state.copyWith(downloadProgress: prog),
+          );
+
+          if (downloadedPatch != null && await downloadedPatch.exists()) {
+            state = state.copyWith(isPatching: true, downloadProgress: 1.0);
+            final stagedOk = await deltaService.applyPatchAndStage(
+              patchFile: downloadedPatch,
+              targetVersion: release.tagName,
+            );
+
+            if (stagedOk) {
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setString(_kStagedVersionTag, release.tagName);
+              state = state.copyWith(
+                isDownloading: false,
+                isPatching: false,
+                isUpdateReadyToRestart: true,
+                stagedVersion: release.tagName,
+                downloadProgress: 1.0,
+              );
+              return;
+            }
+          }
+          debugPrint('[UpdateNotifier] Delta patch application failed or patcher missing. Falling back to full installer...');
+        }
+      }
+
+      // 2. Standard Fallback to Full Installer (.exe / .apk)
       String? downloadUrl;
       String? fileName;
 
@@ -172,6 +269,7 @@ class UpdateNotifier extends Notifier<UpdateState> {
       if (downloadUrl == null) {
         state = state.copyWith(
           isDownloading: false,
+          isPatching: false,
           error: 'Compatible installer (${Platform.isWindows ? ".exe" : ".apk"}) not found in release assets.',
         );
         return;
@@ -199,15 +297,15 @@ class UpdateNotifier extends Notifier<UpdateState> {
       await prefs.setString(_kDownloadedTag, release.tagName);
       await prefs.setString(_kDownloadedPath, filePath);
 
-      state = state.copyWith(isDownloading: false, downloadProgress: 1.0);
+      state = state.copyWith(isDownloading: false, isPatching: false, downloadProgress: 1.0);
     } on DioException catch (e) {
       if (CancelToken.isCancel(e)) {
-        state = state.copyWith(isDownloading: false, downloadProgress: 0.0, error: null);
+        state = state.copyWith(isDownloading: false, isPatching: false, downloadProgress: 0.0, error: null);
       } else {
-        state = state.copyWith(isDownloading: false, error: e.message ?? e.toString());
+        state = state.copyWith(isDownloading: false, isPatching: false, error: e.message ?? e.toString());
       }
     } catch (e) {
-      state = state.copyWith(isDownloading: false, error: e.toString());
+      state = state.copyWith(isDownloading: false, isPatching: false, error: e.toString());
     } finally {
       _cancelToken = null;
     }
@@ -217,7 +315,7 @@ class UpdateNotifier extends Notifier<UpdateState> {
     _cancelToken?.cancel('User cancelled download');
   }
 
-  /// Deletes the downloaded installer file from disk and resets download state.
+  /// Deletes the downloaded installer/staged files from disk and resets download state.
   Future<void> deleteDownloadedRelease(AppRelease release) async {
     final prefs = await SharedPreferences.getInstance();
     final savedPath = prefs.getString(_kDownloadedPath);
@@ -253,29 +351,56 @@ class UpdateNotifier extends Notifier<UpdateState> {
 
     await prefs.remove(_kDownloadedTag);
     await prefs.remove(_kDownloadedPath);
+    await prefs.remove(_kStagedVersionTag);
+    await ref.read(deltaUpdateServiceProvider).clearStagingDirectory();
 
     state = state.copyWith(
       downloadProgress: 0.0,
       selectedRelease: null,
+      isUpdateReadyToRestart: false,
+      stagedVersion: null,
     );
   }
 
-  /// On startup: if a download was previously completed, restore state so
-  /// Install button appears. Clears prefs if file is gone (fallback).
+  /// On startup: restore downloaded/staged state
   Future<void> _checkExistingDownload(List<AppRelease> releases) async {
     final prefs = await SharedPreferences.getInstance();
     final savedTag = prefs.getString(_kDownloadedTag);
     final savedPath = prefs.getString(_kDownloadedPath);
+    final savedStaged = prefs.getString(_kStagedVersionTag);
+
+    if (savedStaged != null) {
+      if (AppRelease.compareSemVer(state.currentVersion, savedStaged) >= 0) {
+        await prefs.remove(_kStagedVersionTag);
+        await prefs.remove(_kDownloadedTag);
+        await prefs.remove(_kDownloadedPath);
+        await ref.read(deltaUpdateServiceProvider).clearStagingDirectory();
+        state = state.copyWith(isUpdateReadyToRestart: false, stagedVersion: null);
+        return;
+      }
+
+      final hasPending = await ref.read(deltaUpdateServiceProvider).hasPendingStagedUpdate();
+      if (!hasPending) {
+        await prefs.remove(_kStagedVersionTag);
+        state = state.copyWith(isUpdateReadyToRestart: false, stagedVersion: null);
+        return;
+      }
+
+      state = state.copyWith(
+        isUpdateReadyToRestart: true,
+        stagedVersion: savedStaged,
+      );
+      return;
+    }
+
     if (savedTag == null || savedPath == null) return;
 
-    // Fallback: if file no longer exists, clear stored prefs
     if (!File(savedPath).existsSync()) {
       await prefs.remove(_kDownloadedTag);
       await prefs.remove(_kDownloadedPath);
       return;
     }
 
-    // Match the saved tag to a release in the current list
     final match = releases.where((r) => r.tagName == savedTag).firstOrNull;
     if (match == null) return;
 
@@ -291,7 +416,18 @@ class UpdateNotifier extends Notifier<UpdateState> {
     }
   }
 
+  /// 1-Second Instant Restart applying the staged delta update
+  Future<void> applyAndRestart() async {
+    await ref.read(deltaUpdateServiceProvider).executeInstantRestart();
+  }
+
   Future<void> installRelease(BuildContext context, AppRelease release) async {
+    // If a staged delta update is ready, perform 1-second instant restart
+    if (state.isUpdateReadyToRestart) {
+      await applyAndRestart();
+      return;
+    }
+
     if (release.assets.isEmpty) return;
 
     String? fileName;
@@ -340,7 +476,9 @@ class UpdateNotifier extends Notifier<UpdateState> {
   }
 
   Future<void> installUpdate(BuildContext context) async {
-    if (state.selectedRelease != null) {
+    if (state.isUpdateReadyToRestart) {
+      await applyAndRestart();
+    } else if (state.selectedRelease != null) {
       await installRelease(context, state.selectedRelease!);
     } else if (state.latestRelease != null) {
       await installRelease(context, state.latestRelease!);

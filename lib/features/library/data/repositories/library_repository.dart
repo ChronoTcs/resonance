@@ -7,6 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/media_item.dart';
 
 import 'package:resonance/core/data/services/cache_manager.dart';
+import 'package:resonance/core/data/services/discord_rpc_service.dart';
+import 'package:resonance/core/data/services/media_cache_service.dart';
 import 'package:resonance/core/utils/path_utils.dart';
 
 class LibraryRepository {
@@ -173,6 +175,196 @@ class LibraryRepository {
 
     return [...finalItems, ...parsedItems];
   }
+
+  /// Imports external audio files into the library with metadata & high-res artwork auto-enrichment.
+  Future<List<MediaItem>> importExternalAudioFiles({
+    required List<String> sourcePaths,
+    required String? musicFolderPath,
+    required DiscordRpcService rpcService,
+    required MediaCacheService mediaCacheService,
+  }) async {
+    final localImagesDir = await _cacheManager.getLocalImagesDir();
+    final List<MediaItem> importedItems = [];
+
+    for (final sourcePath in sourcePaths) {
+      final sourceFile = File(sourcePath);
+      if (!await sourceFile.exists()) continue;
+
+      String finalPath = sourcePath;
+
+      // 1. If musicFolderPath is configured and file is outside, copy into music folder
+      if (musicFolderPath != null && musicFolderPath.isNotEmpty) {
+        final musicDir = Directory(musicFolderPath);
+        if (await musicDir.exists()) {
+          if (!p.isWithin(musicFolderPath, sourcePath)) {
+            final baseName = p.basename(sourcePath);
+            var destPath = p.join(musicFolderPath, baseName);
+
+            // Handle filename collision
+            if (File(destPath).existsSync() && File(destPath).lengthSync() != sourceFile.lengthSync()) {
+              final nameWithoutExt = p.basenameWithoutExtension(baseName);
+              final ext = p.extension(baseName);
+              int counter = 1;
+              while (File(p.join(musicFolderPath, '$nameWithoutExt ($counter)$ext')).existsSync()) {
+                counter++;
+              }
+              destPath = p.join(musicFolderPath, '$nameWithoutExt ($counter)$ext');
+            }
+
+            try {
+              await sourceFile.copy(destPath);
+              finalPath = destPath;
+            } catch (e) {
+              debugPrint('LibraryRepository: Failed to copy imported file to music folder: $e');
+              finalPath = sourcePath;
+            }
+          }
+        }
+      }
+
+      final locId = PathUtils.generateLocId(finalPath);
+      final finalFile = File(finalPath);
+
+      // 2. Extract embedded ID3/Vorbis/MP4 tags and picture
+      final tags = _extractTagsFromFile(finalFile);
+      String? localThumbnailUrl;
+
+      final targetArtFile = File(p.join(localImagesDir.path, 'art_$locId.jpg'));
+
+      if (tags.pictureBytes != null && tags.pictureBytes!.isNotEmpty) {
+        try {
+          await targetArtFile.writeAsBytes(tags.pictureBytes!);
+          localThumbnailUrl = targetArtFile.path;
+        } catch (e) {
+          debugPrint('LibraryRepository: Failed to write embedded art: $e');
+        }
+      }
+
+      // 3. Filename Sanitizer Fallback if Title or Artist is missing
+      final sanitized = sanitizeAudioFilename(p.basenameWithoutExtension(finalPath));
+      String title = (tags.title != null && tags.title!.isNotEmpty) ? tags.title! : sanitized.title;
+      String? artist = (tags.artist != null && tags.artist!.isNotEmpty) ? tags.artist : sanitized.artist;
+      String? album = tags.album;
+      String? date = tags.date;
+
+      // 4. Online Auto-Enrichment if missing cover or artist/album
+      if (localThumbnailUrl == null || artist == null || album == null) {
+        try {
+          final online = await rpcService.resolveFullTrackInfo(title, artist);
+          if (online.artistName != null && (artist == null || artist == 'Unknown Artist')) {
+            artist = online.artistName;
+          }
+          if (online.albumName != null && album == null) {
+            album = online.albumName;
+          }
+          if (online.releaseDate != null && date == null) {
+            date = online.releaseDate;
+          }
+          if (localThumbnailUrl == null && online.artworkUrl != null && online.artworkUrl!.isNotEmpty) {
+            final artPath = await mediaCacheService.cacheArtwork(
+              locId,
+              online.artworkUrl!,
+              forceOverwrite: true,
+            );
+            if (artPath != null && File(artPath).existsSync()) {
+              localThumbnailUrl = artPath;
+            }
+          }
+        } catch (e) {
+          debugPrint('LibraryRepository: Online metadata enrichment error: $e');
+        }
+      }
+
+      final mediaItem = MediaItem(
+        id: locId,
+        path: finalPath,
+        title: title,
+        artist: artist ?? 'Unknown Artist',
+        album: album,
+        date: date,
+        thumbnailUrl: localThumbnailUrl,
+        duration: tags.duration,
+        type: 'audio',
+      );
+
+      // 5. Save sidecar metadata JSON
+      mediaCacheService.saveMetadataForced(locId, mediaItem);
+
+      importedItems.add(mediaItem);
+    }
+
+    return importedItems;
+  }
+}
+
+/// Extracts tags and embedded picture safely from audio file
+({String? title, String? artist, String? album, String? date, Duration? duration, Uint8List? pictureBytes}) _extractTagsFromFile(File file) {
+  try {
+    final tag = readMetadata(file, getImage: true);
+    Uint8List? pictureBytes;
+    if (tag.pictures.isNotEmpty) {
+      pictureBytes = tag.pictures.first.bytes;
+    }
+
+    String? date;
+    if (tag.year != null) {
+      date = tag.year.toString();
+    }
+
+    return (
+      title: tag.title?.isNotEmpty == true ? tag.title : null,
+      artist: tag.artist?.isNotEmpty == true ? tag.artist : null,
+      album: tag.album?.isNotEmpty == true ? tag.album : null,
+      date: date,
+      duration: tag.duration,
+      pictureBytes: pictureBytes,
+    );
+  } catch (e) {
+    debugPrint('LibraryRepository: Error reading tags from ${file.path}: $e');
+    return (
+      title: null,
+      artist: null,
+      album: null,
+      date: null,
+      duration: null,
+      pictureBytes: null,
+    );
+  }
+}
+
+/// Cleans raw filename into (title, artist)
+({String title, String? artist}) sanitizeAudioFilename(String rawName) {
+  var name = rawName;
+
+  // Replace underscores with spaces
+  name = name.replaceAll('_', ' ');
+
+  // Remove bracketed clutter / junk tags
+  final junkPatterns = [
+    RegExp(r'\[\s*(official\s*(music\s*)?video|official\s*audio|lyrics?|hd|hq|4k|audio|visualizer|video|original|remaster(ed)?)\s*\]', caseSensitive: false),
+    RegExp(r'\(\s*(official\s*(music\s*)?video|official\s*audio|lyrics?|hd|hq|4k|audio|visualizer|video|320\s*kbps|128\s*kbps|original|remaster(ed)?)\s*\)', caseSensitive: false),
+  ];
+
+  for (final pattern in junkPatterns) {
+    name = name.replaceAll(pattern, '');
+  }
+
+  // Strip leading track numbers like "01. ", "01 - ", "01 "
+  name = name.replaceFirst(RegExp(r'^\s*\d{1,3}\s*[\.\-_]\s*'), '');
+
+  name = name.trim();
+
+  // Check for "Artist - Title" separator (supports -, –, —)
+  final splitMatch = RegExp(r'\s*[\-–—]\s*').firstMatch(name);
+  if (splitMatch != null) {
+    final firstPart = name.substring(0, splitMatch.start).trim();
+    final secondPart = name.substring(splitMatch.end).trim();
+    if (firstPart.isNotEmpty && secondPart.isNotEmpty) {
+      return (title: secondPart, artist: firstPart);
+    }
+  }
+
+  return (title: name.isNotEmpty ? name : rawName, artist: null);
 }
 
 List<MediaItem> _parseLibraryJson(String content) {

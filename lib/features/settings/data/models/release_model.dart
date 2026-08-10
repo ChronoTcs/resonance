@@ -32,6 +32,28 @@ class AppRelease {
         lowerName.contains('pre-release');
   }
 
+  /// Finds matching delta patch asset specifically created from the currently installed version
+  Map<String, dynamic>? getDeltaPatchAsset(String currentVersion) {
+    // 1. NEVER use delta patching for downgrades or identical versions (prevents binary corruption)
+    if (!isNewerThanCurrent) return null;
+
+    final cleanCurrent = currentVersion.replaceAll(RegExp(r'^[vV]'), '').toLowerCase();
+    for (var asset in assets) {
+      if (asset is! Map<String, dynamic>) continue;
+      final name = asset['name'].toString().toLowerCase();
+      if (name.endsWith('.patch')) {
+        // 2. Strict matching: patch must be specifically built for the user's current version
+        if (name.contains('-to-')) {
+          final fromPart = name.split('-to-').first;
+          if (fromPart.contains(cleanCurrent)) {
+            return asset;
+          }
+        }
+      }
+    }
+    return null;
+  }
+
   /// Compares two version strings (e.g. '0.1.2-beta+3' vs '0.1.1-beta').
   /// Returns > 0 if v1 is newer than v2, < 0 if v1 is older than v2, and 0 if equal.
   static int compareSemVer(String v1, String v2) {

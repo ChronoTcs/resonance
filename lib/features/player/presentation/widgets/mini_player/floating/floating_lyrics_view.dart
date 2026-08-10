@@ -15,17 +15,30 @@ class _FloatingLyricsViewState extends ConsumerState<FloatingLyricsView> {
   Widget build(BuildContext context) {
     final lyricsState = ref.watch(lyricsProvider);
     final lyrics = lyricsState.lyrics;
+    final theme = Theme.of(context);
+    final isLight = theme.brightness == Brightness.light;
+    final backgroundColor = isLight
+        ? theme.colorScheme.surface.withValues(alpha: 0.92)
+        : Colors.black.withValues(alpha: 0.85);
+    final textColor = theme.colorScheme.onSurface;
 
     return PageStorage(
       bucket: PageStorageBucket(),
       child: Container(
-        color: Colors.black.withValues(alpha: 0.85),
+        color: backgroundColor,
         child: Column(
           children: [
             Expanded(
               child: lyrics.isEmpty
-                  ? const Center(child: Text('Lyrics unavailable', style: TextStyle(color: Colors.white54)))
-                  : const LyricsListView(compact: true),
+                  ? Center(
+                      child: Text(
+                        'Lyrics unavailable',
+                        style: TextStyle(
+                          color: textColor.withValues(alpha: 0.54),
+                        ),
+                      ),
+                    )
+                  : LyricsListView(compact: true, textColor: textColor),
             ),
           ],
         ),

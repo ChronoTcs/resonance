@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:silky_scroll/silky_scroll.dart';
 import 'package:resonance/core/utils/app_icons.dart';
 import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/core/widgets/widgets.dart';
@@ -72,7 +73,7 @@ class ExploreRecentPlaysSection extends ConsumerWidget {
               ),
               SizedBox(
                 height: 200,
-                child: ListView.builder(
+                child: SilkyListView.builder(
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   itemCount: items.length,
@@ -99,16 +100,14 @@ class ExploreRecentPlaysSection extends ConsumerWidget {
                                 height: 140,
                                 fit: BoxFit.cover,
                                 placeholder: (context, url) => Container(
-                                  color:
-                                      theme.colorScheme.surfaceContainerHighest,
+                                  color: theme.colorScheme.surfaceContainerHighest,
                                   child: Icon(
                                     AppIcons.music,
                                     color: Colors.grey,
                                   ),
                                 ),
                                 errorWidget: (context, url, error) => Container(
-                                  color:
-                                      theme.colorScheme.surfaceContainerHighest,
+                                  color: theme.colorScheme.surfaceContainerHighest,
                                   child: const Icon(
                                     Icons.music_note,
                                     color: Colors.grey,

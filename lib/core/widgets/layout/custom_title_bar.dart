@@ -7,6 +7,7 @@ import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/core/theme/theme_provider.dart';
 import 'package:resonance/features/dashboard/presentation/widgets/notification_bell.dart';
 import 'package:resonance/features/settings/application/app_behavior_provider.dart';
+import 'package:resonance/features/settings/application/update_provider.dart';
 import 'package:resonance/features/tray/application/tray_service.dart';
 class CustomTitleBar extends ConsumerStatefulWidget {
   final String? nowPlayingTitle;
@@ -125,6 +126,7 @@ class _CustomTitleBarState extends ConsumerState<CustomTitleBar> with WindowList
     final theme = Theme.of(context);
     final themeMode = ref.watch(themeProvider);
     final accentMode = ref.watch(accentColorProvider);
+    final updateState = ref.watch(updateProvider);
 
     final titleText = widget.nowPlayingTitle != null
         ? '${widget.nowPlayingTitle} | Resonance'
@@ -189,6 +191,11 @@ class _CustomTitleBarState extends ConsumerState<CustomTitleBar> with WindowList
           // Right side: Custom Toggles & Windows 11 styled Controls
           Row(
             children: [
+              // Smart 2-in-1 Update Button (Download when available -> Restart when staged)
+              _TitleBarUpdateButton(
+                updateState: updateState,
+                contentColor: contentColor,
+              ),
               // Notification Bell (UIcons.regular.bell)
               NotificationBell(
                 isTitleBar: true,
@@ -317,6 +324,115 @@ class _TitleBarCompactButtonState extends State<_TitleBarCompactButton> {
         ),
       ),
     );
+  }
+}
+
+class _TitleBarUpdateButton extends ConsumerStatefulWidget {
+  final UpdateState updateState;
+  final Color contentColor;
+
+  const _TitleBarUpdateButton({
+    required this.updateState,
+    required this.contentColor,
+  });
+
+  @override
+  ConsumerState<_TitleBarUpdateButton> createState() => _TitleBarUpdateButtonState();
+}
+
+class _TitleBarUpdateButtonState extends ConsumerState<_TitleBarUpdateButton> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final updateState = widget.updateState;
+
+    // 1. Ready to Restart state (Refresh icon with restart action)
+    if (updateState.isUpdateReadyToRestart) {
+      final isLight = widget.contentColor.computeLuminance() > 0.5;
+      final hoverBgColor = isLight
+          ? Colors.white.withValues(alpha: 0.18)
+          : Colors.black.withValues(alpha: 0.08);
+      final hoverFgColor = isLight ? Colors.white : Colors.black;
+
+      return MouseRegion(
+        onEnter: (_) => setState(() => _isHovered = true),
+        onExit: (_) => setState(() => _isHovered = false),
+        child: Tooltip(
+          message: 'Update ${updateState.stagedVersion ?? "Ready"} — Click to Restart & Apply',
+          child: GestureDetector(
+            onTap: () => ref.read(updateProvider.notifier).applyAndRestart(),
+            child: Container(
+              width: 32,
+              height: 32,
+              color: _isHovered ? hoverBgColor : Colors.transparent,
+              child: Icon(
+                UIcons.regular.refresh,
+                size: 13,
+                color: _isHovered ? hoverFgColor : widget.contentColor.withValues(alpha: 0.85),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // 2. Downloading / Patching state (Spinner progress)
+    if (updateState.isDownloading || updateState.isPatching) {
+      final progPercent = (updateState.downloadProgress * 100).toInt();
+      final tooltipMsg = updateState.isPatching ? 'Applying update...' : 'Downloading update: $progPercent%';
+
+      return Tooltip(
+        message: tooltipMsg,
+        child: Container(
+          width: 32,
+          height: 32,
+          alignment: Alignment.center,
+          child: SizedBox(
+            width: 14,
+            height: 14,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.0,
+              value: updateState.isPatching ? null : (updateState.downloadProgress > 0 ? updateState.downloadProgress : null),
+              valueColor: AlwaysStoppedAnimation<Color>(widget.contentColor.withValues(alpha: 0.85)),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // 3. Update Available (Download icon with download & stage action)
+    if (updateState.updateAvailable && updateState.latestRelease != null) {
+      final isLight = widget.contentColor.computeLuminance() > 0.5;
+      final hoverBgColor = isLight
+          ? Colors.white.withValues(alpha: 0.18)
+          : Colors.black.withValues(alpha: 0.08);
+      final hoverFgColor = isLight ? Colors.white : Colors.black;
+
+      return MouseRegion(
+        onEnter: (_) => setState(() => _isHovered = true),
+        onExit: (_) => setState(() => _isHovered = false),
+        child: Tooltip(
+          message: 'Update available (${updateState.latestVersion}) — Click to Download',
+          child: GestureDetector(
+            onTap: () => ref.read(updateProvider.notifier).downloadRelease(updateState.latestRelease!),
+            child: Container(
+              width: 32,
+              height: 32,
+              color: _isHovered ? hoverBgColor : Colors.transparent,
+              child: Icon(
+                UIcons.regular.download,
+                size: 13,
+                color: _isHovered ? hoverFgColor : widget.contentColor.withValues(alpha: 0.85),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // 4. Up to date / hidden
+    return const SizedBox.shrink();
   }
 }
 

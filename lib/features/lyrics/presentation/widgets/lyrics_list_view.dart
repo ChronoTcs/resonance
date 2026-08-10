@@ -9,13 +9,13 @@ import '../../../../core/theme/theme_provider.dart';
 class LyricsListView extends ConsumerStatefulWidget {
   final bool compact;
   final ScrollPhysics? physics;
-  final Color textColor;
+  final Color? textColor;
 
   const LyricsListView({
     super.key,
     this.compact = false,
     this.physics,
-    this.textColor = Colors.white,
+    this.textColor,
   });
 
   @override
@@ -70,12 +70,17 @@ class _LyricsListViewState extends ConsumerState<LyricsListView> {
       );
     }
 
+    final effectiveTextColor =
+        widget.textColor ?? Theme.of(context).colorScheme.onSurface;
+
     if (lyrics.isEmpty) {
       return Center(
         child: Text(
           'No lyrics found for this track',
           style: TextStyle(
-            color: widget.compact ? Colors.white38 : Colors.white54,
+            color: effectiveTextColor.withValues(
+              alpha: widget.compact ? 0.38 : 0.54,
+            ),
             fontSize: widget.compact ? 12 : 18,
           ),
         ),
@@ -134,7 +139,7 @@ class _LyricsListViewState extends ConsumerState<LyricsListView> {
                 inactiveOpacity: inactiveOpacity,
                 fontSizeActive: 18,
                 fontSizeInactive: 14,
-                textColor: widget.textColor,
+                textColor: effectiveTextColor,
               ),
             );
           },
@@ -174,7 +179,7 @@ class _LyricsListViewState extends ConsumerState<LyricsListView> {
                   inactiveOpacity: inactiveOpacity,
                   fontSizeActive: 26,
                   fontSizeInactive: 18,
-                  textColor: widget.textColor,
+                  textColor: effectiveTextColor,
                 ),
               );
             },

@@ -64,7 +64,7 @@ class _FloatingWindowContent extends ConsumerWidget {
     final headerIconColor = theme.colorScheme.onSurface;
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: theme.colorScheme.surface,
       body: ClipRRect(
         borderRadius: BorderRadius.circular(12),
         child: Column(

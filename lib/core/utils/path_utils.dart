@@ -67,6 +67,14 @@ class PathUtils {
     return p.join(docDir.path, 'stream');
   }
 
+  static Future<String> getStagingDefault() async {
+    if (Platform.isWindows) {
+      return p.join(_windowsBaseDir, 'staged_update');
+    }
+    final tempDir = Directory.systemTemp;
+    return p.join(tempDir.path, 'resonance_staged_update');
+  }
+
   /// Generates a stable unified ID matching the Python script perfectly:
   /// `loc_` + `sha256(videoId).hexdigest()[:10]`
   static String generateLocId(String videoId) {

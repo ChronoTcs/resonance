@@ -98,7 +98,7 @@ class FullScreenAudioView extends ConsumerWidget {
             Text(
               'Playing Now',
               style: theme.textTheme.titleMedium?.copyWith(
-                color: Colors.white,
+                color: theme.colorScheme.onSurface,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -108,13 +108,13 @@ class FullScreenAudioView extends ConsumerWidget {
       actions: [
         ReusableHoverIconButton(
           icon: UIcons.regular.add,
-          color: Colors.white70,
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
           tooltip: 'Media Actions',
           onTap: () => _showMediaActions(context, ref, displayTrack),
         ),
         ReusableHoverIconButton(
           icon: UIcons.regular.menu_dots_vertical,
-          color: Colors.white70,
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
           tooltip: 'Audio Settings',
           // [DRY PRINCIPLE] Reuses the existing, reusable AudioSettingsSheet
           // to avoid duplicating Speed/Pitch slider code.

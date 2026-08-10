@@ -17,12 +17,18 @@ class FullScreenBottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return Container(
       padding: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.95),
-        border: const Border(
-          top: BorderSide(color: Colors.white12, width: 0.5),
+        color: colorScheme.surface.withValues(alpha: 0.95),
+        border: Border(
+          top: BorderSide(
+            color: colorScheme.onSurface.withValues(alpha: 0.1),
+            width: 0.5,
+          ),
         ),
       ),
       child: Column(
@@ -56,8 +62,8 @@ class FullScreenBottomBar extends StatelessWidget {
                           children: [
                             Text(
                               track.title,
-                              style: const TextStyle(
-                                color: Colors.white,
+                              style: TextStyle(
+                                color: colorScheme.onSurface,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 14,
                               ),
@@ -66,8 +72,8 @@ class FullScreenBottomBar extends StatelessWidget {
                             ),
                             Text(
                               track.artist ?? 'Artist',
-                              style: const TextStyle(
-                                color: Colors.white70,
+                              style: TextStyle(
+                                color: colorScheme.onSurface.withValues(alpha: 0.7),
                                 fontSize: 12,
                               ),
                               maxLines: 1,
@@ -105,7 +111,7 @@ class FullScreenBottomBar extends StatelessWidget {
                         ReusableHoverIconButton(
                           icon: UIcons.regular.compress,
                           iconSize: 20,
-                          color: Colors.white70,
+                          color: colorScheme.onSurface.withValues(alpha: 0.7),
                           tooltip: 'Exit',
                           onTap: () => Navigator.maybePop(context),
                         ),
@@ -166,14 +172,16 @@ class FullScreenControls extends ConsumerWidget {
           tooltip: 'Shuffle',
           icon: UIcons.regular.shuffle,
           iconSize: 20,
-          color: s.isShuffleEnabled ? colorScheme.primary : Colors.white70,
+          color: s.isShuffleEnabled
+              ? colorScheme.primary
+              : colorScheme.onSurface.withValues(alpha: 0.7),
           onTap: n.toggleShuffle,
         ),
         ReusableHoverIconButton(
           tooltip: 'Previous',
           icon: UIcons.regular.step_backward,
           iconSize: 32,
-          color: Colors.white,
+          color: colorScheme.onSurface,
           isDisabled: s.currentIndex <= 0 && s.loopMode == LoopMode.off,
           onTap: n.skipToPrevious,
         ),
@@ -181,14 +189,14 @@ class FullScreenControls extends ConsumerWidget {
           isPlaying: s.isPlaying,
           isLoading: s.isLoading,
           size: PlayPauseSize.large,
-          color: Colors.white,
+          color: colorScheme.onSurface,
           onTap: n.togglePlayPause,
         ),
         ReusableHoverIconButton(
           tooltip: 'Next',
           icon: UIcons.regular.step_forward,
           iconSize: 32,
-          color: Colors.white,
+          color: colorScheme.onSurface,
           isDisabled:
               s.currentIndex >= s.queue.length - 1 && s.loopMode == LoopMode.off,
           onTap: n.skipToNext,
@@ -199,9 +207,13 @@ class FullScreenControls extends ConsumerWidget {
               : s.loopMode == LoopMode.all
                   ? 'Repeat All'
                   : 'Repeat Off',
-          icon: s.loopMode == LoopMode.one ? UIcons.regular.arrows_repeat_1 : UIcons.regular.arrows_repeat,
+          icon: s.loopMode == LoopMode.one
+              ? UIcons.regular.arrows_repeat_1
+              : UIcons.regular.arrows_repeat,
           iconSize: 20,
-          color: s.loopMode != LoopMode.off ? colorScheme.primary : Colors.white70,
+          color: s.loopMode != LoopMode.off
+              ? colorScheme.primary
+              : colorScheme.onSurface.withValues(alpha: 0.7),
           onTap: n.cycleLoopMode,
         ),
       ],
@@ -227,6 +239,8 @@ class _FullScreenVolumeSliderState extends ConsumerState<FullScreenVolumeSlider>
   @override
   Widget build(BuildContext context) {
     final v = ref.watch(audioProvider.select((s) => s.volume));
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Container(
       width: 180,
       padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -240,7 +254,7 @@ class _FullScreenVolumeSliderState extends ConsumerState<FullScreenVolumeSlider>
                     ? UIcons.regular.volume_down
                     : UIcons.regular.volume,
             iconSize: 20,
-            color: Colors.white70,
+            color: colorScheme.onSurface.withValues(alpha: 0.7),
             tooltip: 'Mute/Unmute',
             onTap: () {
               if (v > 0) {
@@ -260,9 +274,9 @@ class _FullScreenVolumeSliderState extends ConsumerState<FullScreenVolumeSlider>
                 trackHeight: 3,
                 thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
                 overlayShape: SliderComponentShape.noOverlay,
-                activeTrackColor: Colors.white,
-                inactiveTrackColor: Colors.white24,
-                thumbColor: Colors.white,
+                activeTrackColor: colorScheme.onSurface,
+                inactiveTrackColor: colorScheme.onSurface.withValues(alpha: 0.24),
+                thumbColor: colorScheme.onSurface,
               ),
               child: Slider(
                 value: v,
@@ -280,8 +294,8 @@ class _FullScreenVolumeSliderState extends ConsumerState<FullScreenVolumeSlider>
             child: Text(
               '${v.toInt()}%',
               softWrap: false,
-              style: const TextStyle(
-                color: Colors.white70,
+              style: TextStyle(
+                color: colorScheme.onSurface.withValues(alpha: 0.7),
                 fontSize: 11,
                 fontWeight: FontWeight.bold,
               ),
@@ -306,19 +320,21 @@ class FullScreenUtilityButtons extends ConsumerWidget {
 
   @override
   Widget build(BuildContext buildContext, WidgetRef ref) {
+    final colorScheme = Theme.of(buildContext).colorScheme;
+
     return Row(
       children: [
         ReusableHoverIconButton(
           icon: UIcons.regular.microphone,
           iconSize: 20,
-          color: Colors.white70,
+          color: colorScheme.onSurface.withValues(alpha: 0.7),
           tooltip: 'Lyrics',
           onTap: () => ref.read(lyricsOverlayProvider.notifier).toggle(),
         ),
         ReusableHoverIconButton(
           icon: UIcons.regular.settings_sliders,
           iconSize: 20,
-          color: Colors.white70,
+          color: colorScheme.onSurface.withValues(alpha: 0.7),
           tooltip: 'Audio Settings',
           // Call AudioSettingsSheet.show() which is decoupled and reusable.
           onTap: () => AudioSettingsSheet.show(context),

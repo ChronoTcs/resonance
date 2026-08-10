@@ -316,8 +316,9 @@ class _EqualizerSheetState extends ConsumerState<EqualizerSheet> {
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               onChanged: (val) {
-                                if (val != null)
+                                if (val != null) {
                                   eqNotifier.toggleLinkSliders(val);
+                                }
                               },
                             ),
                           ),

@@ -51,10 +51,13 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
         ),
       );
     } else if (lyrics.isEmpty) {
-      content = const Center(
+      content = Center(
         child: Text(
           'No lyrics found for this track',
-          style: TextStyle(color: Colors.white54, fontSize: 18),
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.54),
+            fontSize: 18,
+          ),
         ),
       );
     } else {

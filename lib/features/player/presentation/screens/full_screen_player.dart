@@ -112,11 +112,14 @@ class _FullScreenPlayerState extends ConsumerState<FullScreenPlayer> {
           _exitWithBlur();
         },
         child: Scaffold(
-          backgroundColor: Colors.black,
+          backgroundColor: Theme.of(context).colorScheme.surface,
           body: LayoutBuilder(
             builder: (context, constraints) {
+              final theme = Theme.of(context);
+              final isLight = theme.brightness == Brightness.light;
+
               if (constraints.maxWidth < 400 || constraints.maxHeight < 300) {
-                return Container(color: Colors.black);
+                return Container(color: theme.colorScheme.surface);
               }
 
               return Stack(
@@ -125,12 +128,17 @@ class _FullScreenPlayerState extends ConsumerState<FullScreenPlayer> {
                   Positioned.fill(
                     child: Consumer(
                       builder: (context, ref, _) {
-                        if (currentTrack == null) return Container(color: Colors.black);
+                        if (currentTrack == null) {
+                          return Container(color: theme.colorScheme.surface);
+                        }
                         return MediaArtworkWidget(
                           item: currentTrack,
                           fit: BoxFit.cover,
-                          color: Colors.black.withValues(alpha: 0.6),
-                          colorBlendMode: BlendMode.darken,
+                          color: isLight
+                              ? Colors.white.withValues(alpha: 0.6)
+                              : Colors.black.withValues(alpha: 0.6),
+                          colorBlendMode:
+                              isLight ? BlendMode.lighten : BlendMode.darken,
                         );
                       },
                     ),
@@ -138,7 +146,10 @@ class _FullScreenPlayerState extends ConsumerState<FullScreenPlayer> {
                   Positioned.fill(
                     child: BackdropFilter(
                       filter: ImageFilter.blur(sigmaX: 80, sigmaY: 80),
-                      child: Container(color: Colors.black.withValues(alpha: 0.4)),
+                      child: Container(
+                        color: (isLight ? Colors.white : Colors.black)
+                            .withValues(alpha: 0.4),
+                      ),
                     ),
                   ),
 
@@ -169,7 +180,7 @@ class _FullScreenPlayerState extends ConsumerState<FullScreenPlayer> {
                       child: showFullLyrics
                           ? Container(
                               key: const ValueKey('lyrics_overlay'),
-                              color: Colors.black,
+                              color: theme.colorScheme.surface,
                               child: const LyricsScreen(isEmbedded: true),
                             )
                           : const SizedBox.shrink(key: ValueKey('lyrics_empty')),

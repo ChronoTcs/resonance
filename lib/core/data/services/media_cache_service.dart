@@ -546,10 +546,12 @@ class MediaCacheService {
       final totalSize = detailed.values.fold(0, (sum, val) => sum + val);
 
       if (totalSize < 1024) return '$totalSize B';
-      if (totalSize < 1024 * 1024)
+      if (totalSize < 1024 * 1024) {
         return '${(totalSize / 1024).toStringAsFixed(2)} KB';
-      if (totalSize < 1024 * 1024 * 1024)
+      }
+      if (totalSize < 1024 * 1024 * 1024) {
         return '${(totalSize / (1024 * 1024)).toStringAsFixed(2)} MB';
+      }
       return '${(totalSize / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
     } catch (e) {
       return '0 B';

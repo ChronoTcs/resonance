@@ -13,7 +13,7 @@ class QueueService {
   int _currentIndex = -1;
   LoopMode _loopMode = LoopMode.off;
   bool _isShuffleEnabled = false;
-  
+
   List<String> _shuffleQueue = [];
   int _shuffleQueueIndex = -1;
 
@@ -138,7 +138,11 @@ class QueueService {
     _resetShuffleQueue();
   }
 
-  MediaItem? getNextTrack(LoopMode loopMode, bool isShuffleEnabled, {bool fromCompletion = false}) {
+  MediaItem? getNextTrack(
+    LoopMode loopMode,
+    bool isShuffleEnabled, {
+    bool fromCompletion = false,
+  }) {
     _loopMode = loopMode;
     _isShuffleEnabled = isShuffleEnabled;
     int nextIndex = getNextIndex(fromCompletion: fromCompletion);
@@ -177,7 +181,7 @@ class QueueService {
 
   /// Returns the track at [index] without mutating any state.
   /// Returns null if index is out of bounds.
-  // ponytail: simple direct lookup, no shuffle awareness needed for N+2 peek
+  // simple direct lookup, no shuffle awareness needed for N+2 peek
   MediaItem? peekTrackAt(int index) {
     if (index < 0 || index >= _queue.length) return null;
     return _queue[index];
@@ -185,7 +189,7 @@ class QueueService {
 
   void _resetShuffleQueue() {
     if (_queue.isEmpty) return;
-    
+
     final currentId = currentTrack?.id ?? currentTrack?.path;
     _shuffleQueue = _queue.map((item) => item.id ?? item.path).toList();
     _shuffleQueue.shuffle();
@@ -201,27 +205,37 @@ class QueueService {
 
   void _regenerateShuffleQueue() {
     if (_queue.isEmpty) return;
-    
+
     final lastPlayedId = currentTrack?.id ?? currentTrack?.path;
     _shuffleQueue = _queue.map((item) => item.id ?? item.path).toList();
     _shuffleQueue.shuffle();
 
-    if (lastPlayedId != null && _shuffleQueue.length > 1 && _shuffleQueue.first == lastPlayedId) {
+    if (lastPlayedId != null &&
+        _shuffleQueue.length > 1 &&
+        _shuffleQueue.first == lastPlayedId) {
       final first = _shuffleQueue.removeAt(0);
       _shuffleQueue.insert(Random().nextInt(_shuffleQueue.length) + 1, first);
     }
   }
 
   MediaItem? _peekNextShuffleTrack() {
-     if (_queue.isEmpty) return null;
-     
-     List<String> peekQueue = _queue.map((item) => item.id ?? item.path).toList();
-     peekQueue.shuffle();
-     
-     final lastPlayedId = currentTrack?.id ?? currentTrack?.path;
-     if (lastPlayedId != null && peekQueue.length > 1 && peekQueue.first == lastPlayedId) {
-       return _queue.firstWhere((item) => (item.id ?? item.path) == peekQueue[1]);
-     }
-     return _queue.firstWhere((item) => (item.id ?? item.path) == peekQueue.first);
+    if (_queue.isEmpty) return null;
+
+    List<String> peekQueue = _queue
+        .map((item) => item.id ?? item.path)
+        .toList();
+    peekQueue.shuffle();
+
+    final lastPlayedId = currentTrack?.id ?? currentTrack?.path;
+    if (lastPlayedId != null &&
+        peekQueue.length > 1 &&
+        peekQueue.first == lastPlayedId) {
+      return _queue.firstWhere(
+        (item) => (item.id ?? item.path) == peekQueue[1],
+      );
+    }
+    return _queue.firstWhere(
+      (item) => (item.id ?? item.path) == peekQueue.first,
+    );
   }
 }
