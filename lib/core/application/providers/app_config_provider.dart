@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:resonance/core/constants/app_constants.dart';
 import 'package:resonance/core/data/services/storage_service.dart';
+import 'package:resonance/core/application/services/network_connectivity_service.dart';
 
 /// Dynamic App Config model for remote URLs and dynamic app flags.
 class AppConfig {
@@ -70,6 +71,12 @@ class AppConfigNotifier extends Notifier<AppConfig> {
 
   /// Fetches remote config from GitHub raw endpoint and updates state + cache.
   Future<void> fetchRemoteConfig() async {
+    // Skip network request immediately if device is offline
+    if (!ref.read(networkConnectivityProvider).isOnline) {
+      debugPrint('[AppConfig] Device offline — using cached/default config.');
+      return;
+    }
+
     try {
       final response = await http
           .get(Uri.parse(AppConstants.githubRawConfigUrl))

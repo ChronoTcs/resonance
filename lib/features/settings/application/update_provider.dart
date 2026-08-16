@@ -7,6 +7,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:resonance/core/constants/app_constants.dart';
 import 'package:resonance/core/application/services/delta_update_service.dart';
+import 'package:resonance/core/application/services/network_connectivity_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/application/services/permission_service.dart';
 import '../data/models/release_model.dart';
@@ -122,6 +123,13 @@ class UpdateNotifier extends Notifier<UpdateState> {
   }
 
   Future<void> fetchReleases() async {
+    // Skip network request immediately if device is offline
+    if (!ref.read(networkConnectivityProvider).isOnline) {
+      debugPrint('[UpdateNotifier] Device offline — skipping release check.');
+      state = state.copyWith(isChecking: false);
+      return;
+    }
+
     state = state.copyWith(isChecking: true, error: null);
     try {
       final packageInfo = await PackageInfo.fromPlatform();

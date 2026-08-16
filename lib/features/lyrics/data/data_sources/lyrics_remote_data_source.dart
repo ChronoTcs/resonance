@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
+import '../../../../core/application/services/network_connectivity_service.dart';
 import '../../../../core/data/services/data_usage_service.dart';
 import '../../../library/data/models/media_item.dart';
 import '../services/lyrics_parser.dart';
@@ -11,9 +12,15 @@ class LyricsRemoteDataSource {
 
   LyricsRemoteDataSource(this._ref);
 
+  bool get _isOffline => !_ref.read(networkConnectivityProvider).isOnline;
+
   /// 1. Unison API (Word-by-word synced community source)
 
   Future<String?> fetchFromUnison(MediaItem track) async {
+    if (_isOffline) {
+      debugPrint('[LyricsRemote] Skipping Unison fetch — offline');
+      return null;
+    }
     final videoId = track.id ?? track.path;
     if (videoId.isEmpty) return null;
 
@@ -35,7 +42,7 @@ class LyricsRemoteDataSource {
         if (durationSecs > 0) 'duration=$durationSecs'
       ].join('&');
 
-      debugPrint('LyricsRemoteDataSource: Querying Unison metadata fallback: $queryParams');
+      debugPrint('[LyricsRemote] Querying Unison metadata fallback: $queryParams');
       content = await _fetchUnisonRaw('https://unison.boidu.dev/lyrics?$queryParams');
     }
     return content;
@@ -80,14 +87,14 @@ class LyricsRemoteDataSource {
           }
           final compiled = buffer.toString().trim();
           if (compiled.isNotEmpty) {
-            debugPrint('LyricsRemoteDataSource: Found word-synced lyrics via Unison');
+            debugPrint('[LyricsRemote] Found word-synced lyrics via Unison');
             return compiled;
           }
         }
         
         final lyrics = data['syncedLyrics'] as String? ?? data['plainLyrics'] as String?;
         if (lyrics != null && lyrics.trim().isNotEmpty) {
-          debugPrint('LyricsRemoteDataSource: Found lyrics via Unison fallback');
+          debugPrint('[LyricsRemote] Found lyrics via Unison fallback');
           return lyrics;
         }
       }
@@ -97,6 +104,10 @@ class LyricsRemoteDataSource {
 
   /// 2. LRCLIB API GET (Line-synced exact search)
   Future<String?> fetchFromLrcLibGet(Map<String, String> params) async {
+    if (_isOffline) {
+      debugPrint('[LyricsRemote] Skipping LRCLIB GET — offline');
+      return null;
+    }
     final uri = Uri.parse('https://lrclib.net/api/get').replace(queryParameters: params);
     try {
       final response = await http.get(uri).timeout(const Duration(seconds: 8));
@@ -114,6 +125,10 @@ class LyricsRemoteDataSource {
 
   /// 2b. LRCLIB API SEARCH (Flexible query fallback)
   Future<String?> fetchFromLrcLibSearch(Map<String, String> params) async {
+    if (_isOffline) {
+      debugPrint('[LyricsRemote] Skipping LRCLIB SEARCH — offline');
+      return null;
+    }
     final uri = Uri.parse('https://lrclib.net/api/search').replace(queryParameters: params);
     try {
       final response = await http.get(uri).timeout(const Duration(seconds: 8));
@@ -141,6 +156,10 @@ class LyricsRemoteDataSource {
 
   /// 3. Musixmatch API (Token Bypass endpoint)
   Future<String?> fetchFromMusixmatch(String title, String artist) async {
+    if (_isOffline) {
+      debugPrint('[LyricsRemote] Skipping Musixmatch fetch — offline');
+      return null;
+    }
     // Public/community keyless developer token extracted from official desktop apps
     const publicToken = '2407223b3cf8cfc6a0c5c3c1e31d4e0e5a8f09d8d47b0a7dbb3f6a';
     final cleanTitle = Uri.encodeComponent(title);
@@ -166,7 +185,7 @@ class LyricsRemoteDataSource {
           if (lyricsData != null) {
             final lyricsBody = lyricsData['lyrics_body'] as String?;
             if (lyricsBody != null && lyricsBody.isNotEmpty) {
-              debugPrint('LyricsRemoteDataSource: Found lyrics via Musixmatch Bypass');
+              debugPrint('[LyricsRemote] Found lyrics via Musixmatch Bypass');
               return lyricsBody;
             }
           }
@@ -178,6 +197,10 @@ class LyricsRemoteDataSource {
 
   /// 4. Genius API Search (Token Bypass endpoint)
   Future<String?> fetchFromGenius(String query) async {
+    if (_isOffline) {
+      debugPrint('[LyricsRemote] Skipping Genius fetch — offline');
+      return null;
+    }
     // Public client access token extracted from standard open-source web clients
     const geniusToken = 'Zp77f4L3cK-y6O9eG5qN8mF7uH6vJ4x2z_w-Y9tL7b0a8c9d0f';
     final encodedQuery = Uri.encodeComponent(query);
@@ -216,7 +239,7 @@ class LyricsRemoteDataSource {
                 }
                 final cleanedText = buffer.toString().replaceAll(RegExp(r'&#x27;'), "'").trim();
                 if (cleanedText.isNotEmpty) {
-                  debugPrint('LyricsRemoteDataSource: Found lyrics via Genius Bypass');
+                  debugPrint('[LyricsRemote] Found lyrics via Genius Bypass');
                   return cleanedText;
                 }
               }

@@ -37,7 +37,7 @@ class MusicRestoreService {
           ? await Permission.audio.isGranted
           : await Permission.storage.isGranted;
       if (!hasPermission) {
-        debugPrint('MusicRestoreService: Storage permission denied. Aborting.');
+        debugPrint('[MusicRestore] Storage permission denied. Aborting.');
         return;
       }
     }
@@ -52,7 +52,7 @@ class MusicRestoreService {
     final String? targetCachePath = libraryState.cacheFolderPath;
 
     if (targetMusicPath == null || targetLyricsPath == null || targetCachePath == null) {
-      debugPrint('MusicRestoreService: Target paths not initialized.');
+      debugPrint('[MusicRestore] Target paths not initialized.');
       return;
     }
 
@@ -85,7 +85,7 @@ class MusicRestoreService {
       final dir = Directory(path);
       if (await dir.exists()) {
         sourceImagesDir = dir;
-        debugPrint('MusicRestoreService: Found source images at -> $path');
+        debugPrint('[MusicRestore] Found source images at -> $path');
         break;
       }
     }
@@ -109,7 +109,7 @@ class MusicRestoreService {
         if (!await targetFile.exists()) {
           // Copy .mp3
           await entity.copy(targetFilePath);
-          debugPrint('MusicRestoreService: Restored local file -> $fileName');
+          debugPrint('[MusicRestore] Restored local file -> $fileName');
         } else {
           // If ALREADY EXISTS, check file size to ensure integrity (Matching Strategy Basename + Size)
           final sourceSize = await entity.length();
@@ -131,7 +131,7 @@ class MusicRestoreService {
           }
           if (!await File(targetLrcPath).exists()) {
             await File(sourceLrcPath).copy(targetLrcPath);
-            debugPrint('MusicRestoreService: Restored lyrics -> $baseName.lrc');
+            debugPrint('[MusicRestore] Restored lyrics -> $baseName.lrc');
           }
         }
 
@@ -160,7 +160,7 @@ class MusicRestoreService {
           if (sourceArtFile.existsSync()) {
             if (!targetArtFile.existsSync()) {
               await sourceArtFile.copy(targetArtFile.path);
-              debugPrint('MusicRestoreService: Restored Art -> $targetArtFileName');
+              debugPrint('[MusicRestore] Restored Art -> $targetArtFileName');
             }
           }
         }
@@ -169,7 +169,7 @@ class MusicRestoreService {
       // 7. POST-RESTORE TRIGGER
       _ref.read(libraryProvider.notifier).scanLibrary(isBackground: false);
     } catch (e) {
-      debugPrint('MusicRestoreService: Error during recovery loop: $e');
+      debugPrint('[MusicRestore] Error during recovery loop: $e');
       rethrow;
     }
   }
@@ -214,7 +214,7 @@ class MusicRestoreService {
 
       File? sourceJsonFile;
       for (var path in possibleJsonPaths) {
-        debugPrint('MusicRestoreService: Checking metadata path -> $path');
+        debugPrint('[MusicRestore] Checking metadata path -> $path');
         final file = File(path);
         if (await file.exists()) {
           sourceJsonFile = file;
@@ -224,7 +224,7 @@ class MusicRestoreService {
 
       // Skip scanning Parent on Android Internal root to avoid /Android/data crash logs
       if (sourceJsonFile == null) {
-        debugPrint('MusicRestoreService: Standard paths failed. Performing discovery in $sourcePath...');
+        debugPrint('[MusicRestore] Standard paths failed. Performing discovery in $sourcePath...');
         final List<Directory> searchDirs = [sourceDir];
         
         if (!isAndroidInternal && await sourceParent.exists()) {
@@ -236,30 +236,30 @@ class MusicRestoreService {
             final stream = dir.list(recursive: true, followLinks: false).handleError((e) {
               // Silently skip permission errors to keep logs clean
               if (!e.toString().contains('Permission denied')) {
-                debugPrint('MusicRestoreService: Skipping folder during aggressive scan: $e');
+                debugPrint('[MusicRestore] Skipping folder during aggressive scan: $e');
               }
             }).take(500);
 
             await for (var entity in stream) {
               if (entity is File && p.basename(entity.path) == 'resonance_library.json') {
                 sourceJsonFile = entity;
-                debugPrint('MusicRestoreService: Aggressive Discovery found metadata at -> ${entity.path}');
+                debugPrint('[MusicRestore] Aggressive Discovery found metadata at -> ${entity.path}');
                 break;
               }
             }
           } catch (e) {
-            debugPrint('MusicRestoreService: Aggressive scan error in ${dir.path}: $e');
+            debugPrint('[MusicRestore] Aggressive scan error in ${dir.path}: $e');
           }
           if (sourceJsonFile != null) break;
         }
       }
 
       if (sourceJsonFile == null) {
-        debugPrint('MusicRestoreService: No source resonance_library.json found. Skipping instant awakening.');
+        debugPrint('[MusicRestore] No source resonance_library.json found. Skipping instant awakening.');
         return;
       }
 
-      debugPrint('MusicRestoreService: Borrowing JSON from ${sourceJsonFile.path}');
+      debugPrint('[MusicRestore] Borrowing JSON from ${sourceJsonFile.path}');
 
       final String content = await sourceJsonFile.readAsString();
       
@@ -272,12 +272,12 @@ class MusicRestoreService {
       final targetJsonFile = File(p.join(baseCacheDir.path, 'resonance_library.json'));
 
       await cacheManager.synchronizedWrite(targetJsonFile, remappedContent);
-      debugPrint('MusicRestoreService: Metadata successfully re-mapped and restored.');
+      debugPrint('[MusicRestore] Metadata successfully re-mapped and restored.');
 
       // Atomic Refresh UI
       await _ref.read(libraryProvider.notifier).loadMetadataFromCache();
     } catch (e) {
-      debugPrint('MusicRestoreService: Error during JSON re-mapping (V13.8): $e');
+      debugPrint('[MusicRestore] Error during JSON re-mapping (V13.8): $e');
     }
   }
 
@@ -312,13 +312,13 @@ class MusicRestoreService {
             if (currentMusicPath != null && p.canonicalize(checkPath) == p.canonicalize(currentMusicPath)) {
                continue;
             }
-            debugPrint('MusicRestoreService: Auto-detected structural source -> $checkPath');
+            debugPrint('[MusicRestore] Auto-detected structural source -> $checkPath');
             return checkPath;
           }
         }
       }
     } catch (e) {
-      debugPrint('MusicRestoreService: Auto-detection error (V13.4): $e');
+      debugPrint('[MusicRestore] Auto-detection error (V13.4): $e');
     }
     return null;
   }
@@ -357,7 +357,7 @@ String _remapJsonIsolate(Map<String, dynamic> args) {
     }
     return jsonEncode(items);
   } catch (e) {
-    debugPrint('Isolate Surgery Error (V13.7): $e');
+    debugPrint('[MusicRestore] Isolate Surgery Error (V13.7): $e');
     return content;
   }
 }

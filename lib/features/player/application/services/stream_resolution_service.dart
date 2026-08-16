@@ -62,21 +62,40 @@ class StreamResolutionService {
 
     debugPrint('[StreamResolution] Stream URL resolved for $songId');
 
-    // Trigger background caching as side effects (non-blocking)
-    Future.microtask(() => cacheService.getAudioPath(songId, streamUrl));
+    // Trigger background caching as side effects for non-session-locked HTTP streams (non-blocking)
+    if (streamUrl.startsWith('http') && !streamUrl.contains('c=ANDROID_VR')) {
+      Future.microtask(() => cacheService.getAudioPath(songId, streamUrl));
+    }
     Future.microtask(() => cacheService.saveMetadata(songId, item));
 
     return streamUrl;
   }
 
-  Media buildMedia(String resolvedPath) {
+  String getUserAgent(String resolvedPath) {
+    if (!resolvedPath.startsWith('http')) return _defaultUserAgent;
+    if (resolvedPath.contains('c=ANDROID_VR')) {
+      return 'com.google.android.apps.youtube.vr.oculus/1.56.21 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1)';
+    }
+    if (resolvedPath.contains('c=ANDROID')) {
+      return 'com.google.android.youtube/19.29.37 (Linux; U; Android 14; GB) gzip';
+    }
+    if (resolvedPath.contains('c=IOS')) {
+      return 'com.google.ios.youtube/19.29.1 (iPhone14,3; U; CPU iOS 15_6_1 like Mac OS X)';
+    }
+    return _defaultUserAgent;
+  }
+
+  Media buildMedia(String resolvedPath, {dynamic player}) {
     if (resolvedPath.startsWith('http')) {
-      final userAgent = resolvedPath.contains('c=ANDROID_VR')
-          ? 'com.google.android.apps.youtube.vr.oculus/1.56.21 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip'
-          : resolvedPath.contains('c=IOS')
-              ? 'com.google.ios.youtube/19.29.1 (iPhone14,3; U; CPU iOS 15_6_1 like Mac OS X)'
-              : _defaultUserAgent;
-      return Media(resolvedPath, httpHeaders: {'User-Agent': userAgent});
+      final userAgent = getUserAgent(resolvedPath);
+      if (player != null && Platform.isWindows) {
+        try {
+          (player.platform as dynamic).setProperty('user-agent', userAgent);
+        } catch (_) {}
+      }
+      return Media(resolvedPath, httpHeaders: {
+        'User-Agent': userAgent,
+      });
     }
     return Media(resolvedPath);
   }
@@ -87,10 +106,6 @@ class StreamResolutionService {
 /// Infrastructure configurator for MPV-specific settings.
 /// All operations are fire-and-forget (via [Future.microtask]).
 class MpvConfigurator {
-  static const String _defaultUserAgent =
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-      '(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
-
   /// Redirects the MPV buffer/cache to [customPath] for stable network streaming.
   static void applyCacheSettings(dynamic player, String? customPath) {
     if (customPath == null || customPath.isEmpty) return;
@@ -105,7 +120,9 @@ class MpvConfigurator {
         await (player.platform as dynamic).setProperty('cache-dir', mpvTemp.path);
         await (player.platform as dynamic).setProperty('demuxer-max-bytes', '100MiB');
         await (player.platform as dynamic).setProperty('demuxer-max-back-bytes', '50MiB');
-        await (player.platform as dynamic).setProperty('user-agent', _defaultUserAgent);
+        await (player.platform as dynamic).setProperty('demuxer-lavf-o', 'reconnect=1,reconnect_streamed=1,reconnect_delay_max=5');
+        await (player.platform as dynamic).setProperty('network-timeout', '10');
+        await (player.platform as dynamic).setProperty('tls-verify', 'no');
         debugPrint('[MpvConfigurator] Cache redirected to: ${mpvTemp.path}');
       } catch (e) {
         debugPrint('[MpvConfigurator] Failed to set properties: $e');

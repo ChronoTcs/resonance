@@ -36,9 +36,9 @@ class StreamCacheTrackerService {
 
       data[id] = DateTime.now().toIso8601String();
       await _cacheManager.synchronizedWrite(file, jsonEncode(data));
-      debugPrint('StreamCacheTracker: Updated timestamp for $id');
+      debugPrint('[StreamCacheTracker] Updated timestamp for $id');
     } catch (e) {
-      debugPrint('StreamCacheTracker Error: $e');
+      debugPrint('[StreamCacheTracker] Error: $e');
     }
   }
 
@@ -66,7 +66,7 @@ class StreamCacheTrackerService {
 
       return expired;
     } catch (e) {
-      debugPrint('StreamCacheTracker getExpiredIds Error: $e');
+      debugPrint('[StreamCacheTracker] getExpiredIds Error: $e');
       return [];
     }
   }

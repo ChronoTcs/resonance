@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import '../models/lyric_line.dart';
 import '../../../../core/data/services/data_usage_service.dart';
+import '../../../../core/application/services/network_connectivity_service.dart';
 
 class UnifiedLyricsResult {
   final List<LyricLine> translated;
@@ -25,6 +26,10 @@ class LyricsTranslationService {
     String targetLanguage,
   ) async {
     if (originalLyrics.isEmpty) {
+      return UnifiedLyricsResult(translated: [], romanized: []);
+    }
+    if (!_ref.read(networkConnectivityProvider).isOnline) {
+      debugPrint('[LyricsTranslation] Skipping translation — device offline');
       return UnifiedLyricsResult(translated: [], romanized: []);
     }
 
@@ -119,7 +124,7 @@ class LyricsTranslationService {
         romanized: romanizedResult,
       );
     } catch (e) {
-      debugPrint('LyricsTranslationService: Unified fetch failed (Delimiter Hack) - $e');
+      debugPrint('[LyricsTranslation] Unified fetch failed (Delimiter Hack) - $e');
       rethrow;
     }
   }

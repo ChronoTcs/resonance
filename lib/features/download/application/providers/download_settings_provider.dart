@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../core/utils/path_utils.dart';
@@ -12,7 +13,9 @@ class DownloadSettings {
   final int connectionTimeout; // seconds
   final int fragmentsPerDownload;
   final String audioQuality; // "128" | "192" | "320"
-  final String defaultSource; // "ytmusic" | "youtube"
+  final String? _streamSource; // "ipc" | "dart"
+
+  String get streamSource => _streamSource ?? 'ipc';
 
   const DownloadSettings({
     this.musicOutputPath = '',
@@ -23,8 +26,8 @@ class DownloadSettings {
     this.connectionTimeout = 30,
     this.fragmentsPerDownload = 4,
     this.audioQuality = '192',
-    this.defaultSource = 'ytmusic',
-  });
+    String? streamSource,
+  }) : _streamSource = streamSource ?? 'ipc';
 
   DownloadSettings copyWith({
     String? musicOutputPath,
@@ -35,7 +38,7 @@ class DownloadSettings {
     int? connectionTimeout,
     int? fragmentsPerDownload,
     String? audioQuality,
-    String? defaultSource,
+    String? streamSource,
   }) {
     return DownloadSettings(
       musicOutputPath: musicOutputPath ?? this.musicOutputPath,
@@ -46,7 +49,7 @@ class DownloadSettings {
       connectionTimeout: connectionTimeout ?? this.connectionTimeout,
       fragmentsPerDownload: fragmentsPerDownload ?? this.fragmentsPerDownload,
       audioQuality: audioQuality ?? this.audioQuality,
-      defaultSource: defaultSource ?? this.defaultSource,
+      streamSource: streamSource ?? this.streamSource,
     );
   }
 }
@@ -65,7 +68,7 @@ class DownloadSettingsNotifier extends AsyncNotifier<DownloadSettings> {
   static const _kTimeout = 'dl_timeout';
   static const _kFragments = 'dl_fragments';
   static const _kQuality = 'dl_quality';
-  static const _kSource = 'dl_source';
+  static const _kStreamSource = 'stream_source';
 
   @override
   Future<DownloadSettings> build() async {
@@ -83,11 +86,18 @@ class DownloadSettingsNotifier extends AsyncNotifier<DownloadSettings> {
       connectionTimeout: prefs.getInt(_kTimeout) ?? 30,
       fragmentsPerDownload: prefs.getInt(_kFragments) ?? 4,
       audioQuality: prefs.getString(_kQuality) ?? '192',
-      defaultSource: prefs.getString(_kSource) ?? 'ytmusic',
+      streamSource: prefs.getString(_kStreamSource) ?? 'ipc',
     );
   }
 
   Future<void> saveSettings(DownloadSettings settings) async {
+    final oldSource = state.value?.streamSource;
+    if (oldSource != null && oldSource != settings.streamSource) {
+      debugPrint(
+        '[NetworkSettings] 🔀 Stream engine source changed: "$oldSource" -> "${settings.streamSource}" (${settings.streamSource == 'ipc' ? 'Native IPC First (yt-dlp)' : 'In-App Dart First (youtube_explode)'})',
+      );
+    }
+
     state = AsyncValue.data(settings);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kMusicPath, settings.musicOutputPath);
@@ -99,7 +109,7 @@ class DownloadSettingsNotifier extends AsyncNotifier<DownloadSettings> {
     await prefs.setInt(_kTimeout, settings.connectionTimeout);
     await prefs.setInt(_kFragments, settings.fragmentsPerDownload);
     await prefs.setString(_kQuality, settings.audioQuality);
-    await prefs.setString(_kSource, settings.defaultSource);
+    await prefs.setString(_kStreamSource, settings.streamSource);
     
     // Sync to Library
     _syncToLibrary(settings);

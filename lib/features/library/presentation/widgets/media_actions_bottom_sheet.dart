@@ -1,7 +1,7 @@
 import 'package:resonance/core/widgets/widgets.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/core/utils/app_icons.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart' as yt;
@@ -47,39 +47,12 @@ class MediaActionsBottomSheet extends ConsumerWidget {
           ),
           // Info Header
           ListTile(
-            leading: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: item.albumArt != null
-                  ? Image.memory(
-                      item.albumArt!,
-                      width: 48,
-                      height: 48,
-                      fit: BoxFit.cover,
-                    )
-                  : (item.thumbnailUrl != null)
-                  ? CachedNetworkImage(
-                      imageUrl: item.thumbnailUrl!,
-                      width: 48,
-                      height: 48,
-                      fit: BoxFit.cover,
-                      placeholder: (c, u) => Container(
-                        color: theme.colorScheme.surfaceContainerHighest,
-                        child: Icon(AppIcons.music),
-                      ),
-                      errorWidget: (c, u, e) => Container(
-                        color: theme.colorScheme.surfaceContainerHighest,
-                        child: Icon(AppIcons.music),
-                      ),
-                    )
-                  : Container(
-                      width: 48,
-                      height: 48,
-                      color: theme.colorScheme.surfaceContainerHighest,
-                      child: Icon(
-                        isOnline ? UIcons.regular.world : AppIcons.music,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
+            leading: MediaArtworkWidget(
+              item: item,
+              width: 48,
+              height: 48,
+              borderRadius: 8,
+              placeholderIcon: isOnline ? UIcons.regular.world : AppIcons.music,
             ),
             title: Text(
               item.title,
@@ -405,46 +378,181 @@ class MediaActionsBottomSheet extends ConsumerWidget {
   }
 
   void _showDetailsDialog(BuildContext context) {
+    final theme = Theme.of(context);
+    final isOnline = item.isStreaming;
+
     showDialog(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Metadata Details'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _detailRow('Title', item.title),
-            _detailRow('Artist', item.artist ?? '-'),
-            _detailRow('Album', item.album ?? '-'),
-            _detailRow('Path/ID', item.id ?? item.path),
-            _detailRow('Type', item.type),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Close'),
+      builder: (dialogContext) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          width: 400,
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface.withValues(alpha: 0.95),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: theme.primaryColor.withValues(alpha: 0.2),
+              width: 1,
+            ),
           ),
-        ],
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        UIcons.regular.info,
+                        size: 18,
+                        color: theme.colorScheme.primary,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Metadata Details',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.onSurface,
+                        ),
+                      ),
+                    ],
+                  ),
+                  ReusableHoverIconButton(
+                    icon: UIcons.regular.cross,
+                    tooltip: 'Close',
+                    iconSize: 16.0,
+                    onTap: () => Navigator.pop(dialogContext),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // Metadata Container Card
+              Container(
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: theme.dividerColor.withValues(alpha: 0.08),
+                  ),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Column(
+                  children: [
+                    _detailRow(theme, 'Title', item.title),
+                    _detailRow(theme, 'Artist', item.artist ?? '-'),
+                    _detailRow(theme, 'Album', item.album ?? '-'),
+                    if (item.date != null && item.date!.isNotEmpty)
+                      _detailRow(theme, 'Year', _formatYear(item.date!)),
+                    if (item.duration != null && item.duration!.inSeconds > 0)
+                      _detailRow(theme, 'Duration', _formatDuration(item.duration!)),
+                    _detailRow(
+                      theme,
+                      'Path/ID',
+                      item.id ?? item.path,
+                      isCopyable: true,
+                      dialogContext: dialogContext,
+                    ),
+                    _detailRow(
+                      theme,
+                      'Type',
+                      isOnline ? 'Online Stream' : (item.type.toUpperCase()),
+                      isLast: true,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // Bottom Actions
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  ResonanceButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    label: 'Close',
+                    style: ResonanceButtonStyle.secondary,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
 
-  Widget _detailRow(String label, String value) {
+  String _formatYear(String rawDate) {
+    final trimmed = rawDate.trim();
+    final match = RegExp(r'\b(19\d\d|20\d\d)\b').firstMatch(trimmed);
+    if (match != null) {
+      return match.group(1)!;
+    }
+    return trimmed;
+  }
+
+  String _formatDuration(Duration duration) {
+    final minutes = duration.inMinutes;
+    final seconds = duration.inSeconds % 60;
+    return '$minutes:${seconds.toString().padLeft(2, '0')}';
+  }
+
+  Widget _detailRow(
+    ThemeData theme,
+    String label,
+    String value, {
+    bool isCopyable = false,
+    bool isLast = false,
+    BuildContext? dialogContext,
+  }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Column(
+      padding: EdgeInsets.only(bottom: isLast ? 0 : 10),
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label,
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 12,
-              color: Colors.grey,
+          SizedBox(
+            width: 70,
+            child: Text(
+              label,
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+              ),
             ),
           ),
-          Text(value, style: const TextStyle(fontSize: 14)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: SelectableText(
+              value,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurface,
+                fontWeight: FontWeight.w500,
+                fontSize: 13,
+              ),
+            ),
+          ),
+          if (isCopyable)
+            ReusableHoverIconButton(
+              icon: UIcons.regular.copy,
+              tooltip: 'Copy Path/ID',
+              iconSize: 14.0,
+              padding: 4.0,
+              onTap: () {
+                Clipboard.setData(ClipboardData(text: value));
+                if (dialogContext != null && dialogContext.mounted) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    const SnackBar(
+                      content: Text('Copied Path/ID to clipboard'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                }
+              },
+            ),
         ],
       ),
     );

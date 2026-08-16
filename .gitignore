@@ -89,3 +89,7 @@ node_modules/
 .agents/
 .graphifyignore
 graphify-out/
+
+# Local Reports & Maintenance Logs
+reports/
+/reports/

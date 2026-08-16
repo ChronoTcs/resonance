@@ -35,12 +35,12 @@ class PoTokenProviderService {
       }
 
       if (!File(execPath).existsSync()) {
-        debugPrint('[PoTokenProviderService] Executable not found at $execPath');
+        debugPrint('[PoTokenProvider] Executable not found at $execPath');
         _isGenerating = false;
         return null;
       }
 
-      debugPrint('[PoTokenProviderService] Executing bgutil process: $execPath');
+      debugPrint('[PoTokenProvider] Executing bgutil process: $execPath');
       final result = await Process.run(execPath, [], runInShell: true).timeout(const Duration(seconds: 10));
 
       if (result.exitCode == 0 && result.stdout != null) {
@@ -60,7 +60,7 @@ class PoTokenProviderService {
                 } else {
                   _cachedExpiresAt = DateTime.now().toUtc().add(const Duration(hours: 1));
                 }
-                debugPrint('[PoTokenProviderService] ✅ Fresh PoToken acquired! Valid until: ${_cachedExpiresAt?.toLocal()} (Local Time)');
+                debugPrint('[PoTokenProvider] ✅ Fresh PoToken acquired! Valid until: ${_cachedExpiresAt?.toLocal()} (Local Time)');
                 _isGenerating = false;
                 return _cachedPoToken;
               }
@@ -69,7 +69,7 @@ class PoTokenProviderService {
         }
       }
     } catch (e) {
-      debugPrint('[PoTokenProviderService] Generation exception: $e');
+      debugPrint('[PoTokenProvider] Generation exception: $e');
     }
     _isGenerating = false;
     return _cachedPoToken;
@@ -80,10 +80,10 @@ class PoTokenProviderService {
     _keeperTimer = Timer.periodic(const Duration(minutes: 10), (_) async {
       final now = DateTime.now().toUtc();
       if (_cachedExpiresAt == null || _cachedExpiresAt!.difference(now).inMinutes <= 15) {
-        debugPrint('[PoTokenProviderService Keeper] Token expiring or missing. Refreshing in background...');
+        debugPrint('[PoTokenKeeper] Token expiring or missing. Refreshing in background...');
         await generateFreshToken();
       } else {
-        debugPrint('[PoTokenProviderService Keeper] PoToken active & valid until $_cachedExpiresAt');
+        debugPrint('[PoTokenKeeper] PoToken active & valid until $_cachedExpiresAt');
       }
     });
   }

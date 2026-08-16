@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:flutter/foundation.dart';
@@ -5,6 +6,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:dart_discord_presence/dart_discord_presence.dart';
 import 'package:resonance/core/application/providers/app_config_provider.dart';
+import 'package:resonance/core/application/services/network_connectivity_service.dart';
 import 'package:resonance/core/domain/models/media_item.dart';
 import 'rpc_cache_service.dart';
 import 'media_cache_service.dart';
@@ -43,10 +45,10 @@ class DiscordRpcService {
       await _discord!.initialize('1481352932568862823');
       _isInitialized = true;
       debugPrint(
-        'Discord RPC: Initialized successfully with Client ID: 1481352932568862823',
+        '[DiscordRPC] Initialized successfully with Client ID: 1481352932568862823',
       );
     } catch (e) {
-      debugPrint('Failed to initialize Discord RPC: $e');
+      debugPrint('[DiscordRPC] Failed to initialize Discord RPC: $e');
     }
   }
 
@@ -70,7 +72,7 @@ class DiscordRpcService {
         .read(mediaCacheServiceProvider)
         .getCachedArtPath(songId);
     if (cachedPath != null && cachedPath.isNotEmpty) {
-      debugPrint('Discord RPC: Art cache hit (file) for $songId');
+      debugPrint('[DiscordRPC] Art cache hit (file) for $songId');
       // Fall through to Tier 2 which may have a network URL cached
     }
 
@@ -79,15 +81,20 @@ class DiscordRpcService {
       track.artist ?? '',
       track.title,
       () async {
-        // Tier 3: iTunes network fetch
+        // Tier 3: iTunes network fetch — skip if offline
+        if (!_ref.read(networkConnectivityProvider).isOnline) {
+          debugPrint('[DiscordRPC] Offline — skipping iTunes fetch for ${track.title}');
+          return null;
+        }
         final res = await _fetchAlbumArtAndMetadata(track.title, track.artist);
         final url = res.artworkUrl;
         if (url != null && url.isNotEmpty) {
           // Back-fill into MediaCacheService with forceOverwrite so it replaces low-res art
-          _ref
-              .read(mediaCacheServiceProvider)
-              .cacheArtwork(songId, url, forceOverwrite: true)
-              .ignore();
+          unawaited(
+            _ref
+                .read(mediaCacheServiceProvider)
+                .cacheArtwork(songId, url, forceOverwrite: true),
+          );
         }
         return url;
       },
@@ -110,10 +117,11 @@ class DiscordRpcService {
     final songId = track.id ?? track.path;
     final res = await _fetchAlbumArtAndMetadata(track.title, track.artist);
     if (res.artworkUrl != null && res.artworkUrl!.isNotEmpty) {
-      _ref
-          .read(mediaCacheServiceProvider)
-          .cacheArtwork(songId, res.artworkUrl!, forceOverwrite: true)
-          .ignore();
+      unawaited(
+        _ref
+            .read(mediaCacheServiceProvider)
+            .cacheArtwork(songId, res.artworkUrl!, forceOverwrite: true),
+      );
     }
     return res;
   }
@@ -173,7 +181,7 @@ class DiscordRpcService {
         }
       }
     } catch (e) {
-      debugPrint('Discord RPC: resolveFullTrackInfo error: $e');
+      debugPrint('[DiscordRPC] resolveFullTrackInfo error: $e');
     }
     return (
       artworkUrl: null,
@@ -237,7 +245,7 @@ class DiscordRpcService {
           'https://itunes.apple.com/search?term=${Uri.encodeComponent(query)}&entity=song&limit=5',
         );
         debugPrint(
-          'Discord RPC: Fetching album art & metadata with query: "$query"',
+          '[DiscordRPC] Fetching album art & metadata with query: "$query"',
         );
         final response = await http
             .get(uri)
@@ -251,7 +259,7 @@ class DiscordRpcService {
             for (final result in results) {
               final collectionName = result['collectionName'] as String?;
               if (_isBadAlbum(collectionName)) {
-                debugPrint('Discord RPC: Skipping bad album: $collectionName');
+                debugPrint('[DiscordRPC] Skipping bad album: $collectionName');
                 continue;
               }
               final artworkUrl100 = result['artworkUrl100'] as String?;
@@ -262,23 +270,23 @@ class DiscordRpcService {
                   '500x500bb.jpg',
                 );
                 debugPrint(
-                  'Discord RPC: Found official artwork -> $highResUrl, album: $collectionName',
+                  '[DiscordRPC] Found official artwork -> $highResUrl, album: $collectionName',
                 );
               }
               return (artworkUrl: highResUrl, albumName: collectionName);
             }
             // All candidates were bad — try next query permutation
             debugPrint(
-              'Discord RPC: All ${results.length} results were bad albums for query: "$query"',
+              '[DiscordRPC] All ${results.length} results were bad albums for query: "$query"',
             );
           }
         }
       }
       debugPrint(
-        'Discord RPC: No results found on iTunes for rawTitle: "$rawTitle", rawArtist: "$rawArtist"',
+        '[DiscordRPC] No results found on iTunes for rawTitle: "$rawTitle", rawArtist: "$rawArtist"',
       );
     } catch (e) {
-      debugPrint('Discord RPC: Failed to fetch album art from iTunes: $e');
+      debugPrint('[DiscordRPC] Failed to fetch album art from iTunes: $e');
     }
     return (artworkUrl: null, albumName: null);
   }
@@ -445,15 +453,17 @@ class DiscordRpcService {
 
           // Kick off background artwork resolution so the URL is ready when play resumes.
           final artSession = _requestSessionId;
-          _resolveArtwork(track).then((url) {
-            if (url != null &&
-                url.isNotEmpty &&
-                _requestSessionId == artSession &&
-                _lastTrackId == currentTrackId) {
-              _currentAlbumArtKey = url;
-              // No sendActivity here — the playing stream will push it when playback starts.
-            }
-          }).ignore();
+          unawaited(
+            _resolveArtwork(track).then((url) {
+              if (url != null &&
+                  url.isNotEmpty &&
+                  _requestSessionId == artSession &&
+                  _lastTrackId == currentTrackId) {
+                _currentAlbumArtKey = url;
+                // No sendActivity here — the playing stream will push it when playback starts.
+              }
+            }),
+          );
         } else {
           // Same track, just paused — send once with existing art key.
           _sendActivity(

@@ -284,7 +284,7 @@ class PlaylistNotifier extends AsyncNotifier<PlaylistState> {
       ));
       await _saveState();
     } catch (e) {
-      debugPrint('PlaylistNotifier: Failed to import playlist: $e');
+      debugPrint('[PlaylistNotifier] Failed to import playlist: $e');
       rethrow;
     }
   }
@@ -355,7 +355,7 @@ class PlaylistNotifier extends AsyncNotifier<PlaylistState> {
 
             updatedTracks.add(newMatch);
             count++;
-            debugPrint('Playlist Repair: Resolved "${track.title}" -> ${newMatch.path}');
+            debugPrint('[PlaylistNotifier] Playlist Repair: Resolved "${track.title}" -> ${newMatch.path}');
             continue;
           } catch (_) {}
         }

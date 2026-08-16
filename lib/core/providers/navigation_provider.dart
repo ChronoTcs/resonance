@@ -1,10 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:resonance/core/providers/overlay_provider.dart';
 
 class MainNavigationNotifier extends Notifier<int> {
   @override
   int build() => 0;
 
   void setIndex(int index) {
+    ref.read(nowPlayingOverlayProvider.notifier).setVisible(false);
+    ref.read(lyricsOverlayProvider.notifier).setVisible(false);
     state = index;
   }
 }

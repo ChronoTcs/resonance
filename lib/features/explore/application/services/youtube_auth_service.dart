@@ -33,18 +33,18 @@ class YoutubeAuthService {
     await _prefs.setString(_kCookiesKey, jsonEncode(cookies));
     if (visitorData != null) await _prefs.setString(_kVisitorDataKey, visitorData);
     if (dataSyncId != null) await _prefs.setString(_kDataSyncIdKey, dataSyncId);
-    debugPrint('YoutubeAuthService: Session SAVED.');
+    debugPrint('[YoutubeAuth] Session SAVED.');
   }
 
   /// Scans the native WebView2 cookie database using the [userDataPath].
   /// Uses "Shadow Replication" to bypass the SQLite lock during active sessions.
   Future<void> scanNativeCookies(String userDataPath) async {
-    debugPrint('YoutubeAuthService: Starting Native Cookie Scan at $userDataPath');
+    debugPrint('[YoutubeAuth] Starting Native Cookie Scan at $userDataPath');
     
     // 1. Locate the Network Cookies file (Standard Chromium/WebView2 path)
     final originalFile = File(p.join(userDataPath, 'EBWebView', 'Default', 'Network', 'Cookies'));
     if (!await originalFile.exists()) {
-      debugPrint('YoutubeAuthService: [ERROR] Cookie file not found at ${originalFile.path}');
+      debugPrint('[YoutubeAuth] [ERROR] Cookie file not found at ${originalFile.path}');
       return;
     }
 
@@ -54,7 +54,7 @@ class YoutubeAuthService {
     
     try {
       await originalFile.copy(replicaFile.path);
-      debugPrint('YoutubeAuthService: Shadow Replication SUCCESS.');
+      debugPrint('[YoutubeAuth] Shadow Replication SUCCESS.');
 
       // 3. Open SQLite Replica
       final db = sqlite3.open(replicaFile.path);
@@ -70,7 +70,7 @@ class YoutubeAuthService {
         nativeCookies[row['name'] as String] = row['value'] as String;
       }
       
-      debugPrint('YoutubeAuthService: Extracted ${nativeCookies.length} native cookies (including HttpOnly).');
+      debugPrint('[YoutubeAuth] Extracted ${nativeCookies.length} native cookies (including HttpOnly).');
 
       // 5. Merge with existing cookies (if any) or save as new
       final Map<String, String> currentCookies = getCookies();
@@ -82,13 +82,13 @@ class YoutubeAuthService {
 
       db.close();
     } catch (e) {
-      debugPrint('YoutubeAuthService: [CRITICAL] Cookie extraction failed: $e');
+      debugPrint('[YoutubeAuth] [CRITICAL] Cookie extraction failed: $e');
     } finally {
       // 6. Cleanup Guard: Always delete the replica
       if (await replicaFile.exists()) {
         try {
           await replicaFile.delete();
-          debugPrint('YoutubeAuthService: Replicated cookie file CLEANED UP.');
+          debugPrint('[YoutubeAuth] Replicated cookie file CLEANED UP.');
         } catch (_) {}
       }
     }
@@ -98,7 +98,7 @@ class YoutubeAuthService {
     await _prefs.remove(_kCookiesKey);
     await _prefs.remove(_kVisitorDataKey);
     await _prefs.remove(_kDataSyncIdKey);
-    debugPrint('YoutubeAuthService: Session CLEARED.');
+    debugPrint('[YoutubeAuth] Session CLEARED.');
   }
 
   Map<String, String> getCookies() {

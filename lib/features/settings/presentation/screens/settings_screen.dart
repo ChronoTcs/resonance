@@ -55,7 +55,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       (icon: UIcons.regular.palette,    label: 'Display'),
       (icon: UIcons.regular.headphones, label: 'Audio'),
       (icon: UIcons.regular.hdd,        label: 'Storage'),
-      (icon: UIcons.regular.download,   label: 'Downloads'),
+      (icon: UIcons.regular.globe,      label: 'Network'),
     ];
 
     return DefaultTabController(

@@ -3,8 +3,8 @@
 ; Build command: flutter build windows --release
 
 #define MyAppName "Resonance"
-#define MyAppVersion "0.1.3-beta"
-#define MyAppNumericVersion "0.1.3.0"
+#define MyAppVersion "0.1.4-beta"
+#define MyAppNumericVersion "0.1.4.0"
 #define MyAppPublisher "ChronoTech"
 #define MyAppURL "https://github.com/ChronoTcs/Resonance"
 #define MyAppExeName "Resonance.exe"

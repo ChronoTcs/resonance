@@ -8,6 +8,7 @@ import 'package:media_kit/media_kit.dart';
 import '../../../home/presentation/providers/recently_played_provider.dart';
 import '../../../library/data/models/media_item.dart';
 import '../../../library/application/library_provider.dart';
+import '../../../../core/exceptions/offline_exception.dart';
 
 import '../services/windows_system_media_service.dart';
 import 'active_media_focus_provider.dart';
@@ -193,6 +194,11 @@ class AudioNotifier extends Notifier<AudioState> {
 
       // ── Anti-Loop Error Guard ─────────────────────────────────────────────
       _player.stream.error.listen((error) {
+        debugPrint('[AudioPlayer] [ERROR] Streaming / Playback error: $error');
+        final currentId = state.currentTrack?.id ?? state.currentTrack?.path;
+        if (currentId != null) {
+          ref.read(playbackArchitectureServiceProvider).invalidate(currentId);
+        }
         ref
             .read(notificationProvider.notifier)
             .showNotification(
@@ -283,6 +289,15 @@ class AudioNotifier extends Notifier<AudioState> {
     try {
       final resolvedPath = await _resolver.resolve(item);
       await playTrack(item.copyWith(path: resolvedPath), index: index);
+    } on OfflinePlaybackException {
+      debugPrint('[AudioNotifier] Offline — skipping to next local track');
+      state = state.copyWith(isPlaying: false, isLoading: false);
+      ref.read(notificationProvider.notifier).showNotification(
+        'You\'re Offline',
+        'Skipping to next local track. Download tracks to play offline.',
+      );
+      // Advance queue without re-triggering stream resolution
+      if (state.queue.length > 1) Future.microtask(() => next());
     } catch (e) {
       debugPrint('[AudioNotifier] Stream resolution failed: $e');
       state = state.copyWith(isPlaying: false);
@@ -312,6 +327,15 @@ class AudioNotifier extends Notifier<AudioState> {
       try {
         final resolvedPath = await _resolver.resolve(item);
         trackToPlay = item.copyWith(path: resolvedPath);
+      } on OfflinePlaybackException {
+        debugPrint('[AudioNotifier] Offline — skipping to next local track (playTrack)');
+        state = state.copyWith(isPlaying: false, isLoading: false);
+        ref.read(notificationProvider.notifier).showNotification(
+          'You\'re Offline',
+          'Skipping to next local track. Download tracks to play offline.',
+        );
+        if (state.queue.length > 1) Future.microtask(() => next());
+        return;
       } catch (e) {
         debugPrint('[AudioNotifier] Stream resolution failed in playTrack: $e');
         state = state.copyWith(isPlaying: false, isLoading: false);
@@ -325,7 +349,7 @@ class AudioNotifier extends Notifier<AudioState> {
     _onTrackChanged(item, index);
     state = state.copyWith(isLoading: true);
     try {
-      await _player.open(_resolver.buildMedia(trackToPlay.path), play: true);
+      await _player.open(_resolver.buildMedia(trackToPlay.path, player: _player), play: true);
       _engine.resetErrorGuard();
     } catch (e) {
       debugPrint('[AudioNotifier] CRITICAL: Error opening track: $e');

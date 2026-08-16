@@ -31,7 +31,7 @@ class PlaylistRepository {
       final jsonString = jsonEncode(playlists.map((p) => p.toJson()).toList());
       await _prefs.setString(_playlistsKey, jsonString);
     } catch (e) {
-      debugPrint('PlaylistRepository: Failed to persist playlists: $e');
+      debugPrint('[PlaylistRepo] Failed to persist playlists: $e');
       rethrow;
     }
   }
@@ -42,7 +42,7 @@ class PlaylistRepository {
       final List<dynamic> jsonList = jsonDecode(jsonString);
       return jsonList.map((json) => Playlist.fromJson(json)).toList();
     } catch (e) {
-      debugPrint('Playlist Isolate: Failed to parse JSON: $e');
+      debugPrint('[PlaylistRepo] Isolate: Failed to parse JSON: $e');
       return [];
     }
   }

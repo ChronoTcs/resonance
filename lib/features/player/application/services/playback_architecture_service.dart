@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart' as p;
 import '../../../explore/data/repositories/youtube_stream_repository.dart';
 import '../../../library/application/library_provider.dart';
 import '../../../../core/data/services/media_cache_service.dart';
@@ -47,7 +48,7 @@ class PlaybackArchitectureService {
     // 0. MANDATORY CACHE-FIRST: Cek file lokal sebelum internet
     final localPath = await _checkLocalFile(videoId);
     if (localPath != null) {
-      debugPrint('RateLimit Defender: Local Cache Hit for $videoId');
+      debugPrint('[RateLimitDefender] Local Cache Hit for $videoId');
       return localPath;
     }
 
@@ -71,7 +72,7 @@ class PlaybackArchitectureService {
     final existingRequest = _activeRequests[videoId];
     if (existingRequest != null) {
       debugPrint(
-        'RateLimit Defender: Joining existing active request for $videoId',
+        '[RateLimitDefender] Joining existing active request for $videoId',
       );
       return existingRequest;
     }
@@ -97,7 +98,7 @@ class PlaybackArchitectureService {
       }
       return null;
     } catch (e) {
-      debugPrint('RateLimit Defender: Fetch ERROR for $videoId: $e');
+      debugPrint('[RateLimitDefender] Fetch ERROR for $videoId: $e');
       return null;
     }
   }
@@ -110,11 +111,13 @@ class PlaybackArchitectureService {
         final dir = Directory(libraryState.musicFolderPath!);
         if (await dir.exists()) {
           final files = dir.listSync();
+          const validAudioExtensions = {'.mp3', '.m4a', '.flac', '.wav', '.ogg', '.opus', '.aac'};
           for (var f in files) {
             if (f is File && f.path.contains(videoId)) {
-              if (f.existsSync()) {
+              final ext = p.extension(f.path).toLowerCase();
+              if (validAudioExtensions.contains(ext) && f.existsSync()) {
                 debugPrint(
-                  'PlaybackArchitecture: Physical file found for $videoId at ${f.path}',
+                  '[RateLimitDefender] Physical audio file found for $videoId at ${f.path}',
                 );
                 return f.path;
               }
@@ -150,13 +153,13 @@ class PlaybackArchitectureService {
     // If user moves before 15s, timer is canceled and
     // network request getStreamUrl is NEVER sent.
     debugPrint(
-      'RateLimit Defender: Scheduling prefetch for $nextId in 15 seconds...',
+      '[RateLimitDefender] Scheduling prefetch for $nextId in 15 seconds...',
     );
     _prefetchTimer = Timer(const Duration(seconds: 15), () async {
       // Check if session is still valid after 15s (user did not skip track)
       if (_prefetchSessionId != currentSession) {
         debugPrint(
-          'RateLimit Defender: Aborted ghost prefetch for SESSION $currentSession',
+          '[RateLimitDefender] Aborted ghost prefetch for SESSION $currentSession',
         );
         return;
       }
@@ -168,21 +171,28 @@ class PlaybackArchitectureService {
         if (localPath != null) {
           _urlCache[nextId] = CachedStreamInfo(localPath, DateTime.now());
           debugPrint(
-            'RateLimit Defender: Next track found in local. No internet request needed.',
+            '[RateLimitDefender] Next track found in local. No internet request needed.',
           );
           return;
         }
 
         // If not found locally, fetch the URL via network
         debugPrint(
-          'RateLimit Defender: [NETWORK] Prefetching next track URL from YouTube for SESSION $currentSession...',
+          '[RateLimitDefender] [NETWORK] Prefetching next track URL from YouTube for SESSION $currentSession...',
         );
         final url = await getStreamUrl(nextId);
         if (url != null) {
-          debugPrint('RateLimit Defender: URL Pre-warmed for ID: $nextId');
+          debugPrint('[RateLimitDefender] URL Pre-warmed for ID: $nextId');
         }
       }
     });
+  }
+
+  /// Invalidate stream URL cache for a specific track (e.g. on playback error)
+  void invalidate(String videoId) {
+    _urlCache.remove(videoId);
+    _activeRequests.remove(videoId);
+    debugPrint('[RateLimitDefender] Invalidated stream cache for $videoId');
   }
 
   void clearCache() {

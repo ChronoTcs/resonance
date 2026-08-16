@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance/core/providers/search_provider.dart';
+import 'package:resonance/core/application/services/network_connectivity_service.dart';
 import '../../data/repositories/youtube_search_repository.dart';
 import '../../data/models/explore_item.dart';
 import '../../data/models/explore_playlist.dart';
@@ -12,6 +13,8 @@ export 'package:resonance/core/providers/search_provider.dart'
     show searchQueryProvider, searchStateProvider, SearchQueryNotifier, SearchStateNotifier;
 
 final homeFeedProvider = FutureProvider<List<ExploreHomeSection>>((ref) async {
+  // ponytail: offline guard — return empty immediately, no timeout waste
+  if (!ref.watch(networkConnectivityProvider.select((s) => s.isOnline))) return [];
   final repo = ref.read(youtubeSearchRepositoryProvider);
   return repo.getHomeFeed();
 });
@@ -20,6 +23,7 @@ final homeFeedProvider = FutureProvider<List<ExploreHomeSection>>((ref) async {
 final searchResultsProvider = FutureProvider<List<ExploreItem>>((ref) async {
   final query = ref.watch(searchQueryProvider);
   if (query.isEmpty) return [];
+  if (!ref.watch(networkConnectivityProvider.select((s) => s.isOnline))) return [];
 
   final repo = ref.read(youtubeSearchRepositoryProvider);
   final results = await repo.search(query);
@@ -46,6 +50,7 @@ final searchResultsProvider = FutureProvider<List<ExploreItem>>((ref) async {
 final searchPlaylistResultsProvider = FutureProvider<List<ExplorePlaylist>>((ref) async {
   final query = ref.watch(searchQueryProvider);
   if (query.isEmpty) return [];
+  if (!ref.watch(networkConnectivityProvider.select((s) => s.isOnline))) return [];
 
   final repo = ref.read(youtubeSearchRepositoryProvider);
   return repo.searchPlaylists(query);
@@ -61,6 +66,7 @@ class ExploreSearchTabNotifier extends Notifier<int> {
 final exploreSearchTabProvider = NotifierProvider<ExploreSearchTabNotifier, int>(ExploreSearchTabNotifier.new);
 
 final featuredMusicProvider = FutureProvider<List<ExploreItem>>((ref) async {
+  if (!ref.watch(networkConnectivityProvider.select((s) => s.isOnline))) return [];
   final repo = ref.read(youtubeSearchRepositoryProvider);
   final results = await repo.getFeaturedMusic();
   

@@ -51,7 +51,7 @@ class SponsorBlockService {
           if (introDurationMs > 1000) {
             // Shifting forward in time: we subtract from adjustedPosition (i.e. delay highlight triggers by intro duration)
             final delayOffset = Duration(milliseconds: -introDurationMs);
-            debugPrint('SponsorBlockService: Detected $introDurationMs ms of intro skit. Applying offset: $delayOffset');
+            debugPrint('[SponsorBlock] Detected $introDurationMs ms of intro skit. Applying offset: $delayOffset');
             _ref.read(audioProvider.notifier).adjustLyricsOffset(delayOffset);
           }
         }

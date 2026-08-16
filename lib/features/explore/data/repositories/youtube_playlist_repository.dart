@@ -38,7 +38,7 @@ class YoutubePlaylistRepository {
       }
       return playlists;
     } catch (e) {
-      debugPrint('YoutubePlaylistRepository: fetchMyPlaylists error: $e');
+      debugPrint('[YoutubePlaylistRepo] fetchMyPlaylists error: $e');
       return [];
     }
   }
@@ -57,11 +57,11 @@ class YoutubePlaylistRepository {
           playlistId.startsWith('VLRD');
       
       if (isMix) {
-        debugPrint('[PlaylistRepo] Mix detected ($rawId), using next endpoint');
+        debugPrint('[YoutubePlaylistRepo] Mix detected ($rawId), using next endpoint');
         final data = await _client.post('next', {"playlistId": rawId});
         final queueItems = data['contents']?['singleColumnMusicWatchNextResultsRenderer']?['tabbedRenderer']?['watchNextTabbedResultsRenderer']?['tabs']?[0]?['tabRenderer']?['content']?['musicQueueRenderer']?['content']?['playlistPanelRenderer']?['contents'] ?? [];
         
-        debugPrint('[PlaylistRepo] Mix queue items count: ${queueItems.length}');
+        debugPrint('[YoutubePlaylistRepo] Mix queue items count: ${queueItems.length}');
         
         for (var qItem in queueItems) {
           final renderer = qItem['playlistPanelVideoRenderer'];
@@ -92,7 +92,7 @@ class YoutubePlaylistRepository {
         browseId = playlistId;
       }
 
-      debugPrint('[PlaylistRepo] Browse request ($browseId)');
+      debugPrint('[YoutubePlaylistRepo] Browse request ($browseId)');
       final data = await _client.post('browse', {"browseId": browseId});
       continuationToken = _parsePlaylistBatch(data, items);
 
@@ -108,7 +108,7 @@ class YoutubePlaylistRepository {
 
       // Fallback failover: If browse returned 0 items (e.g. for a community mix ID), try the next endpoint
       if (items.isEmpty) {
-        debugPrint('[PlaylistRepo] Browse returned 0 items for $browseId, attempting next endpoint failover');
+        debugPrint('[YoutubePlaylistRepo] Browse returned 0 items for $browseId, attempting next endpoint failover');
         final nextData = await _client.post('next', {"playlistId": rawId});
         final queueItems = nextData['contents']?['singleColumnMusicWatchNextResultsRenderer']?['tabbedRenderer']?['watchNextTabbedResultsRenderer']?['tabs']?[0]?['tabRenderer']?['content']?['musicQueueRenderer']?['content']?['playlistPanelRenderer']?['contents'] ?? [];
         for (var qItem in queueItems) {
@@ -131,9 +131,9 @@ class YoutubePlaylistRepository {
         }
       }
 
-      debugPrint('[PlaylistRepo] Playlist returned ${items.length} tracks');
+      debugPrint('[YoutubePlaylistRepo] Playlist returned ${items.length} tracks');
     } catch (e) {
-      debugPrint('YoutubePlaylistRepository: Error fetching playlist contents: $e');
+      debugPrint('[YoutubePlaylistRepo] Error fetching playlist contents: $e');
     }
     return items;
   }
@@ -153,7 +153,7 @@ class YoutubePlaylistRepository {
       final data = await _client.post(endpoint, payload);
       return data['status'] == 'STATUS_SUCCEEDED';
     } catch (e) {
-      debugPrint('YoutubePlaylistRepository: editYouTubePlaylist error: $e');
+      debugPrint('[YoutubePlaylistRepo] editYouTubePlaylist error: $e');
       return false;
     }
   }

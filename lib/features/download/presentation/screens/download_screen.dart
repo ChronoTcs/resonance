@@ -27,13 +27,19 @@ class _DownloadScreenState extends ConsumerState<DownloadScreen>
   @override
   void initState() {
     super.initState();
+    _urlController.addListener(_onUrlChanged);
     if (Platform.isAndroid) {
       _selectedType = DownloadType.audio;
     }
   }
 
+  void _onUrlChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
+    _urlController.removeListener(_onUrlChanged);
     _urlController.dispose();
     super.dispose();
   }
@@ -186,44 +192,59 @@ class _DownloadScreenState extends ConsumerState<DownloadScreen>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // URL input — modern filled style
-                      TextField(
-                        controller: _urlController,
-                        maxLines: 4,
-                        minLines: 2,
-                        style: theme.textTheme.bodyMedium,
-                        decoration: InputDecoration(
-                          hintText: 'Paste URL(s) or song name…\nOne per line for batch',
-                          hintStyle: TextStyle(
-                            color: theme.hintColor.withValues(alpha: 0.6),
-                            fontSize: 13,
-                          ),
-                          filled: true,
-                          fillColor: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide.none,
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide(
-                              color: theme.dividerColor.withValues(alpha: 0.08),
+                      // URL input — modern filled style with pinned clear button
+                      Stack(
+                        children: [
+                          TextField(
+                            controller: _urlController,
+                            maxLines: 4,
+                            minLines: 2,
+                            style: theme.textTheme.bodyMedium,
+                            decoration: InputDecoration(
+                              hintText: 'Paste URL(s) or song name…\nOne per line for batch',
+                              hintStyle: TextStyle(
+                                color: theme.hintColor.withValues(alpha: 0.6),
+                                fontSize: 13,
+                              ),
+                              filled: true,
+                              fillColor: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+                              contentPadding: const EdgeInsets.fromLTRB(14, 12, 44, 12),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: BorderSide.none,
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: BorderSide(
+                                  color: theme.dividerColor.withValues(alpha: 0.08),
+                                ),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: BorderSide(
+                                  color: theme.colorScheme.primary.withValues(alpha: 0.5),
+                                  width: 1.5,
+                                ),
+                              ),
                             ),
                           ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide(
-                              color: theme.colorScheme.primary.withValues(alpha: 0.5),
-                              width: 1.5,
+                          Positioned(
+                            top: 0,
+                            bottom: 0,
+                            right: 8,
+                            child: Center(
+                              child: ReusableHoverIconButton(
+                                icon: UIcons.regular.cross_small,
+                                iconSize: 14,
+                                padding: 4.0,
+                                scaleOnHover: 1.0,
+                                borderRadius: BorderRadius.circular(6),
+                                tooltip: 'Clear',
+                                onTap: () => _urlController.clear(),
+                              ),
                             ),
                           ),
-                          suffixIcon: IconButton(
-                            icon: Icon(AppIcons.close, size: 16),
-                            onPressed: () => _urlController.clear(),
-                            tooltip: 'Clear',
-                          ),
-                        ),
+                        ],
                       ),
                       const SizedBox(height: 12),
 
@@ -498,11 +519,11 @@ class _DownloadTileState extends ConsumerState<_DownloadTile> {
                       // Cancel button
                       if (item.status == DownloadStatus.queued ||
                           item.status == DownloadStatus.downloading)
-                        IconButton(
-                          visualDensity: VisualDensity.compact,
-                          icon: Icon(AppIcons.close, size: 16),
-                          padding: EdgeInsets.zero,
-                          onPressed: () => ref
+                        ReusableHoverIconButton(
+                          icon: UIcons.regular.cross,
+                          iconSize: 16,
+                          tooltip: 'Cancel',
+                          onTap: () => ref
                               .read(downloadProvider.notifier)
                               .cancelItem(item.id),
                         ),

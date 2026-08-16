@@ -11,8 +11,14 @@ class AppLifecycleService {
 
   AppLifecycleService(this._ref) {
     _listener = AppLifecycleListener(
+      onResume: () {
+        // Force immediate DirectX 11 / DWM swapchain refresh upon waking from idle/sleep
+        WidgetsBinding.instance.scheduleWarmUpFrame();
+      },
       onStateChange: (state) {
-        if (state == AppLifecycleState.hidden ||
+        if (state == AppLifecycleState.resumed) {
+          WidgetsBinding.instance.scheduleWarmUpFrame();
+        } else if (state == AppLifecycleState.hidden ||
             state == AppLifecycleState.paused ||
             state == AppLifecycleState.detached) {
           _ref.read(dataUsageServiceProvider).flush();

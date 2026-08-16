@@ -61,12 +61,21 @@ class MetadataCard extends StatelessWidget {
               ),
               _InfoLine(label: 'Album', value: track.album ?? 'Unknown Album'),
               if (track.date != null && track.date.isNotEmpty)
-                _InfoLine(label: 'Date', value: track.date),
+                _InfoLine(label: 'Year', value: _formatYear(track.date)),
             ],
           ),
         ),
       ),
     );
+  }
+
+  String _formatYear(String rawDate) {
+    final trimmed = rawDate.trim();
+    final match = RegExp(r'\b(19\d\d|20\d\d)\b').firstMatch(trimmed);
+    if (match != null) {
+      return match.group(1)!;
+    }
+    return trimmed;
   }
 }
 
@@ -241,15 +250,16 @@ class NextInQueueCard extends ConsumerWidget {
                   fontSize: 16,
                 ),
               ),
-              Text(
-                'Open queue',
-                style: TextStyle(
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.onSurface.withValues(alpha: 0.7),
-                  fontSize: 12,
-                ),
-              ),
+              // TODO(feature): Future interactive 'Open queue' button to trigger full queue overlay/modal.
+              // Text(
+              //   'Open queue',
+              //   style: TextStyle(
+              //     color: Theme.of(
+              //       context,
+              //     ).colorScheme.onSurface.withValues(alpha: 0.7),
+              //     fontSize: 12,
+              //   ),
+              // ),
             ],
           ),
           const SizedBox(height: 12),

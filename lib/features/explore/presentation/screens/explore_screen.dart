@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:silky_scroll/silky_scroll.dart';
 import 'package:resonance/core/utils/uicons.dart';
+import 'package:resonance/core/widgets/widgets.dart';
 import 'package:resonance/features/dashboard/presentation/widgets/top_navigation_header.dart';
 import 'package:resonance/features/explore/presentation/providers/explore_provider.dart';
 import 'package:resonance/features/explore/presentation/widgets/explore_music_tile.dart';
@@ -57,6 +58,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> with SingleTicker
     return Scaffold(
       body: Column(
         children: [
+          const OfflineBanner(),
           TopNavigationHeader(
             left: currentQuery.isEmpty
                 ? Text(

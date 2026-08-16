@@ -8,13 +8,21 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'playlist_provider.dart';
 import '../data/models/playlist_model.dart';
+import '../presentation/widgets/import_playlist_dialog.dart';
 
 import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/core/utils/app_icons.dart';
 import 'package:resonance/features/player/application/providers/audio_provider.dart';
 
 class PlaylistIOHelper {
-  static Future<void> importPlaylist(BuildContext context, WidgetRef ref) async {
+  static void importPlaylist(BuildContext context, WidgetRef ref, {bool isStreamTab = true}) {
+    showDialog(
+      context: context,
+      builder: (context) => ImportPlaylistDialog(isStreamTab: isStreamTab),
+    );
+  }
+
+  static Future<void> importJsonFileDirectly(BuildContext context, WidgetRef ref) async {
     try {
       final FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
@@ -46,13 +54,19 @@ class PlaylistIOHelper {
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Playlist imported successfully!')),
+          const SnackBar(
+            content: Text('Playlist imported successfully!'),
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to import playlist: $e')),
+          SnackBar(
+            content: Text('Failed to import playlist: $e'),
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
     }

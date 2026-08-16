@@ -14,6 +14,7 @@ import '../data/models/download_item.dart';
 import '../data/datasources/downloader_bridge_datasource.dart';
 import '../../../core/data/services/media_cache_service.dart';
 import '../../../core/data/services/cache_manager.dart';
+import '../../../core/data/services/po_token_provider_service.dart';
 import '../../../core/application/services/permission_service.dart';
 import '../../../../core/utils/path_utils.dart';
 import '../../library/application/library_provider.dart';
@@ -624,13 +625,40 @@ class DownloadService {
           ),
         );
 
+        final poToken = poTokenProviderService.activePoToken;
+        final clients = <yt.YoutubeApiClient>[];
+        if (poToken != null && poToken.isNotEmpty) {
+          clients.add(
+            yt.YoutubeApiClient(
+              {
+                'context': {
+                  'client': {
+                    'clientName': 'WEB',
+                    'clientVersion': '2.20250312.04.00',
+                    'userAgent':
+                        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                    'hl': 'en',
+                    'timeZone': 'UTC',
+                    'utcOffsetMinutes': 0,
+                  },
+                },
+                'serviceIntegrityDimensions': {
+                  'poToken': poToken,
+                },
+              },
+              'https://www.youtube.com/youtubei/v1/player?prettyPrint=false',
+            ),
+          );
+        }
+        clients.addAll([
+          yt.YoutubeApiClient.androidVr,
+          yt.YoutubeApiClient.ios,
+        ]);
+
         final manifest = await ytClient.videos.streamsClient
             .getManifest(
               video.id,
-              ytClients: [
-                yt.YoutubeApiClient.androidVr,
-                yt.YoutubeApiClient.ios,
-              ],
+              ytClients: clients,
             )
             .timeout(Duration(seconds: settings.connectionTimeout));
 

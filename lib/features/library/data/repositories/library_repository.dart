@@ -32,7 +32,7 @@ class LibraryRepository {
       
       await _cacheManager.synchronizedWrite(file, content);
     } catch (e) {
-      debugPrint('LibraryRepository: Failed to save cache: $e');
+      debugPrint('[LibraryRepo] Failed to save cache: $e');
     } finally {
       _isSaving = false;
     }
@@ -155,6 +155,25 @@ class LibraryRepository {
           }
         }
 
+        // If existing item was saved with missing album or duration, backfill from audio tags
+        if (item.album == null || item.duration == null) {
+          try {
+            final f = File(path);
+            if (f.existsSync()) {
+              final tags = _extractTagsFromFile(f, getImage: false);
+              if (item.album == null && tags.album != null && tags.album!.isNotEmpty) {
+                item = item.copyWith(album: tags.album);
+              }
+              if (item.duration == null && tags.duration != null) {
+                item = item.copyWith(duration: tags.duration);
+              }
+              if (item.date == null && tags.date != null) {
+                item = item.copyWith(date: tags.date);
+              }
+            }
+          } catch (_) {}
+        }
+
         finalItems.add(item);
       } else {
         pathsToParse.add(path);
@@ -215,7 +234,7 @@ class LibraryRepository {
               await sourceFile.copy(destPath);
               finalPath = destPath;
             } catch (e) {
-              debugPrint('LibraryRepository: Failed to copy imported file to music folder: $e');
+              debugPrint('[LibraryRepo] Failed to copy imported file to music folder: $e');
               finalPath = sourcePath;
             }
           }
@@ -236,7 +255,7 @@ class LibraryRepository {
           await targetArtFile.writeAsBytes(tags.pictureBytes!);
           localThumbnailUrl = targetArtFile.path;
         } catch (e) {
-          debugPrint('LibraryRepository: Failed to write embedded art: $e');
+          debugPrint('[LibraryRepo] Failed to write embedded art: $e');
         }
       }
 
@@ -271,7 +290,7 @@ class LibraryRepository {
             }
           }
         } catch (e) {
-          debugPrint('LibraryRepository: Online metadata enrichment error: $e');
+          debugPrint('[LibraryRepo] Online metadata enrichment error: $e');
         }
       }
 
@@ -298,11 +317,11 @@ class LibraryRepository {
 }
 
 /// Extracts tags and embedded picture safely from audio file
-({String? title, String? artist, String? album, String? date, Duration? duration, Uint8List? pictureBytes}) _extractTagsFromFile(File file) {
+({String? title, String? artist, String? album, String? date, Duration? duration, Uint8List? pictureBytes}) _extractTagsFromFile(File file, {bool getImage = true}) {
   try {
-    final tag = readMetadata(file, getImage: true);
+    final tag = readMetadata(file, getImage: getImage);
     Uint8List? pictureBytes;
-    if (tag.pictures.isNotEmpty) {
+    if (getImage && tag.pictures.isNotEmpty) {
       pictureBytes = tag.pictures.first.bytes;
     }
 
@@ -319,8 +338,8 @@ class LibraryRepository {
       duration: tag.duration,
       pictureBytes: pictureBytes,
     );
-  } catch (e) {
-    debugPrint('LibraryRepository: Error reading tags from ${file.path}: $e');
+  } catch (_) {
+    // Graceful fallback for raw stream dumps or audio files without standard metadata atoms
     return (
       title: null,
       artist: null,
@@ -389,6 +408,9 @@ Future<List<MediaItem>> _parseBatch(Map<String, dynamic> args) async {
   for (var path in paths) {
     String title = p.basenameWithoutExtension(path);
     String? artist;
+    String? album;
+    String? date;
+    Duration? duration;
     String fileName = p.basenameWithoutExtension(path);
     String id;
 
@@ -405,23 +427,22 @@ Future<List<MediaItem>> _parseBatch(Map<String, dynamic> args) async {
     try {
       final file = File(path);
       if (file.existsSync()) {
+        final genericTag = readMetadata(file, getImage: false);
+        if (genericTag.title?.isNotEmpty == true) title = genericTag.title!;
+        if (genericTag.artist?.isNotEmpty == true) artist = genericTag.artist!;
+        if (genericTag.album?.isNotEmpty == true) album = genericTag.album!;
+        if (genericTag.year != null) date = genericTag.year.toString();
+        duration = genericTag.duration;
+
         final rawTag = readAllMetadata(file, getImage: false);
-        
-        // Populate setVideoId from container-specific frames
         if (rawTag is Mp3Metadata) {
-          title = rawTag.songName?.isNotEmpty == true ? rawTag.songName! : title;
-          artist = rawTag.leadPerformer ?? rawTag.bandOrOrchestra;
           setVideoId = rawTag.customMetadata['YT_ID'];
         } else if (rawTag is VorbisMetadata) {
-          title = rawTag.title.firstOrNull?.isNotEmpty == true ? rawTag.title.first : title;
-          artist = rawTag.artist.firstOrNull;
           final descTag = rawTag.description.firstWhere((d) => d.startsWith('YT_ID:'), orElse: () => '');
           if (descTag.isNotEmpty) {
             setVideoId = descTag.replaceFirst('YT_ID:', '');
           }
         } else if (rawTag is Mp4Metadata) {
-          title = rawTag.title?.isNotEmpty == true ? rawTag.title! : title;
-          artist = rawTag.artist;
           final lyrics = rawTag.lyrics ?? '';
           final match = RegExp(r'YT_ID:(.*)').firstMatch(lyrics);
           if (match != null) {
@@ -430,7 +451,7 @@ Future<List<MediaItem>> _parseBatch(Map<String, dynamic> args) async {
         }
       }
     } catch (e) {
-      debugPrint('LibraryRepository Isolate: Metadata extraction error for $path: $e');
+      debugPrint('[LibraryRepo] Isolate: Metadata extraction error for $path: $e');
     }
 
     // Attach local art cover — check local/images/ first, then stream/images/
@@ -469,6 +490,9 @@ Future<List<MediaItem>> _parseBatch(Map<String, dynamic> args) async {
       path: path,
       title: title,
       artist: artist,
+      album: album,
+      date: date,
+      duration: duration,
       thumbnailUrl: localThumbnailUrl,
       type: 'audio',
       setVideoId: setVideoId,

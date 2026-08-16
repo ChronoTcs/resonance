@@ -16,19 +16,27 @@ class ResonanceContextMenuItem {
 
 class ResonanceContextMenu extends StatelessWidget {
   final List<ResonanceContextMenuItem> items;
-  final Widget child;
+  final Widget? child;
   final String tooltip;
+  final IconData? icon;
+  final double iconSize;
+  final Color? iconColor;
 
   const ResonanceContextMenu({
     super.key,
     required this.items,
-    required this.child,
+    this.child,
     this.tooltip = 'More options',
+    this.icon,
+    this.iconSize = 16,
+    this.iconColor,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final borderRadius = BorderRadius.circular(8);
+
     return Theme(
       data: theme.copyWith(
         cardColor: theme.colorScheme.surface.withValues(alpha: 0.95),
@@ -36,6 +44,8 @@ class ResonanceContextMenu extends StatelessWidget {
       ),
       child: PopupMenuButton<int>(
         tooltip: tooltip,
+        borderRadius: borderRadius,
+        padding: EdgeInsets.zero,
         itemBuilder: (context) => List.generate(items.length, (index) {
           final item = items[index];
           return PopupMenuItem<int>(
@@ -61,7 +71,15 @@ class ResonanceContextMenu extends StatelessWidget {
             ),
           );
         }),
-        child: child,
+        child: child ??
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Icon(
+                icon ?? Icons.more_vert,
+                size: iconSize,
+                color: iconColor ?? theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
       ),
     );
   }

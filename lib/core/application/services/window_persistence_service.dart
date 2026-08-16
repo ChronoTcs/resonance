@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:resonance/features/player/presentation/notifiers/mini_player_view_notifier.dart';
@@ -10,6 +11,17 @@ class WindowPersistenceService extends WindowListener {
   final WidgetRef _ref;
 
   WindowPersistenceService(this._ref);
+
+  @override
+  void onWindowFocus() {
+    // Re-present Direct3D 11 swapchain immediately when the user clicks/focuses the window
+    WidgetsBinding.instance.scheduleWarmUpFrame();
+  }
+
+  @override
+  void onWindowRestore() {
+    WidgetsBinding.instance.scheduleWarmUpFrame();
+  }
 
   @override
   void onWindowResized() async {
@@ -50,10 +62,17 @@ class AppWindowStyleListener extends WindowListener {
   @override
   void onWindowLeaveFullScreen() {
     windowManager.setTitleBarStyle(TitleBarStyle.hidden);
+    WidgetsBinding.instance.scheduleWarmUpFrame();
   }
 
   @override
   void onWindowRestore() {
     windowManager.setTitleBarStyle(TitleBarStyle.hidden);
+    WidgetsBinding.instance.scheduleWarmUpFrame();
+  }
+
+  @override
+  void onWindowFocus() {
+    WidgetsBinding.instance.scheduleWarmUpFrame();
   }
 }

@@ -114,7 +114,7 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
             child: SafeArea(
               child: Column(
                 children: [
-                  if (!widget.isEmbedded) ...[
+                   if (!widget.isEmbedded) ...[
                     // Drag handle and Modal Header
                     Container(
                       margin: const EdgeInsets.only(top: 12, bottom: 8),
@@ -130,8 +130,9 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
                       child: Row(
                         children: [
                           CollapseButton(
-                            iconSize: 30,
+                            iconSize: 20,
                             tooltip: 'Minimize',
+                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
                             onTap: () => Navigator.pop(context),
                           ),
                            const LyricsOffsetControl(),
@@ -174,9 +175,9 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
               left: 16,
               child: SafeArea(
                 child: CollapseButton(
-                  iconSize: 32,
-                  tooltip: 'Close Lyrics',
-                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.8),
+                  iconSize: 20,
+                  tooltip: 'Close',
+                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
                   onTap: () => ref.read(lyricsOverlayProvider.notifier).toggle(),
                 ),
               ),
@@ -185,7 +186,7 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
           // Overlay Translation Toggle (Only if embedded)
           if (widget.isEmbedded && translationState.isSystemEnabled && lyrics.isNotEmpty)
             Positioned(
-              top: MediaQuery.of(context).padding.top + 20,
+              top: MediaQuery.of(context).padding.top + 8,
               right: 16,
               child: SafeArea(
                 child: Row(

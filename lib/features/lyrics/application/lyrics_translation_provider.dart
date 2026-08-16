@@ -107,7 +107,7 @@ class LyricsTranslationNotifier extends Notifier<LyricsTranslationState> {
     // Also listen to lyricsProvider changes (when base lyrics are loaded)
     ref.listen(lyricsProvider, (prev, next) {
       if (!next.isLoading && next.lyrics.isNotEmpty) {
-        debugPrint('LyricsTranslation: Base lyrics loaded. Evaluating translation fetch...');
+        debugPrint('[LyricsTranslation] Base lyrics loaded. Evaluating translation fetch...');
         _triggerLoadingForCurrentMode();
       }
     });
@@ -263,9 +263,11 @@ class LyricsTranslationNotifier extends Notifier<LyricsTranslationState> {
     _triggerLoadingForCurrentMode();
   }
 
-  /// Unified fetcher that populates both translation and romanization.
-  /// RESILIENCE: Decouples cache discovery from network fetching.
+  /// Unified Fetch: Single-hop API call translating and romanizing simultaneously
   Future<void> _fetchAndCacheUnified() async {
+    if (!state.isSystemEnabled) return;
+    if (state.mode == LyricsTranslationMode.original) return;
+
     final currentTrack = ref.read(audioProvider).currentTrack;
     if (currentTrack == null) return;
     final trackIdAtStart = currentTrack.id ?? currentTrack.path;
@@ -279,7 +281,7 @@ class LyricsTranslationNotifier extends Notifier<LyricsTranslationState> {
 
     final originalLyrics = ref.read(lyricsProvider).lyrics;
     if (originalLyrics.isEmpty) {
-      debugPrint('LyricsTranslation: Base lyrics not yet available for $trackIdAtStart. Waiting...');
+      debugPrint('[LyricsTranslation] Base lyrics not yet available for $trackIdAtStart. Waiting...');
       return;
     }
 
@@ -352,7 +354,7 @@ class LyricsTranslationNotifier extends Notifier<LyricsTranslationState> {
               fetchedRomanized ??= List.from(originalLyrics);
               // Background fire-and-forget write to satisfy hasAllNeeded in future
               romanCacheFile.writeAsString(service.stringify(fetchedRomanized)).catchError((e) {
-                debugPrint('LyricsTranslation: Silent ROM healing failed - $e');
+                debugPrint('[LyricsTranslation] Silent ROM healing failed - $e');
                 return romanCacheFile;
               });
               
@@ -396,7 +398,7 @@ class LyricsTranslationNotifier extends Notifier<LyricsTranslationState> {
         state = state.copyWith(isLoading: false);
       }
     } catch (e) {
-      debugPrint('LyricsTranslation: FAILED fetch for $trackIdAtStart - $e');
+      debugPrint('[LyricsTranslation] FAILED fetch for $trackIdAtStart - $e');
       
       // Only set error if we are still on the same track
       final trackIdError = ref.read(audioProvider).currentTrack?.id ?? 

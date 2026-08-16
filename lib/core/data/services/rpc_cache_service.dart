@@ -35,7 +35,7 @@ class RpcCacheService {
       }
       return url;
     } catch (e) {
-      debugPrint('Album art RPC cache/fetch error: $e');
+      debugPrint('[DiscordRPC] Album art cache/fetch error: $e');
       return null;
     }
   }

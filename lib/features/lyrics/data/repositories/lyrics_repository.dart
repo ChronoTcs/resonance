@@ -28,14 +28,14 @@ class LyricsRepository {
     // 1. Memory Cache Check
     if (_lastTrackId == trackId && _lastLyrics != null && !forceSync) {
       debugPrint(
-        'LyricsRepository: [CACHE] Returning memory cached lyrics for $trackId',
+        '[LyricsRepo][CACHE] Returning memory cached lyrics for $trackId',
       );
       return _lastLyrics!;
     }
 
     if (!forceSync && _inFlightRequests.containsKey(trackId)) {
       debugPrint(
-        'LyricsRepository: [MUTEX] Joining existing in-flight request for $trackId',
+        '[LyricsRepo][MUTEX] Joining existing in-flight request for $trackId',
       );
       return await _inFlightRequests[trackId]!;
     }
@@ -68,7 +68,7 @@ class LyricsRepository {
         lyricsFolderPath,
       );
       if (customContent != null) {
-        debugPrint('LyricsRepository: Found lyrics in Custom Folder Override');
+        debugPrint('[LyricsRepo] Found lyrics in Custom Folder Override');
         final isVideo = customContent.contains('[source: unison-video]');
         return (
           lines: LyricsParser.parse(customContent),
@@ -80,7 +80,7 @@ class LyricsRepository {
     // 2. Check Local File Folder (Same folder as audio file)
     final localFolderContent = await localSource.getFromLocalTrackFolder(track);
     if (localFolderContent != null) {
-      debugPrint('LyricsRepository: Found lyrics in Local Audio Directory');
+      debugPrint('[LyricsRepo] Found lyrics in Local Audio Directory');
       final isVideo = localFolderContent.contains('[source: unison-video]');
       return (
         lines: LyricsParser.parse(localFolderContent),
@@ -93,7 +93,7 @@ class LyricsRepository {
     if (cachedRecord != null && !forceSync) {
       final cachedIsSynced = LyricsParser.hasTimeTags(cachedRecord.content);
       if (cachedIsSynced || !track.isStreaming) {
-        debugPrint('LyricsRepository: Found lyrics in Stream Cache Folder');
+        debugPrint('[LyricsRepo] Found lyrics in Stream Cache Folder');
         final isVideo = cachedRecord.content.contains('[source: unison-video]');
         return (
           lines: LyricsParser.parse(cachedRecord.content),
@@ -109,7 +109,7 @@ class LyricsRepository {
 
       // 4a. Unison API (First Priority - Word-Synced)
       debugPrint(
-        'LyricsRepository: Querying Unison API for word-synced lyrics...',
+        '[LyricsRepo] Querying Unison API for word-synced lyrics...',
       );
 
       // Try video ID first (video-synced)
@@ -126,13 +126,13 @@ class LyricsRepository {
         final parsedLyrics = LyricsParser.parse(foundContent);
         if (!_verifyDurationMatch(parsedLyrics, track.duration)) {
           debugPrint(
-            'LyricsRepository: Discarding Unison lyrics due to duration mismatch.',
+            '[LyricsRepo] Discarding Unison lyrics due to duration mismatch.',
           );
           foundContent = null;
           isUnisonVideo = false;
         } else {
           debugPrint(
-            'LyricsRepository: Successfully matched and fetched Unison lyrics',
+            '[LyricsRepo] Successfully matched and fetched Unison lyrics',
           );
         }
       }
@@ -140,7 +140,7 @@ class LyricsRepository {
       // 4b. LRCLIB API (Second Priority - Line-Synced)
       if (foundContent == null) {
         debugPrint(
-          'LyricsRepository: Querying LRCLIB API for line-synced lyrics...',
+          '[LyricsRepo] Querying LRCLIB API for line-synced lyrics...',
         );
         final durationSecs = track.duration?.inSeconds ?? 0;
         final parsed = LyricsParser.parseHyphenatedTitle(
@@ -177,13 +177,13 @@ class LyricsRepository {
         }
 
         if (foundContent != null) {
-          debugPrint('LyricsRepository: Successfully fetched LRCLIB lyrics');
+          debugPrint('[LyricsRepo] Successfully fetched LRCLIB lyrics');
         }
       }
 
       // 4c. Musixmatch API Bypass (Third Priority - Fallback Synced)
       if (foundContent == null) {
-        debugPrint('LyricsRepository: Querying Musixmatch API fallback...');
+        debugPrint('[LyricsRepo] Querying Musixmatch API fallback...');
         final parsed = LyricsParser.parseHyphenatedTitle(
           track.title,
           track.artist ?? '',
@@ -194,7 +194,7 @@ class LyricsRepository {
         );
         if (foundContent != null) {
           debugPrint(
-            'LyricsRepository: Successfully fetched Musixmatch lyrics',
+            '[LyricsRepo] Successfully fetched Musixmatch lyrics',
           );
         }
       }
@@ -202,14 +202,14 @@ class LyricsRepository {
       // 4d. Genius API Bypass (Fourth Priority - Plain Text Fallback)
       if (foundContent == null) {
         debugPrint(
-          'LyricsRepository: Querying Genius API plain text fallback...',
+          '[LyricsRepo] Querying Genius API plain text fallback...',
         );
         final query = track.artist != null
             ? '${track.title} ${track.artist}'
             : track.title;
         foundContent = await remoteSource.fetchFromGenius(query);
         if (foundContent != null) {
-          debugPrint('LyricsRepository: Successfully fetched Genius lyrics');
+          debugPrint('[LyricsRepo] Successfully fetched Genius lyrics');
         }
       }
 

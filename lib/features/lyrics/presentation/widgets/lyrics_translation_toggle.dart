@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../application/lyrics_translation_provider.dart';
 import 'package:resonance/core/widgets/widgets.dart';
+import 'package:resonance/core/application/services/network_connectivity_service.dart';
 
 class LyricsTranslationToggle extends ConsumerWidget {
   final double iconSize;
@@ -21,12 +22,15 @@ class LyricsTranslationToggle extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(lyricsTranslationProvider);
     final theme = Theme.of(context);
+    final isOnline = ref.watch(networkConnectivityProvider.select((s) => s.isOnline));
     final effectiveColor = color ?? theme.colorScheme.onSurface;
     
     String label = 'OFF';
     String tooltipMessage = 'Enable Translation';
     
-    if (state.mode == LyricsTranslationMode.romanized) {
+    if (!isOnline) {
+      tooltipMessage = 'Translation requires an internet connection';
+    } else if (state.mode == LyricsTranslationMode.romanized) {
       label = 'ROM';
       tooltipMessage = 'Switch to Original Lyrics';
     } else if (state.mode == LyricsTranslationMode.translated) {
@@ -41,8 +45,11 @@ class LyricsTranslationToggle extends ConsumerWidget {
     return ReusableHoverIconButton(
       label: label,
       tooltip: tooltipMessage,
+      isDisabled: !isOnline,
       isSelected: state.mode != LyricsTranslationMode.original,
-      onTap: () => ref.read(lyricsTranslationProvider.notifier).cycleMode(),
+      onTap: isOnline
+          ? () => ref.read(lyricsTranslationProvider.notifier).cycleMode()
+          : null,
       padding: padding,
       iconSize: iconSize,
       color: effectiveColor,

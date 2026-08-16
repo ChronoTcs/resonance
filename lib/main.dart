@@ -79,9 +79,9 @@ Future<void> _cleanSharedPreferences() async {
               // Delete SQLite journal files to clear residual locks
               await File('$path-wal').delete().catchError((_) => File(''));
               await File('$path-shm').delete().catchError((_) => File(''));
-              debugPrint('Cleanup: Deleted legacy cache DB at $path');
+              debugPrint('[Cleanup] Deleted legacy cache DB at $path');
             } catch (e) {
-              debugPrint('Cleanup: Non-fatal error deleting DB at $path: $e');
+              debugPrint('[Cleanup] Non-fatal error deleting DB at $path: $e');
             }
           }
         }
@@ -91,7 +91,7 @@ Future<void> _cleanSharedPreferences() async {
 
     await prefs.setBool(cleanFlag, true);
   } catch (e) {
-    debugPrint('Failed to clean SharedPreferences footprint: $e');
+    debugPrint('[Cleanup] Failed to clean SharedPreferences footprint: $e');
   }
 }
 
@@ -138,7 +138,7 @@ Map<String, dynamic> _performCleanupIsolate(Map<String, dynamic> data) {
         newPlaylistsStr = jsonEncode(playlistsList);
       }
     } catch (e) {
-      debugPrint('Cleanup Isolate: Error parsing playlist JSON: $e');
+      debugPrint('[Cleanup] Isolate: Error parsing playlist JSON: $e');
     }
   }
 
@@ -153,7 +153,7 @@ Map<String, dynamic> _performCleanupIsolate(Map<String, dynamic> data) {
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
-  debugPrint('Resonance: Starting main()...');
+  debugPrint('[ResonanceInit] Starting main()...');
   WidgetsFlutterBinding.ensureInitialized();
 
   await poTokenProviderService.start();
@@ -170,9 +170,9 @@ void main() async {
     Future.microtask(() async {
       try {
         await (player.platform as dynamic).setProperty('ao', 'audiotrack');
-        debugPrint('Audio Engine: Switched output backend to audiotrack');
+        debugPrint('[AudioEngine] Switched output backend to audiotrack');
       } catch (e) {
-        debugPrint('Audio Engine: Failed to switch output backend: $e');
+        debugPrint('[AudioEngine] Failed to switch output backend: $e');
       }
     });
   }

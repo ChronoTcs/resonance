@@ -20,29 +20,29 @@ class DownloadsSettingsSection extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Downloads Settings',
+              'Network Settings',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey),
             ),
             const SizedBox(height: 16),
 
-            // Default Source Selector
+            // Default Stream Engine Selector
             ResonanceSelector<String>(
               icon: UIcons.regular.globe,
               title: 'Default Source',
-              subtitle: 'Select default download provider',
-              value: settings.defaultSource,
+              subtitle: 'Select default streaming engine',
+              value: settings.streamSource,
               onChanged: (val) {
-                notifier.saveSettings(settings.copyWith(defaultSource: val));
+                notifier.saveSettings(settings.copyWith(streamSource: val));
               },
               items: const [
-                ResonanceSelectorItem(value: 'ytmusic', label: 'YouTube Music'),
-                ResonanceSelectorItem(value: 'youtube', label: 'YouTube'),
+                ResonanceSelectorItem(value: 'ipc', label: 'Native IPC First (yt-dlp)'),
+                ResonanceSelectorItem(value: 'dart', label: 'In-App Dart First (youtube_explode)'),
               ],
             ),
 
             const SizedBox(height: 16),
             const Text(
-              'Advanced Limits',
+              'Advance Limits Downloads',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey),
             ),
             const SizedBox(height: 12),

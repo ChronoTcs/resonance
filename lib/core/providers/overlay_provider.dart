@@ -7,6 +7,10 @@ class LyricsOverlayNotifier extends Notifier<bool> {
   void toggle() {
     state = !state;
   }
+
+  void setVisible(bool visible) {
+    state = visible;
+  }
 }
 
 final lyricsOverlayProvider = NotifierProvider<LyricsOverlayNotifier, bool>(() {

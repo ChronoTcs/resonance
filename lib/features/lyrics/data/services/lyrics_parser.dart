@@ -105,7 +105,7 @@ class LyricsParser {
 
     // Fallback: If no time tags found, treat as plain text with 2s intervals
     if (parsedLines.isEmpty && content.trim().isNotEmpty) {
-      debugPrint('LyricsParser: No time tags found. Parsing as plain text.');
+      debugPrint('[LyricsParser] No time tags found. Parsing as plain text.');
       final plainLines =
           content.split('\n').where((l) => l.trim().isNotEmpty).toList();
       for (int i = 0; i < plainLines.length; i++) {

@@ -140,7 +140,7 @@ class LibraryNotifier extends Notifier<LibraryState> {
     if (cachedMedia.isNotEmpty) {
       cachedMedia.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
       state = state.copyWith(allMedia: cachedMedia);
-      debugPrint('LibraryNotifier: Loaded ${cachedMedia.length} items from cache.');
+      debugPrint('[LibraryNotifier] Loaded ${cachedMedia.length} items from cache.');
     }
 
     // 2. Background Scan if Cache is Stale (12h Threshold)
@@ -150,7 +150,7 @@ class LibraryNotifier extends Notifier<LibraryState> {
       final lastScan = DateTime.tryParse(lastScanStr);
       if (lastScan != null && DateTime.now().difference(lastScan).inHours < 12) {
         shouldScan = false;
-        debugPrint('LibraryNotifier: Cache is fresh (${DateTime.now().difference(lastScan).inHours}h old). Skipping auto-scan.');
+        debugPrint('[LibraryNotifier] Cache is fresh (${DateTime.now().difference(lastScan).inHours}h old). Skipping auto-scan.');
       }
     }
 
@@ -262,7 +262,7 @@ class LibraryNotifier extends Notifier<LibraryState> {
     mediaList.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
 
     if (listEquals(state.allMedia, mediaList)) {
-      debugPrint('LibraryNotifier: No changes detected after scan.');
+      debugPrint('[LibraryNotifier] No changes detected after scan.');
       state = state.copyWith(isLoading: false);
       return;
     }
@@ -292,9 +292,9 @@ class LibraryNotifier extends Notifier<LibraryState> {
       if (await file.exists()) {
         try {
           await file.delete();
-          debugPrint('Library removal: Deleted main file $path');
+          debugPrint('[LibraryNotifier] Deleted main file $path');
         } catch (e) {
-          debugPrint('Library removal: File deletion postponed (locked by process): $path');
+          debugPrint('[LibraryNotifier] File deletion postponed (locked by process): $path');
         }
       }
 
@@ -304,7 +304,7 @@ class LibraryNotifier extends Notifier<LibraryState> {
         final lrcFile = File(lrcPath);
         if (await lrcFile.exists()) {
           await lrcFile.delete();
-          debugPrint('Library removal: Deleted local lyrics $lrcPath');
+          debugPrint('[LibraryNotifier] Deleted local lyrics $lrcPath');
         }
       }
 
@@ -316,7 +316,7 @@ class LibraryNotifier extends Notifier<LibraryState> {
         final customLrcFile = File(customLrcPath);
         if (await customLrcFile.exists()) {
           await customLrcFile.delete();
-          debugPrint('Library removal: Deleted custom lyrics $customLrcPath');
+          debugPrint('[LibraryNotifier] Deleted custom lyrics $customLrcPath');
         }
       }
 
@@ -324,7 +324,7 @@ class LibraryNotifier extends Notifier<LibraryState> {
       await ref.read(mediaCacheServiceProvider).removeFromCache(songId);
 
     } catch (e) {
-        debugPrint('Error deleting track: $e');
+        debugPrint('[LibraryNotifier] Error deleting track: $e');
     }
     
     state = state.copyWith(
@@ -353,7 +353,7 @@ class LibraryNotifier extends Notifier<LibraryState> {
     if (cachedMedia.isNotEmpty) {
       cachedMedia.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
       state = state.copyWith(allMedia: cachedMedia);
-      debugPrint('LibraryNotifier: Instant Awakening! Loaded ${cachedMedia.length} items.');
+      debugPrint('[LibraryNotifier] Instant Awakening! Loaded ${cachedMedia.length} items.');
     }
   }
 
@@ -420,7 +420,7 @@ class LibraryNotifier extends Notifier<LibraryState> {
         );
       }
     } catch (e) {
-      debugPrint('LibraryNotifier: Failed to import audio files: $e');
+      debugPrint('[LibraryNotifier] Failed to import audio files: $e');
       state = state.copyWith(isLoading: false);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

@@ -127,7 +127,7 @@ class WindowsSystemMediaService with WindowListener {
 
       await _updateTaskbarThumbnail(isPlaying);
     } catch (e) {
-      debugPrint("Metadata update error: $e");
+      debugPrint("[WindowsSMTC] Metadata update error: $e");
     }
   }
 
@@ -136,7 +136,7 @@ class WindowsSystemMediaService with WindowListener {
     try {
       await _updateTaskbarThumbnail(isPlaying);
     } catch (e) {
-      debugPrint("Taskbar status update error: $e");
+      debugPrint("[WindowsTaskbar] Status update error: $e");
     }
   }
 
@@ -147,21 +147,26 @@ class WindowsSystemMediaService with WindowListener {
     await _updateTaskbarThumbnail(isPlaying, force: true);
   }
 
+  int _lastProgressSec = -1;
+
   Future<void> updateTimeline(Duration position, Duration duration) async {
     if (!Platform.isWindows) return;
 
     try {
+      final currentSec = position.inSeconds;
+      // Throttle Taskbar progress updates to at most once per second
+      if (currentSec == _lastProgressSec) return;
+      _lastProgressSec = currentSec;
+
       if (duration.inMilliseconds > 0) {
-        if (await windowManager.isVisible()) {
-          await WindowsTaskbar.setProgress(
-            position.inMilliseconds,
-            duration.inMilliseconds,
-          );
-        }
+        await WindowsTaskbar.setProgress(
+          position.inMilliseconds,
+          duration.inMilliseconds,
+        );
       }
     } catch (e) {
       if (e is! PlatformException) {
-        debugPrint("Taskbar timeline update error: $e");
+        debugPrint("[WindowsTaskbar] Timeline update error: $e");
       }
     }
   }
@@ -282,7 +287,7 @@ class WindowsSystemMediaService with WindowListener {
         await WindowsTaskbar.resetThumbnailToolbar();
       }
     } catch (e) {
-      debugPrint("Taskbar reset error: $e");
+      debugPrint("[WindowsTaskbar] Taskbar reset error: $e");
     }
   }
 }

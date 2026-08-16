@@ -233,6 +233,9 @@ def handle_download(cmd: dict):
         "progress_hooks": [build_progress_hook(download_id)],
         "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
         "extractor_args": {
+            "youtube": {
+                "player_client": ["android", "ios", "web", "mweb"]
+            },
             "youtubepot-bgutilhttp": {
                 "base_url": "http://127.0.0.1:4416"
             }
@@ -361,11 +364,13 @@ def handle_resolve_stream(cmd: dict):
             "quiet": True,
             "no_warnings": True,
             "nocheckcertificate": True,
-            "format": "bestaudio/best",
-            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "format": "ba[ext=m4a]/ba[ext=mp4]/bestaudio/best",
             "youtube_include_dash_manifest": False,
             "youtube_include_hls_playlist": False,
             "extractor_args": {
+                "youtube": {
+                    "player_client": ["android", "ios", "web", "mweb"]
+                },
                 "youtubepot-bgutilhttp": {
                     "base_url": "http://127.0.0.1:4416"
                 }

@@ -146,7 +146,7 @@ class QueueService {
     _loopMode = loopMode;
     _isShuffleEnabled = isShuffleEnabled;
     int nextIndex = getNextIndex(fromCompletion: fromCompletion);
-    debugPrint('QueueService.getNextTrack: nextIndex=$nextIndex');
+    debugPrint('[QueueService] getNextTrack: nextIndex=$nextIndex');
     if (nextIndex != -1) {
       _currentIndex = nextIndex;
       return _queue[_currentIndex];

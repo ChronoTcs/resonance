@@ -122,10 +122,10 @@ class YoutubeSearchRepository {
         }
       }
 
-      debugPrint('[SearchRepo] search: found ${results.length} YTM tracks for "$query"');
+      debugPrint('[YoutubeSearchRepo] search: found ${results.length} YTM tracks for "$query"');
       return results;
     } catch (e) {
-      debugPrint('YoutubeSearchRepository: Search error: $e');
+      debugPrint('[YoutubeSearchRepo] Search error: $e');
       return [];
     }
   }
@@ -200,19 +200,16 @@ class YoutubeSearchRepository {
         }
       }
 
-      debugPrint('[SearchRepo] searchPlaylists: found ${results.length} playlists for "$query"');
+      debugPrint('[YoutubeSearchRepo] searchPlaylists: found ${results.length} playlists for "$query"');
       return results;
     } catch (e) {
-      debugPrint('YoutubeSearchRepository: searchPlaylists error: $e');
+      debugPrint('[YoutubeSearchRepo] searchPlaylists error: $e');
       return [];
     }
   }
 
-
-
   /// Fetches Spotify-like radio recommendations seeded from [videoId].
-
-  /// Uses YT Music /next endpoint with RDAMVM prefix (same as Metrolist).
+  /// Uses YT Music /next endpoint with RDAMVM prefix.
   /// Returns up to [limit] tracks, excluding the seed track itself.
   Future<List<MediaItem>> getRadioRecommendations(
     String videoId, {
@@ -285,10 +282,10 @@ class YoutubeSearchRepository {
       }
 
       debugPrint(
-          '[RadioRec] Got ${recommendations.length} recommendations for $videoId');
+          '[YoutubeSearchRepo] Got ${recommendations.length} recommendations for $videoId');
       return recommendations;
     } catch (e) {
-      debugPrint('[RadioRec] Failed for $videoId: $e');
+      debugPrint('[YoutubeSearchRepo] Radio recommendations failed for $videoId: $e');
       return [];
     }
   }
@@ -348,7 +345,7 @@ class YoutubeSearchRepository {
       // In a real app, you'd navigate the deep JSON tree
       return []; // Implementation detail omitted for brevity, but same logic as search
     } catch (e) {
-      debugPrint('YoutubeSearchRepository: Featured music error: $e');
+      debugPrint('[YoutubeSearchRepo] Featured music error: $e');
       return [];
     }
   }
@@ -364,7 +361,7 @@ class YoutubeSearchRepository {
         data['contents']?['tabbedSingleColumnBrowseResultsRenderer']?['tabs']?[0]?['tabRenderer']?['content']?['sectionListRenderer']?['contents'] ??
         data['contents']?['singleColumnBrowseResultsRenderer']?['tabs']?[0]?['tabRenderer']?['content']?['sectionListRenderer']?['contents'] ?? [];
       
-      debugPrint('[HomeFeed] Total raw sections: ${rawContents.length}');
+      debugPrint('[YoutubeSearchRepo] Total raw home feed sections: ${rawContents.length}');
 
       for (var section in rawContents) {
         // Log what renderer types each section has
@@ -389,12 +386,12 @@ class YoutubeSearchRepository {
           title = _client.getText(tastebuilder['primaryText']) ?? _client.getText(tastebuilder['heading']) ?? "Personalize Your Feed";
           contentList = tastebuilder['contents'] ?? [];
         } else {
-          debugPrint('[HomeFeed] SKIP section — unknown renderer: $rendererKeys');
+          debugPrint('[YoutubeSearchRepo] SKIP section — unknown renderer: $rendererKeys');
           continue;
         }
         
         if (title.isEmpty) {
-          debugPrint('[HomeFeed] SKIP section — empty title, renderer: $rendererKeys');
+          debugPrint('[YoutubeSearchRepo] SKIP section — empty title, renderer: $rendererKeys');
           continue;
         }
         
@@ -438,7 +435,7 @@ class YoutubeSearchRepository {
               ));
             } else {
               skippedItems++;
-              debugPrint('[HomeFeed] SKIP item in "$title" — no browseId/videoId. nav keys: ${nav?.keys?.toList()}');
+              debugPrint('[YoutubeSearchRepo] SKIP item in "$title" — no browseId/videoId. nav keys: ${nav?.keys?.toList()}');
             }
           } else if (responsiveRow != null) {
             // Quick Picks — flat track rows
@@ -463,16 +460,16 @@ class YoutubeSearchRepository {
           }
         }
         
-        debugPrint('[HomeFeed] Section "$title": ${items.length} items, $skippedItems skipped');
+        debugPrint('[YoutubeSearchRepo] Section "$title": ${items.length} items, $skippedItems skipped');
         
         if (items.isNotEmpty) {
           sections.add(ExploreHomeSection(title: title, items: items));
         }
       }
-      debugPrint('[HomeFeed] Final sections returned: ${sections.length}');
+      debugPrint('[YoutubeSearchRepo] Final sections returned: ${sections.length}');
       return sections;
     } catch (e, stack) {
-      debugPrint('YoutubeSearchRepository: getHomeFeed error: $e\n$stack');
+      debugPrint('[YoutubeSearchRepo] getHomeFeed error: $e\n$stack');
       return [];
     }
   }

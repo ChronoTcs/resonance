@@ -45,6 +45,57 @@ class PlaylistDetailScreen extends ConsumerWidget {
 
           final tracks = playlist.tracks;
           final firstTrack = tracks.isNotEmpty ? tracks.first : null;
+          final bool isLiked = playlist.name == 'Liked Songs';
+          final bool isDark = theme.brightness == Brightness.dark;
+
+          Widget bannerContent;
+          if (isLiked) {
+            bannerContent = Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    theme.colorScheme.primaryContainer,
+                    theme.colorScheme.primary.withValues(alpha: 0.35),
+                  ],
+                ),
+              ),
+              child: Center(
+                child: Icon(
+                  UIcons.solid.heart,
+                  size: 88,
+                  color: theme.colorScheme.primary.withValues(alpha: isDark ? 0.35 : 0.2),
+                ),
+              ),
+            );
+          } else if (firstTrack != null) {
+            bannerContent = MediaArtworkWidget(
+              item: firstTrack,
+              width: double.infinity,
+              height: double.infinity,
+              borderRadius: 0,
+              placeholderIcon: UIcons.regular.list_music,
+            );
+          } else {
+            bannerContent = Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    theme.colorScheme.primary.withValues(alpha: 0.8),
+                    theme.colorScheme.tertiary.withValues(alpha: 0.6),
+                  ],
+                ),
+              ),
+              child: Icon(
+                UIcons.regular.list_music,
+                size: 100,
+                color: Colors.white.withValues(alpha: 0.3),
+              ),
+            );
+          }
 
           return SilkyCustomScrollView(
             slivers: [
@@ -101,17 +152,15 @@ class PlaylistDetailScreen extends ConsumerWidget {
                   ),
                   if (state.online.any((p) => p.id == playlist.id))
                     ResonanceContextMenu(
+                      icon: AppIcons.moreVert,
+                      iconSize: 18,
+                      tooltip: 'More options',
                       items: PlaylistIOHelper.buildPlaylistMenuItems(
                         context: context,
                         ref: ref,
                         playlist: playlist,
                         isOnline: true,
                         onDeleteSuccess: () => ref.read(selectedPlaylistIdProvider.notifier).setSelectedId(null),
-                      ),
-                      child: ReusableHoverIconButton(
-                        icon: AppIcons.moreVert,
-                        tooltip: 'More options',
-                        iconSize: 18,
                       ),
                     ),
                 ],
@@ -133,37 +182,26 @@ class PlaylistDetailScreen extends ConsumerWidget {
                         ),
                       ),
                       titlePadding: const EdgeInsets.only(left: 48, bottom: 16),
-                      background: firstTrack != null
-                          ? ColorFiltered(
-                              colorFilter: ColorFilter.mode(
-                                Colors.black.withValues(alpha: 0.4),
-                                BlendMode.darken,
-                              ),
-                              child: MediaArtworkWidget(
-                                item: firstTrack,
-                                width: double.infinity,
-                                height: double.infinity,
-                                borderRadius: 0,
-                                placeholderIcon: UIcons.regular.list_music,
-                              ),
-                            )
-                          : Container(
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: [
-                                    theme.colorScheme.primary.withValues(alpha: 0.8),
-                                    theme.colorScheme.tertiary.withValues(alpha: 0.6),
-                                  ],
-                                ),
-                              ),
-                              child: Icon(
-                                UIcons.regular.list_music,
-                                size: 100,
-                                color: Colors.white.withValues(alpha: 0.3),
+                      background: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          bannerContent,
+                          DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  theme.colorScheme.surface.withValues(alpha: isDark ? 0.7 : 0.55),
+                                  theme.colorScheme.surface.withValues(alpha: 0.05),
+                                  theme.colorScheme.surface.withValues(alpha: isDark ? 0.85 : 0.75),
+                                ],
+                                stops: const [0.0, 0.45, 1.0],
                               ),
                             ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),

@@ -5,6 +5,7 @@ import 'package:silky_scroll/silky_scroll.dart';
 import 'package:resonance/core/utils/app_icons.dart';
 import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/core/widgets/widgets.dart';
+import 'package:resonance/core/application/services/network_connectivity_service.dart';
 import 'package:resonance/features/explore/data/models/explore_home.dart';
 import 'package:resonance/features/explore/data/repositories/youtube_playlist_repository.dart';
 import 'package:resonance/features/explore/presentation/providers/explore_provider.dart';
@@ -30,6 +31,35 @@ class _ExploreHomeFeedSectionState
     return homeFeedAsync.when(
       data: (sections) {
         if (sections.isEmpty) {
+          final isOnline = ref.watch(
+            networkConnectivityProvider.select((s) => s.isOnline),
+          );
+          if (!isOnline) {
+            return SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        UIcons.regular.wifi_slash,
+                        size: 32,
+                        color: theme.colorScheme.outline,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Explore feed is unavailable offline',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }
           return const SliverToBoxAdapter(child: SizedBox.shrink());
         }
 

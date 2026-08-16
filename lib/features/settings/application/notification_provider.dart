@@ -127,7 +127,7 @@ class NotificationNotifier extends Notifier<NotificationState> {
         state = state.copyWith(isDropdownVisible: true);
       }
     } catch (e) {
-      debugPrint('Notification click restore failed: $e');
+      debugPrint('[NotificationNotifier] Notification click restore failed: $e');
     }
   }
 
@@ -137,6 +137,8 @@ class NotificationNotifier extends Notifier<NotificationState> {
     bool isError = false,
     String? target,
   }) async {
+    debugPrint('[Notification]${isError ? " [ERROR]" : ""} $title: $message');
+
     // 1. Add to in-app notification list
     final newItem = NotificationItem(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -165,7 +167,7 @@ class NotificationNotifier extends Notifier<NotificationState> {
           payload: target,
         );
       } catch (e) {
-        debugPrint('Windows local notification show failed: $e');
+        debugPrint('[NotificationNotifier] Windows local notification show failed: $e');
       }
     }
 
@@ -187,7 +189,7 @@ class NotificationNotifier extends Notifier<NotificationState> {
           payload: target,
         );
       } catch (e) {
-        debugPrint('Android local notification show failed: $e');
+        debugPrint('[NotificationNotifier] Android local notification show failed: $e');
       }
     }
   }

@@ -41,7 +41,7 @@ class DataUsageService {
     final current = _prefs.getInt(_totalBytesKey) ?? 0;
     await _prefs.setInt(_totalBytesKey, current + toFlush);
     _bufferedBytes = 0;
-    debugPrint('DataUsageService: Flushed $toFlush bytes to disk.');
+    debugPrint('[DataUsage] Flushed $toFlush bytes to disk.');
   }
 
   Future<void> resetUsage() async {

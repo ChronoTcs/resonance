@@ -23,16 +23,16 @@ class TranslationCacheCleanup {
               deletedCount++;
             }
           } catch (e) {
-            debugPrint('TranslationCacheCleanup: Failed to check/delete ${entity.path}: $e');
+            debugPrint('[TranslationCacheCleanup] Failed to check/delete ${entity.path}: $e');
           }
         }
       }
 
       if (deletedCount > 0) {
-        debugPrint('TranslationCacheCleanup: Deleted $deletedCount expired translation files.');
+        debugPrint('[TranslationCacheCleanup] Deleted $deletedCount expired translation files.');
       }
     } catch (e) {
-      debugPrint('TranslationCacheCleanup: Cleanup failed - $e');
+      debugPrint('[TranslationCacheCleanup] Cleanup failed - $e');
     }
   }
 }

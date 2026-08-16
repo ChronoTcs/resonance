@@ -88,7 +88,7 @@ class DownloaderBridgeDatasource {
       
       _eventController.add(evt);
     } catch (e) {
-      debugPrint('DownloaderBridgeDatasource: Error decoding JSON: $line');
+      debugPrint('[DownloaderBridge] Error decoding JSON: $line');
     }
   }
 
@@ -107,7 +107,7 @@ class DownloaderBridgeDatasource {
       _process?.stdin.writeln(line);
       await _process?.stdin.flush();
     } catch (e) {
-      debugPrint('DownloaderBridgeDatasource: Error writing to stdin: $e');
+      debugPrint('[DownloaderBridge] Error writing to stdin: $e');
     }
   }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/core/widgets/widgets.dart';
+import 'package:resonance/features/settings/application/app_behavior_provider.dart';
 import 'package:resonance/features/settings/application/update_provider.dart';
 import 'package:resonance/features/settings/data/models/release_model.dart';
 
@@ -28,6 +29,7 @@ class _ReleaseManagerScreenState extends ConsumerState<ReleaseManagerScreen> {
     final theme = Theme.of(context);
     final updateState = ref.watch(updateProvider);
     final updateNotifier = ref.read(updateProvider.notifier);
+    final appBehavior = ref.watch(appBehaviorProvider);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -128,6 +130,39 @@ class _ReleaseManagerScreenState extends ConsumerState<ReleaseManagerScreen> {
             ),
           )
         else ...[
+          // ── Section 0: Update Preferences ──────────────────────────────────
+          _buildSectionHeader(context, 'Update Preferences', UIcons.regular.settings),
+          const SizedBox(height: 10),
+          Material(
+            color: theme.colorScheme.surface,
+            clipBehavior: Clip.antiAlias,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: theme.dividerColor.withValues(alpha: 0.08)),
+            ),
+            child: Column(
+              children: [
+                ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  leading: Icon(UIcons.regular.cloud_download, size: 18, color: theme.primaryColor),
+                  title: const Text(
+                    'Automatic Updates',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: Text(
+                    'Automatically download and stage updates in the background when available',
+                    style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                  trailing: ResonanceSwitch(
+                    value: appBehavior.autoUpdate,
+                    onChanged: (val) => ref.read(appBehaviorProvider.notifier).setAutoUpdate(val),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+
           // ── Section 1: Latest Release ──────────────────────────────────────
           if (updateState.latestRelease != null) ...[
             _buildSectionHeader(context, 'Latest Release', UIcons.regular.star),

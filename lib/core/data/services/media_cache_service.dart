@@ -10,8 +10,8 @@ import 'package:resonance/core/domain/models/media_item.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'stream_cache_tracker_service.dart';
 import '../../../features/settings/application/maintenance_provider.dart';
-import '../../../features/explore/data/repositories/youtube_stream_repository.dart';
 import '../../utils/thumbnail_utils.dart';
+import '../../application/services/network_connectivity_service.dart';
 
 final mediaCacheServiceProvider = Provider<MediaCacheService>((ref) {
   final dataUsageService = ref.watch(dataUsageServiceProvider);
@@ -71,7 +71,7 @@ class MediaCacheService {
     final file = File(p.join(dir.path, '$safeId.m4a'));
 
     if (file.existsSync()) {
-      debugPrint('MediaCacheService: Cache hit for $songId');
+      debugPrint('[MediaCache] Cache hit for $songId');
       // Update tracker setiap kali file diakses
       _trackerService.updateLastPlayed(songId);
       return file.path;
@@ -80,7 +80,7 @@ class MediaCacheService {
     // If currently being downloaded, return streamUrl immediately so the player streams instantly instead of blocking
     if (_activeDownloads.containsKey(songId)) {
       debugPrint(
-        'MediaCacheService: Existing prefetch in progress for $songId. Returning streamUrl to avoid blocking.',
+        '[MediaCache] Existing prefetch in progress for $songId. Returning streamUrl to avoid blocking.',
       );
       return streamUrl;
     }
@@ -90,14 +90,14 @@ class MediaCacheService {
     if (failedAt != null &&
         DateTime.now().difference(failedAt) < _kFailureCooldown) {
       debugPrint(
-        'MediaCacheService: [$songId] In failure cooldown. Streaming directly.',
+        '[MediaCache] [$songId] In failure cooldown. Streaming directly.',
       );
       return streamUrl;
     }
     _failedDownloads.remove(songId); // cooldown expired — clear it
 
     debugPrint(
-      'MediaCacheService: Cache miss for $songId. Starting background cache...',
+      '[MediaCache] Cache miss for $songId. Starting background cache...',
     );
     final downloadFuture =
         _downloadAudioInBackground(
@@ -107,7 +107,7 @@ class MediaCacheService {
           userAgent: userAgent,
         ).catchError((e) {
           debugPrint(
-            'MediaCacheService: Caught unhandled background failure for $songId: $e',
+            '[MediaCache] Caught unhandled background failure for $songId: $e',
           );
         });
     _activeDownloads[songId] = downloadFuture;
@@ -141,12 +141,15 @@ class MediaCacheService {
       final activeUA =
           userAgent ??
           (url.contains('c=ANDROID_VR')
-              ? 'com.google.android.apps.youtube.vr.oculus/1.56.21 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip'
+              ? 'com.google.android.apps.youtube.vr.oculus/1.56.21 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1)'
               : url.contains('c=IOS')
               ? 'com.google.ios.youtube/19.29.1 (iPhone14,3; U; CPU iOS 15_6_1 like Mac OS X)'
               : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36");
 
-      final isAndroid = activeUA.toLowerCase().contains('android');
+      final isMobileClient = activeUA.toLowerCase().contains('android') ||
+          activeUA.toLowerCase().contains('ios') ||
+          url.contains('c=ANDROID_VR') ||
+          url.contains('c=IOS');
 
       final Map<String, String> resolvedHeaders = {
         'User-Agent': activeUA,
@@ -156,7 +159,7 @@ class MediaCacheService {
         'Range': 'bytes=0-',
       };
 
-      if (!isAndroid) {
+      if (!isMobileClient) {
         resolvedHeaders.addAll({
           'Origin': 'https://www.youtube.com',
           'Referer': 'https://www.youtube.com/',
@@ -187,35 +190,13 @@ class MediaCacheService {
 
         _dataUsageService.addBytes(downloadedBytes);
         debugPrint(
-          'MediaCacheService: Audio cached successfully for $songId ($downloadedBytes bytes)',
+          '[MediaCache] Audio cached successfully for $songId ($downloadedBytes bytes)',
         );
 
         // Tandai sebagai 'biasa diputar' agar masuk siklus 30 hari
         _trackerService.updateLastPlayed(songId);
 
         _scheduleCleanup();
-      } else if (response.statusCode == 403) {
-        // HTTP 403: Stream URL expired or signature rejected by specific CDN node.
-        // Force-resolve a fresh stream URL directly via YoutubeStreamRepository to avoid circular provider loop.
-        debugPrint(
-          'MediaCacheService: [403 Retry] Stream URL expired for $songId. Resolving fresh URL via repo...',
-        );
-        final freshUrl = await _ref
-            .read(youtubeStreamRepositoryProvider)
-            .getStreamUrl(songId);
-        if (freshUrl != null &&
-            freshUrl != url &&
-            freshUrl.startsWith('http')) {
-          return await _downloadAudioInBackground(
-            songId,
-            freshUrl,
-            savePath,
-            userAgent: userAgent,
-          );
-        }
-        throw Exception(
-          'Media Integrity Check failed: Server returned 403 after retry',
-        );
       } else {
         throw Exception(
           'Media Integrity Check failed: Server returned ${response.statusCode}',
@@ -226,7 +207,7 @@ class MediaCacheService {
       // [Deadlock Guard] Record failure time to suppress retry spam
       _failedDownloads[songId] = DateTime.now();
 
-      debugPrint('MediaCacheService: Audio caching failed for $songId: $e');
+      debugPrint('[MediaCache] Audio caching failed for $songId: $e');
       if (sink != null) {
         try {
           await sink.close();
@@ -237,7 +218,7 @@ class MediaCacheService {
         try {
           await file.delete();
           debugPrint(
-            'MediaCacheService: Cleaned up corrupted session for $songId',
+            '[MediaCache] Cleaned up corrupted session for $songId',
           );
         } catch (_) {}
       }
@@ -257,7 +238,7 @@ class MediaCacheService {
     final file = File(p.join(dir.path, '$safeId.lrc'));
 
     if (file.existsSync()) {
-      debugPrint('MediaCacheService: Lyrics Cache hit for $songId');
+      debugPrint('[MediaCache] Lyrics Cache hit for $songId');
       return await file.readAsString();
     }
 
@@ -271,12 +252,12 @@ class MediaCacheService {
         if (!dir.existsSync()) await dir.create(recursive: true);
 
         await file.writeAsString(lyrics);
-        debugPrint('MediaCacheService: Lyrics SAVED to cache: ${file.path}');
+        debugPrint('[MediaCache] Lyrics SAVED to cache: ${file.path}');
         _trackerService.updateLastPlayed(songId);
         return lyrics;
       }
     } catch (e) {
-      debugPrint('MediaCacheService: Lyrics fetch/cache error: $e');
+      debugPrint('[MediaCache] Lyrics fetch/cache error: $e');
     }
     return null;
   }
@@ -290,6 +271,8 @@ class MediaCacheService {
 
   Future<String?> cacheArtwork(String songId, String? url, {bool forceOverwrite = false}) async {
     if (url == null || !url.startsWith('http')) return null;
+    // ponytail: skip download entirely if offline — no point queuing it
+    if (!_ref.read(networkConnectivityProvider).isOnline) return null;
     final upgradedUrl = ThumbnailUtils.upgradeResolution(url);
     // in-flight guard prevents duplicate concurrent downloads unless forceOverwrite is requested
     if (!forceOverwrite && _activeArtworkDownloads.contains(songId)) return null;
@@ -313,7 +296,7 @@ class MediaCacheService {
       final response = await _client.get(Uri.parse(upgradedUrl));
       if (response.statusCode == 200) {
         await file.writeAsBytes(response.bodyBytes);
-        debugPrint('MediaCacheService: Artwork cached safely: ${file.path}');
+        debugPrint('[MediaCache] Artwork cached safely: ${file.path}');
 
         // Also sync to local/images/ if this track has a local download copy
         final localDir = await _cacheManager.getLocalImagesDir();
@@ -327,7 +310,7 @@ class MediaCacheService {
         return file.path;
       }
     } catch (e) {
-      debugPrint('MediaCacheService: Artwork caching error: $e');
+      debugPrint('[MediaCache] Artwork caching error: $e');
     } finally {
       _activeArtworkDownloads.remove(songId);
     }
@@ -345,7 +328,7 @@ class MediaCacheService {
         _scheduleCleanup();
       }
     } catch (e) {
-      debugPrint('Art caching error: $e');
+      debugPrint('[MediaCache] Art caching error: $e');
     }
   }
 
@@ -387,7 +370,7 @@ class MediaCacheService {
       await _cacheManager.synchronizedWrite(file, jsonEncode(map));
       _scheduleCleanup();
     } catch (e) {
-      debugPrint('Metadata caching error: $e');
+      debugPrint('[MediaCache] Metadata caching error: $e');
     }
   }
 
@@ -417,7 +400,7 @@ class MediaCacheService {
       await _cacheManager.synchronizedWrite(file, jsonEncode(item.toJson(includeArt: false)));
       debugPrint('[MediaCache] Forced sidecar update for $songId (album/art enriched)');
     } catch (e) {
-      debugPrint('Metadata forced-save error: $e');
+      debugPrint('[MediaCache] Metadata forced-save error: $e');
     }
   }
 
@@ -430,7 +413,7 @@ class MediaCacheService {
       final json = jsonDecode(await file.readAsString());
       return MediaItem.fromJson(json);
     } catch (e) {
-      debugPrint('Metadata retrieval error: $e');
+      debugPrint('[MediaCache] Metadata retrieval error: $e');
       return null;
     }
   }
@@ -465,22 +448,22 @@ class MediaCacheService {
             try {
               await file.delete();
               debugPrint(
-                'MediaCacheService: Cache removal SUCCESS: ${p.basename(file.path)}',
+                '[MediaCache] Cache removal SUCCESS: ${p.basename(file.path)}',
               );
             } catch (e) {
               debugPrint(
-                'MediaCacheService: File removal postponed (locked by player): ${p.basename(file.path)}',
+                '[MediaCache] File removal postponed (locked by player): ${p.basename(file.path)}',
               );
             }
           } else {
             debugPrint(
-              'MediaCacheService: [CRITICAL] Blocked deletion of non-cache file: ${file.path}',
+              '[MediaCache] [CRITICAL] Blocked deletion of non-cache file: ${file.path}',
             );
           }
         }
       }
     } catch (e) {
-      debugPrint('Cache removal error for $songId: $e');
+      debugPrint('[MediaCache] Cache removal error for $songId: $e');
     }
   }
 
@@ -500,7 +483,7 @@ class MediaCacheService {
       }
     } catch (e) {
       debugPrint(
-        'MediaCacheService: Error calculating size for ${dir.path}: $e',
+        '[MediaCache] Error calculating size for ${dir.path}: $e',
       );
     }
     return total;
@@ -603,10 +586,10 @@ class MediaCacheService {
             } catch (_) {}
           }
         }
-        debugPrint('MediaCacheService: Cleared category $category');
+        debugPrint('[MediaCache] Cleared category $category');
       }
     } catch (e) {
-      debugPrint('MediaCacheService: Clear category error: $e');
+      debugPrint('[MediaCache] Clear category error: $e');
     }
   }
 
@@ -632,9 +615,9 @@ class MediaCacheService {
           }
         }
       }
-      debugPrint('MediaCacheService: FULL CACHE CLEARED');
+      debugPrint('[MediaCache] FULL CACHE CLEARED');
     } catch (e) {
-      debugPrint('Album art RPC cache/fetch error: $e');
+      debugPrint('[MediaCache] Album art RPC cache/fetch error: $e');
     }
   }
 

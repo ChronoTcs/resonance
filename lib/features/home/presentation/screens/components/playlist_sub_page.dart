@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:silky_scroll/silky_scroll.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:resonance/core/utils/app_icons.dart';
+import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/features/playlist/application/playlist_provider.dart';
 import 'package:resonance/features/home/presentation/providers/home_navigation_provider.dart';
 
@@ -41,6 +42,7 @@ class PlaylistSubPage extends ConsumerWidget {
           itemBuilder: (context, index) {
             final playlist = allPlaylists[index];
             final bool isOnline = state.online.contains(playlist);
+            final bool isLiked = playlist.name == 'Liked Songs';
             final firstTrack = playlist.tracks.isNotEmpty ? playlist.tracks.first : null;
 
             return Card(
@@ -57,31 +59,46 @@ class PlaylistSubPage extends ConsumerWidget {
                     children: [
                       ClipRRect(
                         borderRadius: BorderRadius.circular(8),
-                        child: firstTrack?.albumArt != null
-                            ? Image.memory(
-                                firstTrack!.albumArt!,
+                        child: isLiked
+                            ? Container(
                                 width: 56,
                                 height: 56,
-                                fit: BoxFit.cover,
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.primaryContainer,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                alignment: Alignment.center,
+                                child: Icon(
+                                  UIcons.solid.heart,
+                                  color: theme.colorScheme.onPrimaryContainer,
+                                  size: 24,
+                                ),
                               )
-                            : (firstTrack?.thumbnailUrl != null)
-                                ? CachedNetworkImage(
-                                    imageUrl: firstTrack!.thumbnailUrl!,
+                            : firstTrack?.albumArt != null
+                                ? Image.memory(
+                                    firstTrack!.albumArt!,
                                     width: 56,
                                     height: 56,
                                     fit: BoxFit.cover,
-                                    placeholder: (c, u) => Container(color: theme.colorScheme.surfaceContainerHighest, child: Icon(AppIcons.music, size: 20)),
-                                    errorWidget: (c, u, e) => Container(color: theme.colorScheme.surfaceContainerHighest, child: Icon(AppIcons.music, size: 20)),
                                   )
-                                : Container(
-                                    width: 56,
-                                    height: 56,
-                                    color: theme.colorScheme.surfaceContainerHighest,
-                                    child: Icon(
-                                      AppIcons.playlist,
-                                      color: theme.colorScheme.onSurfaceVariant,
-                                    ),
-                                  ),
+                                : (firstTrack?.thumbnailUrl != null)
+                                    ? CachedNetworkImage(
+                                        imageUrl: firstTrack!.thumbnailUrl!,
+                                        width: 56,
+                                        height: 56,
+                                        fit: BoxFit.cover,
+                                        placeholder: (c, u) => Container(color: theme.colorScheme.surfaceContainerHighest, child: Icon(AppIcons.music, size: 20)),
+                                        errorWidget: (c, u, e) => Container(color: theme.colorScheme.surfaceContainerHighest, child: Icon(AppIcons.music, size: 20)),
+                                      )
+                                    : Container(
+                                        width: 56,
+                                        height: 56,
+                                        color: theme.colorScheme.surfaceContainerHighest,
+                                        child: Icon(
+                                          AppIcons.playlist,
+                                          color: theme.colorScheme.onSurfaceVariant,
+                                        ),
+                                      ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
