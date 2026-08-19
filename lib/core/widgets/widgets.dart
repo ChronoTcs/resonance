@@ -19,4 +19,5 @@ export 'overlays/blur_transition_overlay.dart';
 export 'overlays/glossy_animated_background.dart';
 export 'wrappers/keyboard_listener_wrapper.dart';
 export 'common/shimmer_skeleton.dart';
+export 'common/loading_skeletons.dart';
 export 'common/offline_banner.dart';

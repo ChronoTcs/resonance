@@ -199,6 +199,36 @@ class AudioNotifier extends Notifier<AudioState> {
         if (currentId != null) {
           ref.read(playbackArchitectureServiceProvider).invalidate(currentId);
         }
+
+        final shouldStop = _engine.handlePlaybackError(error);
+        if (shouldStop) {
+          state = state.copyWith(isPlaying: false, isLoading: false);
+          return;
+        }
+
+        // Transparent 403 self-heal: re-resolve same track before skipping
+        final errStr = error.toString().toLowerCase();
+        final is403 = errStr.contains('403') || errStr.contains('forbidden') || errStr.contains('expired');
+        if (is403 && currentId != null && (state.currentTrack?.isStreaming ?? false)) {
+          debugPrint('[AudioPlayer] 403 detected — attempting self-heal re-resolve for $currentId');
+          Future.microtask(() async {
+            try {
+              final url = await ref.read(playbackArchitectureServiceProvider)
+                  .getStreamUrl(currentId, forceRefresh: true);
+              if (url != null) {
+                debugPrint('[AudioPlayer] Self-heal success — resuming $currentId');
+                await _player.open(Media(url));
+                return;
+              }
+            } catch (_) {}
+            debugPrint('[AudioPlayer] Self-heal failed — skipping to next');
+            if (ref.read(mediaFocusProvider) == MediaFocus.audio) {
+              next(fromCompletion: true);
+            }
+          });
+          return;
+        }
+
         ref
             .read(notificationProvider.notifier)
             .showNotification(
@@ -206,11 +236,6 @@ class AudioNotifier extends Notifier<AudioState> {
               'Streaming / Playback error: $error',
               isError: true,
             );
-        final shouldStop = _engine.handlePlaybackError(error);
-        if (shouldStop) {
-          state = state.copyWith(isPlaying: false, isLoading: false);
-          return;
-        }
         if (ref.read(mediaFocusProvider) == MediaFocus.audio) {
           Future.microtask(() => next(fromCompletion: true));
         }
@@ -379,6 +404,10 @@ class AudioNotifier extends Notifier<AudioState> {
   }
 
   void addTrackToQueue(MediaItem item) {
+    final itemId = item.id ?? item.path;
+    final exists = state.queue.any((t) => (t.id ?? t.path) == itemId);
+    if (exists) return; // Queue deduplication guard
+
     if (state.queue.isEmpty) {
       playPlaylist([item]);
     } else {
@@ -392,11 +421,23 @@ class AudioNotifier extends Notifier<AudioState> {
   /// Batch-appends tracks to queue. Fires _updateNextTrack once — not once per track.
   void addTracksToQueue(List<MediaItem> items) {
     if (items.isEmpty) return;
+    // Deduplicate incoming tracks against current queue and within the batch
+    final existingIds = state.queue.map((t) => t.id ?? t.path).toSet();
+    final deduped = <MediaItem>[];
+    for (final item in items) {
+      final id = item.id ?? item.path;
+      if (!existingIds.contains(id)) {
+        deduped.add(item);
+        existingIds.add(id);
+      }
+    }
+    if (deduped.isEmpty) return;
+
     if (state.queue.isEmpty) {
-      playPlaylist(items);
+      playPlaylist(deduped);
     } else {
-      _queue.appendTracks(items);
-      state = state.copyWith(queue: [...state.queue, ...items]);
+      _queue.appendTracks(deduped);
+      state = state.copyWith(queue: [...state.queue, ...deduped]);
       _updateNextTrack();
     }
   }

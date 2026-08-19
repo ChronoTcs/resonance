@@ -62,9 +62,9 @@ class StreamResolutionService {
 
     debugPrint('[StreamResolution] Stream URL resolved for $songId');
 
-    // Trigger background caching as side effects for non-session-locked HTTP streams (non-blocking)
+    // Defer disk caching by 10s — gives player 100% bandwidth to fill demuxer buffer
     if (streamUrl.startsWith('http') && !streamUrl.contains('c=ANDROID_VR')) {
-      Future.microtask(() => cacheService.getAudioPath(songId, streamUrl));
+      Future.delayed(const Duration(seconds: 10), () => cacheService.getAudioPath(songId, streamUrl));
     }
     Future.microtask(() => cacheService.saveMetadata(songId, item));
 
@@ -106,24 +106,28 @@ class StreamResolutionService {
 /// Infrastructure configurator for MPV-specific settings.
 /// All operations are fire-and-forget (via [Future.microtask]).
 class MpvConfigurator {
-  /// Redirects the MPV buffer/cache to [customPath] for stable network streaming.
+  /// Redirects the MPV buffer/cache to [customPath] and applies EBU R128 loudness normalization.
   static void applyCacheSettings(dynamic player, String? customPath) {
-    if (customPath == null || customPath.isEmpty) return;
-
     Future.microtask(() async {
       try {
-        final mpvTemp = Directory(p.join(customPath, 'mpv_temp'));
-        if (!mpvTemp.existsSync()) {
-          mpvTemp.createSync(recursive: true);
+        if (customPath != null && customPath.isNotEmpty) {
+          final mpvTemp = Directory(p.join(customPath, 'mpv_temp'));
+          if (!mpvTemp.existsSync()) {
+            mpvTemp.createSync(recursive: true);
+          }
+          await (player.platform as dynamic).setProperty('cache', 'yes');
+          await (player.platform as dynamic).setProperty('cache-dir', mpvTemp.path);
+          await (player.platform as dynamic).setProperty('demuxer-max-bytes', '100MiB');
+          await (player.platform as dynamic).setProperty('demuxer-max-back-bytes', '50MiB');
+          await (player.platform as dynamic).setProperty('demuxer-lavf-o', 'reconnect=1,reconnect_streamed=1,reconnect_delay_max=5');
+          await (player.platform as dynamic).setProperty('network-timeout', '10');
+          await (player.platform as dynamic).setProperty('tls-verify', 'no');
+          debugPrint('[MpvConfigurator] Cache redirected to: ${mpvTemp.path}');
         }
-        await (player.platform as dynamic).setProperty('cache', 'yes');
-        await (player.platform as dynamic).setProperty('cache-dir', mpvTemp.path);
-        await (player.platform as dynamic).setProperty('demuxer-max-bytes', '100MiB');
-        await (player.platform as dynamic).setProperty('demuxer-max-back-bytes', '50MiB');
-        await (player.platform as dynamic).setProperty('demuxer-lavf-o', 'reconnect=1,reconnect_streamed=1,reconnect_delay_max=5');
-        await (player.platform as dynamic).setProperty('network-timeout', '10');
-        await (player.platform as dynamic).setProperty('tls-verify', 'no');
-        debugPrint('[MpvConfigurator] Cache redirected to: ${mpvTemp.path}');
+
+        // EBU R128 Loudness Normalization via FFmpeg libavfilter
+        await (player.platform as dynamic).setProperty('af', 'lavfi=[loudnorm=I=-14:TP=-1.5:LRA=11]');
+        debugPrint('[MpvConfigurator] Loudness normalization applied (lavfi loudnorm I=-14, TP=-1.5)');
       } catch (e) {
         debugPrint('[MpvConfigurator] Failed to set properties: $e');
       }

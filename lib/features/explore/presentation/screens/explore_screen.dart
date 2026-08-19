@@ -5,10 +5,12 @@ import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/core/widgets/widgets.dart';
 import 'package:resonance/features/dashboard/presentation/widgets/top_navigation_header.dart';
 import 'package:resonance/features/explore/presentation/providers/explore_provider.dart';
+import 'package:resonance/features/home/presentation/providers/recently_played_provider.dart';
 import 'package:resonance/features/explore/presentation/widgets/explore_music_tile.dart';
 import 'package:resonance/features/explore/presentation/widgets/explore_playlist_card_tile.dart';
 import 'package:resonance/features/explore/presentation/widgets/explore_recent_plays_section.dart';
 import 'package:resonance/features/explore/presentation/widgets/explore_home_feed_section.dart';
+import 'package:resonance/features/explore/presentation/widgets/explore_personalized_sections.dart';
 
 class ExploreScreen extends ConsumerStatefulWidget {
   const ExploreScreen({super.key});
@@ -40,6 +42,18 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> with SingleTicker
   void dispose() {
     _tabController?.dispose();
     super.dispose();
+  }
+
+  void _refreshExplore() {
+    ref.invalidate(homeFeedProvider);
+    ref.invalidate(speedDialProvider);
+    ref.invalidate(quickPicksProvider);
+    ref.invalidate(dailyDiscoverProvider);
+    ref.invalidate(forgottenFavoritesProvider);
+    ref.invalidate(similarArtistsProvider);
+    ref.invalidate(recentlyPlayedProvider);
+    ref.invalidate(searchResultsProvider);
+    ref.invalidate(searchPlaylistResultsProvider);
   }
 
   @override
@@ -105,12 +119,25 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> with SingleTicker
                       ],
                     ),
                   ),
+            actions: [
+              ReusableHoverIconButton(
+                icon: UIcons.regular.refresh,
+                tooltip: 'Refresh Explore',
+                iconSize: 18,
+                onTap: _refreshExplore,
+              ),
+            ],
           ),
           Expanded(
             child: SilkyCustomScrollView(
               slivers: [
                 if (currentQuery.isEmpty) ...[
+                  const ExploreSpeedDialSection(),
                   const ExploreRecentPlaysSection(),
+                  const ExploreQuickPicksSection(),
+                  const ExploreDailyDiscoverSection(),
+                  const ExploreForgottenFavoritesSection(),
+                  const ExploreSimilarArtistsSection(),
                   const ExploreHomeFeedSection(),
                   const SliverToBoxAdapter(child: SizedBox(height: 100)),
                 ] else ...[

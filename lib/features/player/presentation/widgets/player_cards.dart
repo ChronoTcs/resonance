@@ -2,6 +2,7 @@ import 'package:resonance/core/widgets/widgets.dart';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:silky_scroll/silky_scroll.dart';
 import 'package:resonance/features/player/application/providers/audio_provider.dart';
 import 'package:resonance/features/lyrics/application/lyrics_provider.dart';
 import 'package:resonance/features/lyrics/application/lyrics_translation_provider.dart';
@@ -40,8 +41,7 @@ class MetadataCard extends StatelessWidget {
             width: 1,
           ),
         ),
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
+        child: SilkySingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -121,89 +121,101 @@ class MiniLyricsCard extends ConsumerStatefulWidget {
 }
 
 class _MiniLyricsCardState extends ConsumerState<MiniLyricsCard> {
+  final UniqueKey _silkyLockKey = UniqueKey();
+
+  @override
+  void dispose() {
+    SilkyScrollGlobalManager.instance.detachKey(_silkyLockKey);
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final lyricsState = ref.watch(lyricsProvider);
     final translationState = ref.watch(lyricsTranslationProvider);
     return RepaintBoundary(
-      child: GestureDetector(
-        onTap: () => ref.read(lyricsOverlayProvider.notifier).toggle(),
-        child: Container(
-          height: widget.height,
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: Theme.of(context).brightness == Brightness.light
-                ? Colors.white.withValues(alpha: 0.4)
-                : Colors.white.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color:
-                  (Theme.of(context).brightness == Brightness.light
-                          ? Colors.black
-                          : Colors.white)
-                      .withValues(alpha: 0.12),
-              width: 1,
+      child: MouseRegion(
+        onEnter: (_) => SilkyScrollGlobalManager.instance.enteredKey(_silkyLockKey),
+        onExit: (_) => SilkyScrollGlobalManager.instance.exitKey(_silkyLockKey),
+        child: GestureDetector(
+          onTap: () => ref.read(lyricsOverlayProvider.notifier).toggle(),
+          child: Container(
+            height: widget.height,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Theme.of(context).brightness == Brightness.light
+                  ? Colors.white.withValues(alpha: 0.4)
+                  : Colors.white.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color:
+                    (Theme.of(context).brightness == Brightness.light
+                            ? Colors.black
+                            : Colors.white)
+                        .withValues(alpha: 0.12),
+                width: 1,
+              ),
             ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        'LYRICS',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1,
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onSurface.withValues(alpha: 0.5),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      if (translationState.isLoading)
-                        const SizedBox(
-                          width: 12,
-                          height: 12,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      else if (lyricsState.lyrics.isNotEmpty &&
-                          translationState.isSystemEnabled) ...[
-                        const LyricsTranslationToggle(fontSize: 10, padding: 4),
-                        if (translationState.error != null) ...[
-                          const SizedBox(width: 4),
-                          LyricsRetryButton(
-                            modeLabel:
-                                translationState.mode ==
-                                    LyricsTranslationMode.translated
-                                ? 'Translation'
-                                : 'Romanization',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          'LYRICS',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurface.withValues(alpha: 0.5),
                           ),
+                        ),
+                        const SizedBox(width: 8),
+                        if (translationState.isLoading)
+                          const SizedBox(
+                            width: 12,
+                            height: 12,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        else if (lyricsState.lyrics.isNotEmpty &&
+                            translationState.isSystemEnabled) ...[
+                          const LyricsTranslationToggle(fontSize: 10, padding: 4),
+                          if (translationState.error != null) ...[
+                            const SizedBox(width: 4),
+                            LyricsRetryButton(
+                              modeLabel:
+                                  translationState.mode ==
+                                      LyricsTranslationMode.translated
+                                  ? 'Translation'
+                                  : 'Romanization',
+                            ),
+                          ],
                         ],
                       ],
-                    ],
-                  ),
-                  const Spacer(),
-                  const LyricsOffsetControl(compact: true),
-                  const SizedBox(width: 12),
-                  ReusableHoverIconButton(
-                    icon: UIcons.regular.expand,
-                    tooltip: 'Show Full Lyrics',
-                    iconSize: 16,
-                    onTap: () =>
-                        ref.read(lyricsOverlayProvider.notifier).toggle(),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Expanded(
-                child: const LyricsListView(compact: true),
-              ),
-            ],
+                    ),
+                    const Spacer(),
+                    const LyricsOffsetControl(compact: true),
+                    const SizedBox(width: 12),
+                    ReusableHoverIconButton(
+                      icon: UIcons.regular.expand,
+                      tooltip: 'Show Full Lyrics',
+                      iconSize: 16,
+                      onTap: () =>
+                          ref.read(lyricsOverlayProvider.notifier).toggle(),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: const LyricsListView(compact: true),
+                ),
+              ],
+            ),
           ),
         ),
       ),

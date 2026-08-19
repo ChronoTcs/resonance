@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:silky_scroll/silky_scroll.dart';
 import 'package:resonance/core/domain/models/media_item.dart';
 import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/features/playlist/application/playlist_provider.dart';
@@ -93,9 +94,8 @@ void showMiniplayerAddToPlaylistDialog(
                         child: Scrollbar(
                           controller: scrollController,
                           thumbVisibility: true,
-                          child: ListView.builder(
+                          child: SilkyListView.builder(
                             controller: scrollController,
-                            physics: const BouncingScrollPhysics(),
                             shrinkWrap: true,
                             itemCount: playlists.length,
                             itemBuilder: (context, index) {

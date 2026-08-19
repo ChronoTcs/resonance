@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:resonance/core/application/providers/app_config_provider.dart';
 import 'package:resonance/core/application/services/network_connectivity_service.dart';
+import 'package:resonance/core/data/services/cache_manager.dart';
 import 'package:resonance/features/download/application/download_service.dart';
 import 'package:resonance/features/settings/application/app_behavior_provider.dart';
 import 'package:resonance/features/settings/application/notification_provider.dart';
@@ -25,6 +27,9 @@ Future<void> runStartupChecks(dynamic ref, {bool? isOnline}) async {
       }
     }
   }
+
+  // Clean any pending deleted files from previous sessions
+  unawaited(_cleanPendingDeletions(ref));
 
   // Initialise notification provider (lazy singleton bootstrap)
   ref.read(notificationProvider);
@@ -71,4 +76,26 @@ Future<void> runStartupChecks(dynamic ref, {bool? isOnline}) async {
   } catch (e) {
     debugPrint('[StartupService] Startup update check failed: $e');
   }
+}
+
+Future<void> _cleanPendingDeletions(dynamic ref) async {
+  try {
+    final cacheManager = ref.read(cacheManagerProvider);
+    final musicDir = await cacheManager.getLocalMusicDir();
+    final lyricsDir = await cacheManager.getLocalLyricsDir();
+    final imagesDir = await cacheManager.getLocalImagesDir();
+
+    for (final dir in [musicDir, lyricsDir, imagesDir]) {
+      if (dir is Directory && await dir.exists()) {
+        await for (final entity in dir.list(recursive: true)) {
+          if (entity is File && entity.path.endsWith('.pending_delete')) {
+            try {
+              await entity.delete();
+              debugPrint('[StartupService] Purged pending deleted file: ${entity.path}');
+            } catch (_) {}
+          }
+        }
+      }
+    }
+  } catch (_) {}
 }

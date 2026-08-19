@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -11,6 +12,67 @@ import 'package:resonance/features/player/application/providers/audio_provider.d
 class ExploreRecentPlaysSection extends ConsumerWidget {
   const ExploreRecentPlaysSection({super.key});
 
+  void _playTrackOrStream(WidgetRef ref, dynamic item) {
+    if (item.isLocal || (item.path.isNotEmpty && !item.isStreaming && !item.path.startsWith('http'))) {
+      ref.read(audioProvider.notifier).playTrack(item);
+    } else {
+      ref.read(audioProvider.notifier).playYouTubeTrack(item);
+    }
+  }
+
+  Widget _buildArtwork(dynamic item, double size, ThemeData theme) {
+    final localArtPath = (item.thumbnailUrl != null && !item.thumbnailUrl!.startsWith('http'))
+        ? item.thumbnailUrl
+        : null;
+
+    Widget imageWidget;
+    if (localArtPath != null && File(localArtPath).existsSync()) {
+      imageWidget = Image.file(
+        File(localArtPath),
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => Container(
+          width: size,
+          height: size,
+          color: theme.colorScheme.surfaceContainerHighest,
+          child: Icon(AppIcons.music, color: Colors.grey),
+        ),
+      );
+    } else if (item.thumbnailUrl != null && item.thumbnailUrl!.startsWith('http')) {
+      imageWidget = CachedNetworkImage(
+        imageUrl: item.thumbnailUrl!,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        placeholder: (context, url) => Container(
+          width: size,
+          height: size,
+          color: theme.colorScheme.surfaceContainerHighest,
+          child: Icon(AppIcons.music, color: Colors.grey),
+        ),
+        errorWidget: (context, url, error) => Container(
+          width: size,
+          height: size,
+          color: theme.colorScheme.surfaceContainerHighest,
+          child: Icon(UIcons.regular.music, color: Colors.grey),
+        ),
+      );
+    } else {
+      imageWidget = Container(
+        width: size,
+        height: size,
+        color: theme.colorScheme.surfaceContainerHighest,
+        child: Icon(AppIcons.music, color: Colors.grey),
+      );
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: imageWidget,
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
@@ -18,7 +80,7 @@ class ExploreRecentPlaysSection extends ConsumerWidget {
         .watch(recentlyPlayedProvider)
         .whenData(
           (items) =>
-              items.where((item) => item.id != null && !item.isLocal).toList(),
+              items.where((item) => (item.id ?? item.path).isNotEmpty).toList(),
         );
 
     return recentAsync.when(
@@ -32,22 +94,30 @@ class ExploreRecentPlaysSection extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(24, 16, 24, 12),
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Expanded(
-                      child: Text(
-                        'Recently Played',
-                        style: theme.textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(UIcons.regular.clock, size: 18, color: theme.primaryColor),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Recently Played',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                      ],
                     ),
-                    ResonanceButton(
-                      onPressed: () {
+                    ReusableHoverIconButton(
+                      icon: UIcons.regular.trash,
+                      tooltip: 'Clear history',
+                      iconSize: 15,
+                      padding: 6.0,
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: () {
                         showDialog(
                           context: context,
                           builder: (dlg) => ResonanceConfirmDialog(
@@ -64,9 +134,6 @@ class ExploreRecentPlaysSection extends ConsumerWidget {
                           ),
                         );
                       },
-                      icon: UIcons.regular.trash,
-                      label: 'Clear',
-                      style: ResonanceButtonStyle.danger,
                     ),
                   ],
                 ),
@@ -83,46 +150,20 @@ class ExploreRecentPlaysSection extends ConsumerWidget {
                       width: 140,
                       margin: const EdgeInsets.symmetric(horizontal: 4),
                       child: InkWell(
-                        onTap: () {
-                          ref
-                              .read(audioProvider.notifier)
-                              .playYouTubeTrack(item);
-                        },
+                        onTap: () => _playTrackOrStream(ref, item),
                         borderRadius: BorderRadius.circular(8),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: CachedNetworkImage(
-                                imageUrl: item.thumbnailUrl ?? '',
-                                width: 140,
-                                height: 140,
-                                fit: BoxFit.cover,
-                                placeholder: (context, url) => Container(
-                                  color: theme.colorScheme.surfaceContainerHighest,
-                                  child: Icon(
-                                    AppIcons.music,
-                                    color: Colors.grey,
-                                  ),
-                                ),
-                                errorWidget: (context, url, error) => Container(
-                                  color: theme.colorScheme.surfaceContainerHighest,
-                                  child: const Icon(
-                                    Icons.music_note,
-                                    color: Colors.grey,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
+                            _buildArtwork(item, 140, theme),
+                            const SizedBox(height: 6),
                             Text(
                               item.title,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: theme.textTheme.bodyMedium?.copyWith(
                                 fontWeight: FontWeight.w600,
-                                fontSize: 13,
+                                fontSize: 12.5,
                               ),
                             ),
                             const SizedBox(height: 2),
@@ -146,7 +187,7 @@ class ExploreRecentPlaysSection extends ConsumerWidget {
           ),
         );
       },
-      loading: () => const SliverToBoxAdapter(child: SizedBox.shrink()),
+      loading: () => const SectionCarouselSliverSkeleton(titleWidth: 120),
       error: (_, _) => const SliverToBoxAdapter(child: SizedBox.shrink()),
     );
   }

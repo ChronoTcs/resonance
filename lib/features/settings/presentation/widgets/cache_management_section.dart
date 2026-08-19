@@ -17,9 +17,20 @@ class CacheManagementSection extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Cache Management',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Cache Management',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey),
+            ),
+            ReusableHoverIconButton(
+              icon: UIcons.regular.refresh,
+              tooltip: 'Recalculate storage sizes',
+              iconSize: 16,
+              onTap: () => notifier.forceRecalculate(),
+            ),
+          ],
         ),
         const SizedBox(height: 16),
 

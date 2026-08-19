@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:silky_scroll/silky_scroll.dart';
 import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/features/player/application/providers/audio_provider.dart';
 import 'package:resonance/core/providers/overlay_provider.dart';
@@ -229,7 +230,7 @@ class NowPlayingScreen extends ConsumerWidget {
                       ),
                     );
                   },
-                  child: SingleChildScrollView(
+                  child: SilkySingleChildScrollView(
                     padding: const EdgeInsets.only(
                       left: 24,
                       right: 24,

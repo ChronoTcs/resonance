@@ -53,6 +53,13 @@ class SponsorBlockService {
             final delayOffset = Duration(milliseconds: -introDurationMs);
             debugPrint('[SponsorBlock] Detected $introDurationMs ms of intro skit. Applying offset: $delayOffset');
             _ref.read(audioProvider.notifier).adjustLyricsOffset(delayOffset);
+
+            // Instant intro skit trimming: skip audio past intro if player is still near track start
+            final currentPos = _ref.read(audioProvider).position;
+            if (currentPos.inSeconds < 2) {
+              _ref.read(audioProvider.notifier).seek(Duration(milliseconds: (skipEnd * 1000).toInt()));
+              debugPrint('[SponsorBlock] Auto-skipped intro skit to ${skipEnd}s');
+            }
           }
         }
       }

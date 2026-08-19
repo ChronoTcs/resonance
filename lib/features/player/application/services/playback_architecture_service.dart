@@ -10,9 +10,14 @@ import '../../../../core/data/services/media_cache_service.dart';
 class CachedStreamInfo {
   final String url;
   final DateTime fetchedAt;
-  CachedStreamInfo(this.url, this.fetchedAt);
+  final DateTime? expiresAt; // parsed from &expire= YouTube param
 
-  bool get isExpired => DateTime.now().difference(fetchedAt).inHours >= 2;
+  CachedStreamInfo(this.url, this.fetchedAt, {this.expiresAt});
+
+  bool get isExpired {
+    if (expiresAt != null) return DateTime.now().isAfter(expiresAt!);
+    return DateTime.now().difference(fetchedAt).inHours >= 2;
+  }
 }
 
 final playbackArchitectureServiceProvider =
@@ -93,7 +98,12 @@ class PlaybackArchitectureService {
       final String? url = await _repository.getStreamUrl(videoId);
 
       if (url != null) {
-        _urlCache[videoId] = CachedStreamInfo(url, DateTime.now());
+        // Parse exact expiry from YouTube URL &expire= param
+        final expireParam = Uri.tryParse(url)?.queryParameters['expire'];
+        final expiresAt = expireParam != null
+            ? DateTime.fromMillisecondsSinceEpoch(int.parse(expireParam) * 1000)
+            : null;
+        _urlCache[videoId] = CachedStreamInfo(url, DateTime.now(), expiresAt: expiresAt);
         return url;
       }
       return null;

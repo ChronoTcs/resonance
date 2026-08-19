@@ -10,7 +10,8 @@ import 'package:resonance/core/providers/search_history_provider.dart';
 class TopNavigationHeader extends ConsumerStatefulWidget {
   final Widget? left;
   final Widget? right;
-  const TopNavigationHeader({super.key, this.left, this.right});
+  final List<Widget>? actions;
+  const TopNavigationHeader({super.key, this.left, this.right, this.actions});
 
   @override
   ConsumerState<TopNavigationHeader> createState() =>
@@ -425,6 +426,10 @@ class _TopNavigationHeaderState extends ConsumerState<TopNavigationHeader> {
                               ),
                             ),
                           ),
+                          if (widget.actions != null) ...[
+                            const SizedBox(width: 8),
+                            ...widget.actions!,
+                          ],
                         ],
                       ),
                 ],

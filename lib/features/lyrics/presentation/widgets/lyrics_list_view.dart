@@ -1,6 +1,8 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
+import 'package:silky_scroll/silky_scroll.dart';
 import '../../application/lyrics_provider.dart';
 import '../../application/lyrics_translation_provider.dart';
 import 'word_synced_lyric_row.dart';
@@ -25,11 +27,13 @@ class LyricsListView extends ConsumerStatefulWidget {
 class _LyricsListViewState extends ConsumerState<LyricsListView> {
   final ItemScrollController _itemScrollController = ItemScrollController();
   final ItemPositionsListener _itemPositionsListener = ItemPositionsListener.create();
+  final UniqueKey _silkyLockKey = UniqueKey();
   int _currentIndex = -1;
   double _listHeight = 600.0;
 
   @override
   void dispose() {
+    SilkyScrollGlobalManager.instance.detachKey(_silkyLockKey);
     super.dispose();
   }
 
@@ -95,97 +99,124 @@ class _LyricsListViewState extends ConsumerState<LyricsListView> {
       });
     }
 
+    Widget content;
     if (widget.compact) {
-      return ShaderMask(
-        shaderCallback: (Rect rect) {
-          return const LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Colors.transparent,
-              Colors.white,
-              Colors.white,
-              Colors.transparent,
-            ],
-            stops: [0.0, 0.1, 0.9, 1.0],
-          ).createShader(rect);
-        },
-        blendMode: BlendMode.dstIn,
-        child: ScrollablePositionedList.builder(
-          itemScrollController: _itemScrollController,
-          itemPositionsListener: _itemPositionsListener,
-          initialScrollIndex: activeIndex != -1 ? activeIndex + 3 : 0,
-          initialAlignment: 0.45,
-          itemCount: lyrics.length + 6,
-          physics: widget.physics ?? const BouncingScrollPhysics(),
-          itemBuilder: (context, index) {
-            if (index < 3 || index >= lyrics.length + 3) {
-              return const SizedBox(height: 48);
-            }
-
-            final lineIndex = index - 3;
-            final line = lyrics[lineIndex];
-            final isActive = lineIndex == activeIndex;
-
-            final adjustedPosition = ref.watch(adjustedLyricsPositionProvider);
-
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
-              child: WordSyncedLyricRow(
-                line: line,
-                playerPosition: adjustedPosition,
-                isActive: isActive,
-                activeOpacity: activeOpacity,
-                inactiveOpacity: inactiveOpacity,
-                fontSizeActive: 18,
-                fontSizeInactive: 14,
-                textColor: effectiveTextColor,
-              ),
+      content = Listener(
+        onPointerSignal: (pointerSignal) {
+          if (pointerSignal is PointerScrollEvent) {
+            GestureBinding.instance.pointerSignalResolver.register(
+              pointerSignal,
+              (event) {},
             );
+          }
+        },
+        child: ShaderMask(
+          shaderCallback: (Rect rect) {
+            return const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.transparent,
+                Colors.white,
+                Colors.white,
+                Colors.transparent,
+              ],
+              stops: [0.0, 0.1, 0.9, 1.0],
+            ).createShader(rect);
           },
-        ),
-      );
-    }
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        _listHeight = constraints.maxHeight;
-        final adjustedPosition = ref.watch(adjustedLyricsPositionProvider);
-        return RepaintBoundary(
+          blendMode: BlendMode.dstIn,
           child: ScrollablePositionedList.builder(
             itemScrollController: _itemScrollController,
             itemPositionsListener: _itemPositionsListener,
-            initialScrollIndex: activeIndex != -1 ? activeIndex : 0,
-            initialAlignment: 0.5,
+            initialScrollIndex: activeIndex != -1 ? activeIndex + 3 : 0,
+            initialAlignment: 0.45,
+            itemCount: lyrics.length + 6,
             physics: widget.physics ?? const BouncingScrollPhysics(),
-            padding: EdgeInsets.only(
-              top: _listHeight / 2 - 30,
-              bottom: _listHeight / 2,
-            ),
-            itemCount: lyrics.length,
             itemBuilder: (context, index) {
-              final line = lyrics[index];
-              final isActive = index == activeIndex;
+              if (index < 3 || index >= lyrics.length + 3) {
+                return const SizedBox(height: 48);
+              }
 
-              return AnimatedContainer(
-                duration: const Duration(milliseconds: 400),
-                curve: Curves.easeOutCubic,
-                padding: const EdgeInsets.symmetric(vertical: 12.0),
+              final lineIndex = index - 3;
+              final line = lyrics[lineIndex];
+              final isActive = lineIndex == activeIndex;
+
+              final adjustedPosition = ref.watch(adjustedLyricsPositionProvider);
+
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8.0),
                 child: WordSyncedLyricRow(
                   line: line,
                   playerPosition: adjustedPosition,
                   isActive: isActive,
                   activeOpacity: activeOpacity,
                   inactiveOpacity: inactiveOpacity,
-                  fontSizeActive: 26,
-                  fontSizeInactive: 18,
+                  fontSizeActive: 18,
+                  fontSizeInactive: 14,
                   textColor: effectiveTextColor,
                 ),
               );
             },
           ),
-        );
-      },
+        ),
+      );
+    } else {
+      content = LayoutBuilder(
+        builder: (context, constraints) {
+          _listHeight = constraints.maxHeight;
+          final adjustedPosition = ref.watch(adjustedLyricsPositionProvider);
+          return RepaintBoundary(
+            child: Listener(
+              onPointerSignal: (pointerSignal) {
+                if (pointerSignal is PointerScrollEvent) {
+                  GestureBinding.instance.pointerSignalResolver.register(
+                    pointerSignal,
+                    (event) {},
+                  );
+                }
+              },
+              child: ScrollablePositionedList.builder(
+                itemScrollController: _itemScrollController,
+                itemPositionsListener: _itemPositionsListener,
+                initialScrollIndex: activeIndex != -1 ? activeIndex : 0,
+                initialAlignment: 0.5,
+                physics: widget.physics ?? const BouncingScrollPhysics(),
+                padding: EdgeInsets.only(
+                  top: _listHeight / 2 - 30,
+                  bottom: _listHeight / 2,
+                ),
+                itemCount: lyrics.length,
+                itemBuilder: (context, index) {
+                  final line = lyrics[index];
+                  final isActive = index == activeIndex;
+
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 400),
+                    curve: Curves.easeOutCubic,
+                    padding: const EdgeInsets.symmetric(vertical: 12.0),
+                    child: WordSyncedLyricRow(
+                      line: line,
+                      playerPosition: adjustedPosition,
+                      isActive: isActive,
+                      activeOpacity: activeOpacity,
+                      inactiveOpacity: inactiveOpacity,
+                      fontSizeActive: 26,
+                      fontSizeInactive: 18,
+                      textColor: effectiveTextColor,
+                    ),
+                  );
+                },
+              ),
+            ),
+          );
+        },
+      );
+    }
+
+    return MouseRegion(
+      onEnter: (_) => SilkyScrollGlobalManager.instance.enteredKey(_silkyLockKey),
+      onExit: (_) => SilkyScrollGlobalManager.instance.exitKey(_silkyLockKey),
+      child: content,
     );
   }
 }

@@ -52,7 +52,7 @@ class GaplessPrefetchService {
     // ── Slot 2: N+2 after 5s stagger ───────────────────────────────────────
     if (!_isFetchingSecond) {
       _staggerTimer?.cancel();
-      _staggerTimer = Timer(const Duration(seconds: 5), () async {
+      _staggerTimer = Timer(const Duration(seconds: 2), () async {
         if (_isFetchingSecond) return;
 
         // Re-read state at timer fire time (track may have changed)

@@ -1185,10 +1185,32 @@ class DownloadService {
 
   Future<String?> resolveStreamUrl(String videoId) async {
     if (Platform.isAndroid) return null;
+
+    // Route through persistent daemon bridge — no process spawn per call
+    if (_bridge.isReady) {
+      final reqId = 'resolve_${DateTime.now().microsecondsSinceEpoch}';
+      final completer = Completer<String?>();
+      _resolveCompleters[reqId] = completer;
+      _bridge.sendCommand({
+        'action': 'resolve_stream',
+        'id': reqId,
+        'videoId': videoId,
+      });
+      debugPrint('[DownloadService] resolveStreamUrl: sent via daemon bridge for $videoId (id=$reqId)');
+      try {
+        return await completer.future.timeout(const Duration(seconds: 15));
+      } on TimeoutException {
+        _resolveCompleters.remove(reqId);
+        debugPrint('[DownloadService] resolveStreamUrl TIMEOUT (daemon) for $videoId');
+        return null;
+      }
+    }
+
+    // Fallback: one-shot process when daemon is not yet ready
     final bridge = _bridge.resolveBridgeForOneShot();
     if (bridge == null) return null;
     debugPrint(
-      '[DownloadService] resolveStreamUrl: spawning one-shot process for $videoId',
+      '[DownloadService] resolveStreamUrl: spawning one-shot process for $videoId (daemon not ready)',
     );
     Process? process;
     try {

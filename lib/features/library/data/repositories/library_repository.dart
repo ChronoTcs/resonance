@@ -66,6 +66,7 @@ class LibraryRepository {
         // Collect files
         await for (final entity in musicDir.list(recursive: true)) {
           if (entity is File) {
+            if (entity.path.endsWith('.pending_delete')) continue;
             final ext = p.extension(entity.path).toLowerCase();
             if (['.mp3', '.m4a', '.wav', '.flac'].contains(ext)) {
               audioPaths.add(entity.path);
@@ -81,6 +82,7 @@ class LibraryRepository {
       if (await videoDir.exists()) {
         await for (final entity in videoDir.list(recursive: true)) {
           if (entity is File) {
+            if (entity.path.endsWith('.pending_delete')) continue;
             final ext = p.extension(entity.path).toLowerCase();
             if (['.mp4', '.mkv', '.avi', '.mov'].contains(ext)) {
               videoItems.add(
@@ -153,25 +155,6 @@ class LibraryRepository {
               }
             }
           }
-        }
-
-        // If existing item was saved with missing album or duration, backfill from audio tags
-        if (item.album == null || item.duration == null) {
-          try {
-            final f = File(path);
-            if (f.existsSync()) {
-              final tags = _extractTagsFromFile(f, getImage: false);
-              if (item.album == null && tags.album != null && tags.album!.isNotEmpty) {
-                item = item.copyWith(album: tags.album);
-              }
-              if (item.duration == null && tags.duration != null) {
-                item = item.copyWith(duration: tags.duration);
-              }
-              if (item.date == null && tags.date != null) {
-                item = item.copyWith(date: tags.date);
-              }
-            }
-          } catch (_) {}
         }
 
         finalItems.add(item);
@@ -427,28 +410,37 @@ Future<List<MediaItem>> _parseBatch(Map<String, dynamic> args) async {
     try {
       final file = File(path);
       if (file.existsSync()) {
-        final genericTag = readMetadata(file, getImage: false);
-        if (genericTag.title?.isNotEmpty == true) title = genericTag.title!;
-        if (genericTag.artist?.isNotEmpty == true) artist = genericTag.artist!;
-        if (genericTag.album?.isNotEmpty == true) album = genericTag.album!;
-        if (genericTag.year != null) date = genericTag.year.toString();
-        duration = genericTag.duration;
-
-        final rawTag = readAllMetadata(file, getImage: false);
-        if (rawTag is Mp3Metadata) {
-          setVideoId = rawTag.customMetadata['YT_ID'];
-        } else if (rawTag is VorbisMetadata) {
-          final descTag = rawTag.description.firstWhere((d) => d.startsWith('YT_ID:'), orElse: () => '');
-          if (descTag.isNotEmpty) {
-            setVideoId = descTag.replaceFirst('YT_ID:', '');
-          }
-        } else if (rawTag is Mp4Metadata) {
-          final lyrics = rawTag.lyrics ?? '';
-          final match = RegExp(r'YT_ID:(.*)').firstMatch(lyrics);
-          if (match != null) {
-            setVideoId = match.group(1)?.trim();
-          }
+        try {
+          final genericTag = readMetadata(file, getImage: false);
+          if (genericTag.title?.isNotEmpty == true) title = genericTag.title!;
+          if (genericTag.artist?.isNotEmpty == true) artist = genericTag.artist!;
+          if (genericTag.album?.isNotEmpty == true) album = genericTag.album!;
+          if (genericTag.year != null) date = genericTag.year.toString();
+          duration = genericTag.duration;
+        } catch (_) {
+          // Non-standard / malformed audio container — fall back to filename sanitizer
+          final sanitized = sanitizeAudioFilename(fileName);
+          title = sanitized.title;
+          artist = sanitized.artist;
         }
+
+        try {
+          final rawTag = readAllMetadata(file, getImage: false);
+          if (rawTag is Mp3Metadata) {
+            setVideoId = rawTag.customMetadata['YT_ID'];
+          } else if (rawTag is VorbisMetadata) {
+            final descTag = rawTag.description.firstWhere((d) => d.startsWith('YT_ID:'), orElse: () => '');
+            if (descTag.isNotEmpty) {
+              setVideoId = descTag.replaceFirst('YT_ID:', '');
+            }
+          } else if (rawTag is Mp4Metadata) {
+            final lyrics = rawTag.lyrics ?? '';
+            final match = RegExp(r'YT_ID:(.*)').firstMatch(lyrics);
+            if (match != null) {
+              setVideoId = match.group(1)?.trim();
+            }
+          }
+        } catch (_) {}
       }
     } catch (e) {
       debugPrint('[LibraryRepo] Isolate: Metadata extraction error for $path: $e');

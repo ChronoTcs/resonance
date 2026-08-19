@@ -1,6 +1,7 @@
 import 'package:resonance/core/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:silky_scroll/silky_scroll.dart';
 
 import 'package:resonance/features/library/presentation/widgets/media_actions_bottom_sheet.dart';
 
@@ -58,8 +59,7 @@ class FullScreenAudioView extends ConsumerWidget {
       children: [
         // Base: Scrollable Audio Content
         Positioned.fill(
-          child: CustomScrollView(
-            physics: const BouncingScrollPhysics(),
+          child: SilkyCustomScrollView(
             slivers: [
               _buildAudioAppBar(context, ref, theme),
               SliverToBoxAdapter(

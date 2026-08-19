@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:silky_scroll/silky_scroll.dart';
 import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/core/widgets/inputs/resonance_switch.dart';
 import '../../application/providers/equalizer_controller.dart';
@@ -192,7 +193,7 @@ class _EqualizerSheetState extends ConsumerState<EqualizerSheet> {
 
                 // Sliders
                 Expanded(
-                  child: SingleChildScrollView(
+                  child: SilkySingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.start,

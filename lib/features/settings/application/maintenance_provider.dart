@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/data/services/data_usage_service.dart';
 import '../../../core/data/services/media_cache_service.dart';
@@ -35,20 +36,34 @@ class MaintenanceState {
 class MaintenanceNotifier extends Notifier<MaintenanceState> {
   @override
   MaintenanceState build() {
-    // We can't call async refresh here directly if we want initial state to be empty,
-    // but we can use Future.microtask or just let the UI call refresh.
-    // Or we can return an initial state and trigger a refresh.
+    // 0ms instant initialization from persisted snapshot
+    Map<String, int> initialFolderSizes = const {};
+    try {
+      final prefs = ref.watch(sharedPreferencesProvider);
+      final savedJson = prefs.getString('cached_storage_sizes');
+      if (savedJson != null) {
+        final Map<String, dynamic> decoded = jsonDecode(savedJson);
+        final Map<String, int> parsed = {};
+        decoded.forEach((key, value) {
+          if (value is int) parsed[key] = value;
+        });
+        initialFolderSizes = parsed;
+      }
+    } catch (_) {}
+
     Future.microtask(() => refresh());
-    return MaintenanceState();
+    return MaintenanceState(folderSizes: initialFolderSizes);
   }
 
   DataUsageService get _dataUsageService => ref.read(dataUsageServiceProvider);
   MediaCacheService get _mediaCacheService => ref.read(mediaCacheServiceProvider);
 
-  Future<void> refresh() async {
-    state = state.copyWith(isLoading: true);
-    final size = await _mediaCacheService.getCacheSize();
-    final detailedSizes = await _mediaCacheService.getDetailedCacheSizes();
+  Future<void> refresh({bool force = false}) async {
+    if (state.folderSizes.isEmpty) {
+      state = state.copyWith(isLoading: true);
+    }
+    final size = await _mediaCacheService.getCacheSize(force: force);
+    final detailedSizes = await _mediaCacheService.getDetailedCacheSizes(force: force);
     final usage = await _dataUsageService.getTotalBytes();
     state = state.copyWith(
       cacheSize: size, 
@@ -56,6 +71,10 @@ class MaintenanceNotifier extends Notifier<MaintenanceState> {
       totalDataUsage: usage, 
       isLoading: false,
     );
+  }
+
+  Future<void> forceRecalculate() async {
+    await refresh(force: true);
   }
 
   Future<void> clearCategory(String category) async {

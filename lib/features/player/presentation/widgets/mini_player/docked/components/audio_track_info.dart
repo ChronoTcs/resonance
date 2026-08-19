@@ -5,6 +5,7 @@ import 'package:resonance/features/library/data/models/media_item.dart';
 
 import 'package:resonance/core/utils/formatters.dart';
 import 'package:resonance/features/player/application/providers/audio_provider.dart';
+import 'package:resonance/core/providers/overlay_provider.dart';
 
 class AudioTrackInfo extends ConsumerWidget {
   final MediaItem track;
@@ -18,7 +19,15 @@ class AudioTrackInfo extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Row(
+    final isNowPlayingOpen = ref.watch(nowPlayingOverlayProvider);
+    final tooltipMessage = isNowPlayingOpen
+        ? 'Close Now Playing view'
+        : 'Open Now Playing view';
+
+    return Tooltip(
+      message: tooltipMessage,
+      waitDuration: const Duration(milliseconds: 400),
+      child: Row(
       children: [
         // Album Art with Hero Animation
         Padding(
@@ -47,9 +56,7 @@ class AudioTrackInfo extends ConsumerWidget {
                   Expanded(
                     child: Text(
                       track.title,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: const TextStyle(fontWeight: FontWeight.bold),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -74,13 +81,19 @@ class AudioTrackInfo extends ConsumerWidget {
                   padding: const EdgeInsets.only(top: 4.0),
                   child: Consumer(
                     builder: (context, ref, _) {
-                      final pos = ref.watch(audioProvider.select((s) => s.position));
-                      final dur = ref.watch(audioProvider.select((s) => s.duration));
+                      final pos = ref.watch(
+                        audioProvider.select((s) => s.position),
+                      );
+                      final dur = ref.watch(
+                        audioProvider.select((s) => s.duration),
+                      );
                       return Text(
                         "${AppFormatters.formatDuration(pos)} / ${AppFormatters.formatDuration(dur)}",
                         style: TextStyle(
                           fontSize: 10,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
                         ),
                       );
                     },
@@ -90,6 +103,7 @@ class AudioTrackInfo extends ConsumerWidget {
           ),
         ),
       ],
+    ),
     );
   }
 }

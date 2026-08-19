@@ -12,6 +12,7 @@ import '../data/models/media_item.dart';
 import '../data/repositories/library_repository.dart';
 import '../../download/application/providers/download_settings_provider.dart';
 import '../../playlist/application/playlist_provider.dart';
+import '../../player/application/providers/audio_provider.dart';
 import '../../../core/utils/path_utils.dart';
 
 class LibraryState {
@@ -287,14 +288,45 @@ class LibraryNotifier extends Notifier<LibraryState> {
       final String path = item.path;
       final String songId = item.id ?? path;
 
-      // 1. Delete Main File
+      // 0. If track is currently active in audio player, unmount/stop to release native file handles
+      try {
+        final audioState = ref.read(audioProvider);
+        final current = audioState.currentTrack;
+        if (current != null && (current.id == songId || current.path == path)) {
+          ref.read(audioProvider.notifier).stop();
+        }
+      } catch (_) {}
+
+      // 1. Delete Main File with Exponential Retry & Pending Rename Fallback
       final file = File(path);
       if (await file.exists()) {
-        try {
-          await file.delete();
-          debugPrint('[LibraryNotifier] Deleted main file $path');
-        } catch (e) {
-          debugPrint('[LibraryNotifier] File deletion postponed (locked by process): $path');
+        bool deleted = false;
+        for (int attempt = 0; attempt < 3; attempt++) {
+          try {
+            await file.delete();
+            deleted = true;
+            debugPrint('[LibraryNotifier] Deleted main file $path');
+            break;
+          } catch (_) {
+            await Future.delayed(Duration(milliseconds: 100 * (attempt + 1)));
+          }
+        }
+
+        // If file is still locked by an external process (e.g. Windows Defender / Indexer),
+        // rename it to .pending_delete so scanLibrary immediately ignores it, then purge in background
+        if (!deleted && await file.exists()) {
+          try {
+            final pendingPath = '$path.pending_delete';
+            final pendingFile = await file.rename(pendingPath);
+            debugPrint('[LibraryNotifier] File locked — renamed for pending deletion: $pendingPath');
+            Future.delayed(const Duration(seconds: 2), () async {
+              try {
+                if (await pendingFile.exists()) await pendingFile.delete();
+              } catch (_) {}
+            });
+          } catch (e) {
+            debugPrint('[LibraryNotifier] File deletion deferred: $path ($e)');
+          }
         }
       }
 
@@ -303,8 +335,10 @@ class LibraryNotifier extends Notifier<LibraryState> {
         final lrcPath = '${path.substring(0, path.lastIndexOf('.'))}.lrc';
         final lrcFile = File(lrcPath);
         if (await lrcFile.exists()) {
-          await lrcFile.delete();
-          debugPrint('[LibraryNotifier] Deleted local lyrics $lrcPath');
+          try {
+            await lrcFile.delete();
+            debugPrint('[LibraryNotifier] Deleted local lyrics $lrcPath');
+          } catch (_) {}
         }
       }
 
@@ -315,8 +349,10 @@ class LibraryNotifier extends Notifier<LibraryState> {
         final customLrcPath = "${state.lyricsFolderPath}${Platform.pathSeparator}$baseName.lrc";
         final customLrcFile = File(customLrcPath);
         if (await customLrcFile.exists()) {
-          await customLrcFile.delete();
-          debugPrint('[LibraryNotifier] Deleted custom lyrics $customLrcPath');
+          try {
+            await customLrcFile.delete();
+            debugPrint('[LibraryNotifier] Deleted custom lyrics $customLrcPath');
+          } catch (_) {}
         }
       }
 

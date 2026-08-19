@@ -6,12 +6,27 @@ import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'data_usage_service.dart';
 import 'cache_manager.dart';
+import 'storage_service.dart';
 import 'package:resonance/core/domain/models/media_item.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'stream_cache_tracker_service.dart';
 import '../../../features/settings/application/maintenance_provider.dart';
 import '../../utils/thumbnail_utils.dart';
 import '../../application/services/network_connectivity_service.dart';
+
+int _scanDirectoryBytesIsolate(String path) {
+  int total = 0;
+  final dir = Directory(path);
+  if (!dir.existsSync()) return 0;
+  try {
+    for (final entity in dir.listSync(recursive: true, followLinks: false)) {
+      if (entity is File) {
+        total += entity.lengthSync();
+      }
+    }
+  } catch (_) {}
+  return total;
+}
 
 final mediaCacheServiceProvider = Provider<MediaCacheService>((ref) {
   final dataUsageService = ref.watch(dataUsageServiceProvider);
@@ -34,6 +49,49 @@ class MediaCacheService {
   final StreamCacheTrackerService _trackerService;
   final http.Client _client = http.Client(); // Persistent HTTP client
   Timer? _cleanupTimer;
+
+  // ── High-Performance Storage Cache & Delta Accounting ──
+  final Map<String, int> _cachedSizes = {};
+  final Map<String, DateTime> _dirModTimes = {};
+  bool _isSizesInitialized = false;
+
+  void _initSizes() {
+    if (_isSizesInitialized) return;
+    try {
+      final prefs = _ref.read(sharedPreferencesProvider);
+      final savedJson = prefs.getString('cached_storage_sizes');
+      if (savedJson != null) {
+        final Map<String, dynamic> decoded = jsonDecode(savedJson);
+        decoded.forEach((key, value) {
+          if (value is int) _cachedSizes[key] = value;
+        });
+      }
+    } catch (_) {}
+    _isSizesInitialized = true;
+  }
+
+  void _saveSizesSnapshot() {
+    try {
+      final prefs = _ref.read(sharedPreferencesProvider);
+      prefs.setString('cached_storage_sizes', jsonEncode(_cachedSizes));
+    } catch (_) {}
+  }
+
+  /// Real-time incremental delta accounting (+/- bytes)
+  void notifyDelta(String category, int byteDelta) {
+    _initSizes();
+    final current = _cachedSizes[category] ?? 0;
+    final updated = (current + byteDelta).clamp(0, 9223372036854775807);
+    _cachedSizes[category] = updated;
+    _saveSizesSnapshot();
+  }
+
+  /// Resets category size to 0
+  void resetCategorySize(String category) {
+    _initSizes();
+    _cachedSizes[category] = 0;
+    _saveSizesSnapshot();
+  }
 
   MediaCacheService(
     this._ref,
@@ -189,6 +247,7 @@ class MediaCacheService {
         sink = null;
 
         _dataUsageService.addBytes(downloadedBytes);
+        notifyDelta('stream_audio', downloadedBytes);
         debugPrint(
           '[MediaCache] Audio cached successfully for $songId ($downloadedBytes bytes)',
         );
@@ -271,7 +330,7 @@ class MediaCacheService {
 
   Future<String?> cacheArtwork(String songId, String? url, {bool forceOverwrite = false}) async {
     if (url == null || !url.startsWith('http')) return null;
-    // ponytail: skip download entirely if offline — no point queuing it
+    // Skip download entirely if offline — no point queuing it
     if (!_ref.read(networkConnectivityProvider).isOnline) return null;
     final upgradedUrl = ThumbnailUtils.upgradeResolution(url);
     // in-flight guard prevents duplicate concurrent downloads unless forceOverwrite is requested
@@ -296,14 +355,16 @@ class MediaCacheService {
       final response = await _client.get(Uri.parse(upgradedUrl));
       if (response.statusCode == 200) {
         await file.writeAsBytes(response.bodyBytes);
+        notifyDelta('stream_images', response.bodyBytes.length);
         debugPrint('[MediaCache] Artwork cached safely: ${file.path}');
 
-        // Also sync to local/images/ if this track has a local download copy
+        // Also sync to local/images/ ONLY if this track already has a local download copy
         final localDir = await _cacheManager.getLocalImagesDir();
         final localFile = File(p.join(localDir.path, 'art_$safeId.jpg'));
-        if (localFile.existsSync() || forceOverwrite) {
+        if (localFile.existsSync()) {
           try {
             await localFile.writeAsBytes(response.bodyBytes);
+            notifyDelta('local_images', response.bodyBytes.length);
           } catch (_) {}
         }
 
@@ -324,6 +385,7 @@ class MediaCacheService {
       final file = File(p.join(dir.path, 'art_$safeId.jpg'));
       if (!file.existsSync()) {
         await file.writeAsBytes(bytes);
+        notifyDelta('stream_images', bytes.length);
         _trackerService.updateLastPlayed(songId);
         _scheduleCleanup();
       }
@@ -446,7 +508,20 @@ class MediaCacheService {
 
           if (isSafePath) {
             try {
+              int len = 0;
+              try {
+                len = await file.length();
+              } catch (_) {}
               await file.delete();
+              if (normalizedPath.contains('/stream/audio/')) {
+                notifyDelta('stream_audio', -len);
+              } else if (normalizedPath.contains('/stream/lyrics/')) {
+                notifyDelta('stream_lyrics', -len);
+              } else if (normalizedPath.contains('/stream/images/')) {
+                notifyDelta('stream_images', -len);
+              } else if (normalizedPath.contains('/cache/metadata/')) {
+                notifyDelta('metadata', -len);
+              }
               debugPrint(
                 '[MediaCache] Cache removal SUCCESS: ${p.basename(file.path)}',
               );
@@ -467,65 +542,61 @@ class MediaCacheService {
     }
   }
 
-  // ---------------- Cache Management (Granular) ----------------
+  // ---------------- Cache Management (Granular Fast Scanning) ----------------
 
-  Future<int> _getDirSize(Directory dir) async {
-    int total = 0;
-    if (!await dir.exists()) return 0;
-    try {
-      await for (final entity in dir.list(
-        recursive: true,
-        followLinks: false,
-      )) {
-        if (entity is File) {
-          total += await entity.length();
-        }
-      }
-    } catch (e) {
-      debugPrint(
-        '[MediaCache] Error calculating size for ${dir.path}: $e',
-      );
+  Future<int> _getDirSizeFast(String category, Directory dir, {bool force = false}) async {
+    if (!await dir.exists()) {
+      _cachedSizes[category] = 0;
+      return 0;
     }
-    return total;
+
+    try {
+      final stat = await dir.stat();
+      final lastKnownMod = _dirModTimes[category];
+
+      // O(1) Instant Cache Hit: Return cached size if directory modtime is unchanged and not forced
+      if (!force && _cachedSizes.containsKey(category) && lastKnownMod != null && stat.modified.isAtSameMomentAs(lastKnownMod)) {
+        return _cachedSizes[category]!;
+      }
+
+      // Re-scan dirty folder in background isolate (zero UI hitch)
+      final total = await compute(_scanDirectoryBytesIsolate, dir.path);
+      _cachedSizes[category] = total;
+      _dirModTimes[category] = stat.modified;
+      _saveSizesSnapshot();
+      return total;
+    } catch (e) {
+      debugPrint('[MediaCache] Error calculating size for ${dir.path}: $e');
+      return _cachedSizes[category] ?? 0;
+    }
   }
 
-  Future<Map<String, int>> getDetailedCacheSizes() async {
+  Future<Map<String, int>> getDetailedCacheSizes({bool force = false}) async {
+    _initSizes();
+
+    final categories = <String, Future<Directory>>{
+      'local_music': _cacheManager.getLocalMusicDir(),
+      'local_lyrics': _cacheManager.getLocalLyricsDir(),
+      'local_images': _cacheManager.getLocalImagesDir(),
+      'metadata': _cacheManager.getMetadataDir(),
+      'translate': _cacheManager.getTranslateDir(),
+      'stream_audio': _cacheManager.getStreamAudioDir(),
+      'stream_images': _cacheManager.getStreamImagesDir(),
+      'stream_lyrics': _cacheManager.getStreamLyricsDir(),
+    };
+
     final Map<String, int> sizes = {};
-
-    // Local (downloaded) folders
-    sizes['local_music'] = await _getDirSize(
-      await _cacheManager.getLocalMusicDir(),
-    );
-    sizes['local_lyrics'] = await _getDirSize(
-      await _cacheManager.getLocalLyricsDir(),
-    );
-    sizes['local_images'] = await _getDirSize(
-      await _cacheManager.getLocalImagesDir(),
-    );
-
-    // Core system cache folders
-    sizes['metadata'] = await _getDirSize(await _cacheManager.getMetadataDir());
-    sizes['translate'] = await _getDirSize(
-      await _cacheManager.getTranslateDir(),
-    );
-
-    // Stream sub-folders
-    sizes['stream_audio'] = await _getDirSize(
-      await _cacheManager.getStreamAudioDir(),
-    );
-    sizes['stream_images'] = await _getDirSize(
-      await _cacheManager.getStreamImagesDir(),
-    );
-    sizes['stream_lyrics'] = await _getDirSize(
-      await _cacheManager.getStreamLyricsDir(),
-    );
+    for (final entry in categories.entries) {
+      final dir = await entry.value;
+      sizes[entry.key] = await _getDirSizeFast(entry.key, dir, force: force);
+    }
 
     return sizes;
   }
 
-  Future<String> getCacheSize() async {
+  Future<String> getCacheSize({bool force = false}) async {
     try {
-      final detailed = await getDetailedCacheSizes();
+      final detailed = await getDetailedCacheSizes(force: force);
       final totalSize = detailed.values.fold(0, (sum, val) => sum + val);
 
       if (totalSize < 1024) return '$totalSize B';
@@ -586,6 +657,7 @@ class MediaCacheService {
             } catch (_) {}
           }
         }
+        resetCategorySize(category);
         debugPrint('[MediaCache] Cleared category $category');
       }
     } catch (e) {
@@ -615,9 +687,14 @@ class MediaCacheService {
           }
         }
       }
+      resetCategorySize('stream_audio');
+      resetCategorySize('stream_images');
+      resetCategorySize('stream_lyrics');
+      resetCategorySize('metadata');
+      resetCategorySize('translate');
       debugPrint('[MediaCache] FULL CACHE CLEARED');
     } catch (e) {
-      debugPrint('[MediaCache] Album art RPC cache/fetch error: $e');
+      debugPrint('[MediaCache] Clear full cache error: $e');
     }
   }
 

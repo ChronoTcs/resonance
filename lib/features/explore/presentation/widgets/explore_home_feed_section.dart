@@ -37,21 +37,42 @@ class _ExploreHomeFeedSectionState
           if (!isOnline) {
             return SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
+                    ),
+                  ),
+                  child: Row(
                     children: [
                       Icon(
                         UIcons.regular.wifi_slash,
-                        size: 32,
+                        size: 20,
                         color: theme.colorScheme.outline,
                       ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Explore feed is unavailable offline',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Explore feed unavailable offline',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Connect to the internet to browse trending community playlists and global music feeds',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -69,44 +90,23 @@ class _ExploreHomeFeedSectionState
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (sectionIndex == 0)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 4),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            'Feed',
-                            style: theme.textTheme.headlineSmall?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        ReusableHoverIconButton(
-                          icon: UIcons.regular.refresh,
-                          tooltip: 'Reload feed',
-                          iconSize: 18,
-                          onTap: () async {
-                            ref.invalidate(homeFeedProvider);
-                            await ref
-                                .read(homeFeedProvider.future)
-                                .catchError((_) => <ExploreHomeSection>[]);
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 12),
-                  child: Text(
-                    section.title,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+                  child: Row(
+                    children: [
+                      Icon(UIcons.regular.sparkles, size: 18, color: theme.primaryColor),
+                      const SizedBox(width: 8),
+                      Text(
+                        section.title,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 SizedBox(
-                  height: 230,
+                  height: 200,
                   child: SilkyListView.builder(
                     scrollDirection: Axis.horizontal,
                     padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -146,8 +146,8 @@ class _ExploreHomeFeedSectionState
                                             color: theme
                                                 .colorScheme
                                                 .surfaceContainerHighest,
-                                            child: const Icon(
-                                              Icons.music_note,
+                                            child: Icon(
+                                              UIcons.regular.music,
                                               color: Colors.grey,
                                             ),
                                           ),
@@ -163,9 +163,9 @@ class _ExploreHomeFeedSectionState
                                             .withValues(alpha: 0.6),
                                         child: IconButton(
                                           padding: EdgeInsets.zero,
-                                          icon: const Icon(
-                                            Icons.playlist_add,
-                                            size: 18,
+                                          icon: Icon(
+                                            UIcons.regular.add_folder,
+                                            size: 16,
                                             color: Colors.white,
                                           ),
                                           tooltip: 'Add to Stream Playlists',
@@ -179,14 +179,14 @@ class _ExploreHomeFeedSectionState
                                     ),
                                 ],
                               ),
-                              const SizedBox(height: 8),
+                              const SizedBox(height: 6),
                               Text(
                                 item.title,
-                                maxLines: 2,
+                                maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: theme.textTheme.bodyMedium?.copyWith(
                                   fontWeight: FontWeight.w600,
-                                  fontSize: 13,
+                                  fontSize: 12.5,
                                 ),
                               ),
                               if (item.subtitle.isNotEmpty) ...[
@@ -213,7 +213,7 @@ class _ExploreHomeFeedSectionState
           }, childCount: sections.length),
         );
       },
-      loading: () => const ExploreFeedSkeleton(),
+      loading: () => const SectionCarouselSliverSkeleton(titleWidth: 120),
       error: (_, _) => const SliverToBoxAdapter(child: SizedBox.shrink()),
     );
   }
@@ -321,64 +321,5 @@ class _ExploreHomeFeedSectionState
         ).showSnackBar(SnackBar(content: Text('Failed to add playlist: $e')));
       }
     }
-  }
-}
-
-class ExploreFeedSkeleton extends StatelessWidget {
-  const ExploreFeedSkeleton({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return SliverToBoxAdapter(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
-            child: ShimmerSkeleton(
-              width: 120,
-              height: 24,
-              borderRadius: BorderRadius.circular(4),
-            ),
-          ),
-          SizedBox(
-            height: 200,
-            child: SilkyListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              itemCount: 5,
-              itemBuilder: (context, index) {
-                return Container(
-                  width: 140,
-                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      ShimmerSkeleton(
-                        width: 140,
-                        height: 140,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      const SizedBox(height: 8),
-                      ShimmerSkeleton(
-                        width: 110,
-                        height: 16,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      const SizedBox(height: 6),
-                      ShimmerSkeleton(
-                        width: 70,
-                        height: 12,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }

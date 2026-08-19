@@ -1,31 +1,36 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import 'package:resonance/main.dart';
+import 'package:resonance/features/player/application/services/playback_architecture_service.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const ProviderScope(child: ResonanceApp()));
+  group('Playback & Cache Architecture Tests', () {
+    test('CachedStreamInfo correctly parses YouTube &expire= UNIX timestamps', () {
+      final nowUnix = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      final futureUnix = nowUnix + 3600; // 1 hour in future
+      final expiredUnix = nowUnix - 60; // 1 minute in past
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+      final validUrl = 'https://rr1---sn.googlevideo.com/videoplayback?expire=$futureUnix&id=test';
+      final expiredUrl = 'https://rr1---sn.googlevideo.com/videoplayback?expire=$expiredUnix&id=test';
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+      final validParam = Uri.parse(validUrl).queryParameters['expire'];
+      final validExpiresAt = DateTime.fromMillisecondsSinceEpoch(int.parse(validParam!) * 1000);
+      final validInfo = CachedStreamInfo(validUrl, DateTime.now(), expiresAt: validExpiresAt);
+      expect(validInfo.isExpired, isFalse);
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+      final expiredParam = Uri.parse(expiredUrl).queryParameters['expire'];
+      final expiredExpiresAt = DateTime.fromMillisecondsSinceEpoch(int.parse(expiredParam!) * 1000);
+      final expiredInfo = CachedStreamInfo(expiredUrl, DateTime.now(), expiresAt: expiredExpiresAt);
+      expect(expiredInfo.isExpired, isTrue);
+    });
+
+    test('CachedStreamInfo falls back to 2-hour delta when &expire= is missing', () {
+      final freshInfo = CachedStreamInfo('https://stream.example.com/audio.m4a', DateTime.now());
+      expect(freshInfo.isExpired, isFalse);
+
+      final oldInfo = CachedStreamInfo(
+        'https://stream.example.com/audio.m4a',
+        DateTime.now().subtract(const Duration(hours: 3)),
+      );
+      expect(oldInfo.isExpired, isTrue);
+    });
   });
 }

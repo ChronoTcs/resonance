@@ -21,8 +21,8 @@ final youtubeStreamRepositoryProvider = Provider<YoutubeStreamRepository>((ref) 
   
   final repo = YoutubeStreamRepository(ref, client, cacheService, prefs);
   ref.onDispose(() => repo.dispose());
-  // warm-up only needed on Android (no native cookie sync like Windows)
-  if (Platform.isAndroid) repo.warmUpSession();
+  // Warm-up visitorData on both Android and Windows at boot to eliminate cold-start lag
+  if (Platform.isAndroid || Platform.isWindows) repo.warmUpSession();
   return repo;
 });
 

@@ -3,6 +3,7 @@ import '../../../../core/application/services/maintenance_service.dart';
 import '../../../explore/data/repositories/youtube_search_repository.dart';
 import '../../../library/data/models/media_item.dart';
 import '../providers/audio_provider.dart';
+import '../../data/models/player_enums.dart';
 import 'playback_restoration_service.dart';
 import 'playback_sync_service.dart';
 import 'playback_tracking_service.dart';
@@ -61,6 +62,11 @@ class AudioOrchestrator {
       // Reset Gapless Lock on track change
       _ref.read(gaplessPrefetchServiceProvider).resetLock();
 
+      // T+0s prefetch — resolve N+1 immediately so rapid skips hit RAM cache
+      if (next != null && next != prev) {
+        _ref.read(gaplessPrefetchServiceProvider).proactiveFetch();
+      }
+
       // SponsorBlock Auto Intro Trimming Offset
       if (next != null && next.isStreaming) {
         final prevId = prev?.id ?? prev?.path;
@@ -74,12 +80,14 @@ class AudioOrchestrator {
       // Guards:
       //   1. Only when queue has ≤ _radioRefillThreshold tracks left ahead.
       //   2. Cooldown: minimum 60s between fetches.
+      //   3. Suppressed when LoopMode.all — finite playlists should loop, not expand.
       // This prevents cascading — radio tracks are also isStreaming, so
       // without the threshold guard every radio track would re-trigger.
       if (next != null && next.isStreaming) {
         final seedId = next.id ?? next.path;
         if (seedId.isNotEmpty) {
           final audioState = _ref.read(audioProvider);
+          if (audioState.loopMode == LoopMode.all) return; // no radio during loop-all
           final remaining =
               audioState.queue.length - audioState.currentIndex - 1;
           final now = DateTime.now();
