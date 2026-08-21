@@ -115,13 +115,13 @@ if (Test-Path $PortableDir) {
 }
 Copy-Item -Recurse $BuildDir $PortableDir
 
-# If build number is specified, also preserve build snapshot for hotfix diffing
+# If build number is specified, preserve build snapshot inside WindowsOutputDir/snapshots for hotfix diffing
 if ($BuildNumber -gt 0) {
-    $BuildSnapshotDir = Join-Path $ReleasesRootDir "v$FullVersion\Windows\Release_v$FullVersion"
-    $BuildSnapshotParent = Split-Path -Parent $BuildSnapshotDir
-    if (-not (Test-Path $BuildSnapshotParent)) {
-        New-Item -ItemType Directory -Path $BuildSnapshotParent -Force | Out-Null
+    $SnapshotsDir = Join-Path $WindowsOutputDir "snapshots"
+    if (-not (Test-Path $SnapshotsDir)) {
+        New-Item -ItemType Directory -Path $SnapshotsDir -Force | Out-Null
     }
+    $BuildSnapshotDir = Join-Path $SnapshotsDir "Release_v$FullVersion"
     if (Test-Path $BuildSnapshotDir) {
         Remove-Item -Recurse -Force $BuildSnapshotDir
     }
@@ -166,12 +166,16 @@ function Get-SemVerTuple([string]$v) {
     }
     $main = $clean.Split('-')[0].Split('+')[0]
     $parts = $main.Split('.')
-    $major = if ($parts.Length -gt 0) { [int]$parts[0] } else { 0 }
-    $minor = if ($parts.Length -gt 1) { [int]$parts[1] } else { 0 }
-    $patch = if ($parts.Length -gt 2) { [int]$parts[2] } else { 0 }
+    $major = 0
+    $minor = 0
+    $patch = 0
+    if ($parts.Length -gt 0) { [int]::TryParse($parts[0], [ref]$major) | Out-Null }
+    if ($parts.Length -gt 1) { [int]::TryParse($parts[1], [ref]$minor) | Out-Null }
+    if ($parts.Length -gt 2) { [int]::TryParse($parts[2], [ref]$patch) | Out-Null }
     return ([int64]$major * 100000000) + ([int64]$minor * 100000) + ([int64]$patch * 100) + $build
 }
 
+$TargetVersionLabel = if ($BuildNumber -gt 0) { "$Version+$BuildNumber" } else { $Version }
 $TargetPrevReleases = @()
 
 if (-not [string]::IsNullOrWhiteSpace($PreviousVersion)) {
@@ -185,27 +189,52 @@ if (-not [string]::IsNullOrWhiteSpace($PreviousVersion)) {
         Write-Host "  -> Specified PreviousVersion v$PreviousVersion not found at $SpecifiedPath" -ForegroundColor DarkYellow
     }
 } else {
-    $CurrentTuple = Get-SemVerTuple (if ($BuildNumber -gt 0) { $FullVersion } else { $Version })
+    $CurrentTuple = Get-SemVerTuple $TargetVersionLabel
+    $DiscoveredCandidates = @()
 
-    $AllOlder = Get-ChildItem -Path $ReleasesRootDir -Directory | Where-Object { 
-        $dirTuple = Get-SemVerTuple $_.Name
-        $dirTuple -lt $CurrentTuple -and (Test-Path (Join-Path $_.FullName "Windows\Release_$($_.Name)"))
+    # 1. Check local snapshots inside current release folder (for in-place hotfix diffs)
+    $SnapshotsDir = Join-Path $WindowsOutputDir "snapshots"
+    if (Test-Path $SnapshotsDir) {
+        Get-ChildItem -Path $SnapshotsDir -Directory | Where-Object { $_.Name -like "Release_v*" } | ForEach-Object {
+            $snapVer = $_.Name.Replace("Release_v", "")
+            $snapTuple = Get-SemVerTuple $snapVer
+            if ($snapTuple -lt $CurrentTuple) {
+                $DiscoveredCandidates += @{
+                    Tuple = $snapTuple
+                    Version = $snapVer
+                    Path = $_.FullName
+                }
+            }
+        }
     }
 
-    $SortedOlder = $AllOlder | Sort-Object { Get-SemVerTuple $_.Name } -Descending
-    $Selected = $SortedOlder | Select-Object -First $MaxDeltaReleases
+    # 2. Check older major/minor releases in Releases root
+    $AllOlder = Get-ChildItem -Path $ReleasesRootDir -Directory | Where-Object { 
+        $_.Name -ne "v$Version" -and (Test-Path (Join-Path $_.FullName "Windows\Release_$($_.Name)"))
+    }
 
-    foreach ($dir in $Selected) {
-        $prevVer = $dir.Name.TrimStart('v', 'V')
-        $prevPath = Join-Path $dir.FullName "Windows\Release_$($dir.Name)"
+    foreach ($dir in $AllOlder) {
+        $dirVer = $dir.Name.TrimStart('v', 'V')
+        $dirTuple = Get-SemVerTuple $dirVer
+        if ($dirTuple -lt $CurrentTuple) {
+            $DiscoveredCandidates += @{
+                Tuple = $dirTuple
+                Version = $dirVer
+                Path = (Join-Path $dir.FullName "Windows\Release_$($dir.Name)")
+            }
+        }
+    }
+
+    $SortedCandidates = $DiscoveredCandidates | Sort-Object { $_.Tuple } -Descending
+    $Selected = $SortedCandidates | Select-Object -First $MaxDeltaReleases
+
+    foreach ($item in $Selected) {
         $TargetPrevReleases += @{
-            Version = $prevVer
-            Path = $prevPath
+            Version = $item.Version
+            Path = $item.Path
         }
     }
 }
-
-$TargetVersionLabel = if ($BuildNumber -gt 0) { "$Version+$BuildNumber" } else { $Version }
 
 if ((Test-Path $HDiffzExe) -and ($TargetPrevReleases.Count -gt 0)) {
     foreach ($prev in $TargetPrevReleases) {

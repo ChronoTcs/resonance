@@ -61,16 +61,16 @@ class _ReleaseManagerScreenState extends ConsumerState<ReleaseManagerScreen> {
             const Spacer(),
             if (updateState.currentVersion.isNotEmpty)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
                   color: theme.primaryColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(6),
                   border: Border.all(color: theme.primaryColor.withValues(alpha: 0.3)),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(UIcons.regular.info, size: 12, color: theme.primaryColor),
+                    Icon(UIcons.regular.info, size: 13, color: theme.primaryColor),
                     const SizedBox(width: 6),
                     Text(
                       'Installed: v${updateState.currentVersion}',
