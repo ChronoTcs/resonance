@@ -89,7 +89,9 @@ class UpdateNotifier extends Notifier<UpdateState> {
     final prefs = await SharedPreferences.getInstance();
     final savedStagedTag = prefs.getString(_kStagedVersionTag);
     final packageInfo = await PackageInfo.fromPlatform();
-    final currentVersion = packageInfo.version;
+    final currentVersion = packageInfo.buildNumber.isNotEmpty && packageInfo.buildNumber != '0'
+        ? '${packageInfo.version}+${packageInfo.buildNumber}'
+        : packageInfo.version;
 
     if (savedStagedTag != null) {
       // If currently running version already matches or exceeds the staged version, clear the flag and staging folder!
@@ -133,7 +135,9 @@ class UpdateNotifier extends Notifier<UpdateState> {
     state = state.copyWith(isChecking: true, error: null);
     try {
       final packageInfo = await PackageInfo.fromPlatform();
-      final currentVersion = packageInfo.version;
+      final currentVersion = packageInfo.buildNumber.isNotEmpty && packageInfo.buildNumber != '0'
+          ? '${packageInfo.version}+${packageInfo.buildNumber}'
+          : packageInfo.version;
 
       final options = Options(
         headers: {

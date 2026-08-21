@@ -38,16 +38,23 @@ class AppRelease {
     if (!isNewerThanCurrent) return null;
 
     final cleanCurrent = currentVersion.replaceAll(RegExp(r'^[vV]'), '').toLowerCase();
+    final baseCurrent = cleanCurrent.split('-')[0].split('+')[0];
+
     for (var asset in assets) {
       if (asset is! Map<String, dynamic>) continue;
       final name = asset['name'].toString().toLowerCase();
-      if (name.endsWith('.patch')) {
+      if (name.endsWith('.patch') && name.contains('-to-')) {
         // 2. Strict matching: patch must be specifically built for the user's current version
-        if (name.contains('-to-')) {
-          final fromPart = name.split('-to-').first;
-          if (fromPart.contains(cleanCurrent)) {
-            return asset;
-          }
+        final fromPart = name.split('-to-').first;
+        if (fromPart.contains(cleanCurrent) ||
+            fromPart.contains('v$cleanCurrent') ||
+            fromPart.contains('-$cleanCurrent-') ||
+            fromPart.endsWith('-$cleanCurrent') ||
+            fromPart.contains('-$baseCurrent-') ||
+            fromPart.endsWith('-$baseCurrent') ||
+            fromPart.endsWith('-v$baseCurrent') ||
+            fromPart.contains('-v$baseCurrent-')) {
+          return asset;
         }
       }
     }
@@ -95,7 +102,29 @@ class AppRelease {
 
   factory AppRelease.fromJson(Map<String, dynamic> json, String currentAppVersion) {
     final rawTag = json['tag_name'].toString();
-    final cmp = compareSemVer(rawTag, currentAppVersion);
+    final assets = json['assets'] as List<dynamic>? ?? [];
+
+    // Extract target build number from patch asset names if present (e.g. "...-to-v0.1.6-beta+8-delta.patch")
+    String effectiveVersion = rawTag;
+    int highestBuild = 0;
+    for (var asset in assets) {
+      if (asset is! Map<String, dynamic>) continue;
+      final name = asset['name'].toString().toLowerCase();
+      if (name.endsWith('.patch') && name.contains('-to-')) {
+        final toPart = name.split('-to-').last.replaceAll('-delta.patch', '').replaceAll('.patch', '');
+        if (toPart.contains('+')) {
+          final buildStr = toPart.split('+').last;
+          final b = int.tryParse(buildStr) ?? 0;
+          if (b > highestBuild) {
+            highestBuild = b;
+            final base = rawTag.split('+')[0];
+            effectiveVersion = '$base+$highestBuild';
+          }
+        }
+      }
+    }
+
+    final cmp = compareSemVer(effectiveVersion, currentAppVersion);
     final isCurrent = cmp == 0;
     final isNewer = cmp > 0;
     final isOlder = cmp < 0;
@@ -108,7 +137,7 @@ class AppRelease {
       body: json['body']?.toString() ?? 'No release notes provided for this version.',
       isPrerelease: json['prerelease'] == true,
       publishedAt: DateTime.tryParse(json['published_at']?.toString() ?? '') ?? DateTime.now(),
-      assets: json['assets'] as List<dynamic>? ?? [],
+      assets: assets,
       isCurrentVersion: isCurrent,
       isNewerThanCurrent: isNewer,
       isOlderThanCurrent: isOlder,

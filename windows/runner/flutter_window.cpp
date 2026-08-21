@@ -18,6 +18,20 @@ static constexpr UINT_PTR kSubclassId = 100;
 
 std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> g_hover_channel = nullptr;
 
+// Helper: check if hwnd currently covers its monitor (i.e. is truly fullscreen).
+// O(1), called from NCHITTEST and NCLBUTTONDOWN guards.
+static bool IsWindowFullscreen(HWND hwnd) {
+  RECT wr;
+  if (!GetWindowRect(hwnd, &wr)) return false;
+  HMONITOR mon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+  if (!mon) return false;
+  MONITORINFO mi;
+  mi.cbSize = sizeof(MONITORINFO);
+  if (!GetMonitorInfo(mon, &mi)) return false;
+  return wr.left == mi.rcMonitor.left && wr.top == mi.rcMonitor.top &&
+         wr.right == mi.rcMonitor.right && wr.bottom == mi.rcMonitor.bottom;
+}
+
 static void UpdateHoverState(HWND parent, bool hovered) {
   if (g_is_hovered_state != hovered) {
     g_is_hovered_state = hovered;
@@ -63,8 +77,10 @@ static LRESULT CALLBACK ChildSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, L
       return HTTRANSPARENT;
     }
 
-    // Maximize button zone: let parent handle Snap Layouts hover.
-    if (pt.y >= 0 && pt.y <= title_bar_height && pt.x >= max_btn_left && pt.x <= max_btn_right) {
+    // Maximize button zone: let parent handle Snap Layouts hover (only if window is maximizable).
+    bool is_maximizable = (GetWindowLong(parent, GWL_STYLE) & WS_MAXIMIZEBOX) != 0;
+    bool is_fullscreen  = IsWindowFullscreen(parent);
+    if (!is_fullscreen && is_maximizable && pt.y >= 0 && pt.y <= title_bar_height && pt.x >= max_btn_left && pt.x <= max_btn_right) {
       UpdateHoverState(parent, true);
       return HTTRANSPARENT;
     } else {
@@ -72,21 +88,6 @@ static LRESULT CALLBACK ChildSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, L
     }
   }
   return DefSubclassProc(hwnd, uMsg, wParam, lParam);
-}
-
-
-// Helper: check if hwnd currently covers its monitor (i.e. is truly fullscreen).
-// O(1), called from NCHITTEST and NCLBUTTONDOWN guards.
-static bool IsWindowFullscreen(HWND hwnd) {
-  RECT wr;
-  if (!GetWindowRect(hwnd, &wr)) return false;
-  HMONITOR mon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
-  if (!mon) return false;
-  MONITORINFO mi;
-  mi.cbSize = sizeof(MONITORINFO);
-  if (!GetMonitorInfo(mon, &mi)) return false;
-  return wr.left == mi.rcMonitor.left && wr.top == mi.rcMonitor.top &&
-         wr.right == mi.rcMonitor.right && wr.bottom == mi.rcMonitor.bottom;
 }
 
 static LRESULT CALLBACK WindowSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
@@ -139,11 +140,13 @@ static LRESULT CALLBACK WindowSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, 
     UpdateHoverState(hwnd, false);
   }
 
-  // Guard: only intercept maximize-button zone when NOT in fullscreen.
-  // In fullscreen the title bar is hidden — clicks in that coordinate would otherwise
-  // trigger SC_RESTORE/SC_MAXIMIZE and corrupt the window state machine.
-  if (!IsWindowFullscreen(hwnd)) {
-    if (uMsg == WM_NCLBUTTONDOWN && wParam == HTMAXBUTTON) {
+  // Guard: only intercept maximize-button zone when NOT in fullscreen AND window is maximizable.
+  // In fullscreen or miniplayer mode, title bar maximize clicks must be completely ignored.
+  bool is_fullscreen  = IsWindowFullscreen(hwnd);
+  bool is_maximizable = (GetWindowLong(hwnd, GWL_STYLE) & WS_MAXIMIZEBOX) != 0;
+
+  if (!is_fullscreen) {
+    if (is_maximizable && uMsg == WM_NCLBUTTONDOWN && wParam == HTMAXBUTTON) {
       WINDOWPLACEMENT wp;
       wp.length = sizeof(WINDOWPLACEMENT);
       if (GetWindowPlacement(hwnd, &wp)) {
@@ -185,8 +188,8 @@ static LRESULT CALLBACK WindowSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, 
         return HTTOP;
       }
 
-      // Maximize button zone — Windows 11 Snap Layouts hover.
-      if (pt.y >= 0 && pt.y <= title_bar_height &&
+      // Maximize button zone — Windows 11 Snap Layouts hover (only when window is maximizable).
+      if (is_maximizable && pt.y >= 0 && pt.y <= title_bar_height &&
           pt.x >= max_btn_left && pt.x <= max_btn_right) {
         return HTMAXBUTTON;
       }

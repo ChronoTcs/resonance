@@ -159,8 +159,14 @@ class _FloatingWindowContent extends ConsumerWidget {
                             Center(
                               child: Icon(UIcons.regular.grip_lines, color: headerIconColor.withValues(alpha: 0.4), size: 16),
                             ),
-                            // 2. Wrap Drag functionality
-                            const Positioned.fill(child: DragToMoveArea(child: SizedBox())),
+                            // 2. Wrap Drag functionality (without double-tap maximize)
+                            Positioned.fill(
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.translucent,
+                                onPanStart: (_) => windowManager.startDragging(),
+                                child: const SizedBox(),
+                              ),
+                            ),
                             
                             Positioned(
                               left: 4,
