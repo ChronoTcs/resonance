@@ -11,7 +11,7 @@ datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
 
 a = Analysis(
-    ['D:\\File Mata Kuliah\\Projek\\streamly\\resonance\\python_engine\\resonance_downloader.py'],
+    ['resonance_downloader.py'],
     pathex=[],
     binaries=binaries,
     datas=datas,
@@ -44,4 +44,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    # PE resource metadata — reduces AV false positives by giving the binary a known identity
+    version='version_info.txt',
+    icon='../windows/runner/resources/app_icon.ico',
 )

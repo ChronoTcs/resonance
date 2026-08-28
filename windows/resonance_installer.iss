@@ -15,7 +15,7 @@
 AppId={{D3F7A1E1-8C9B-4B2E-BC6D-9E9A9B9C9D9E}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
-;AppVerName={#MyAppName} {#MyAppVersion}
+AppVerName={#MyAppName}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
@@ -51,6 +51,9 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Source: "..\build\windows\x64\runner\Release\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "tools\*"; DestDir: "{app}\tools"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
+; Bundle installer alongside app — used by the in-app delta update swap script to silently
+; refresh the Windows Uninstall registry entry (DisplayVersion, DisplayName) after file swap.
+Source: "{#SourcePath}Output\{#SetupSetting('OutputBaseFilename')}.exe"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 
 [Icons]

@@ -86,13 +86,22 @@ class AppRelease {
       }
     }
 
-    // If base numeric parts (0.1.2 == 0.1.2) match, compare build numbers if present (+2 vs +3)
-    int extractBuild(String v) {
-      if (v.contains('+')) {
-        final buildStr = v.split('+').last;
-        return int.tryParse(buildStr) ?? 0;
-      }
+    // If base numeric parts (0.1.2 == 0.1.2) match, compare build numbers only when
+    // BOTH versions have an explicit '+N' suffix.
+    // Rationale: a GitHub release tag like 'v0.1.7-beta' (no build number) is the
+    // canonical release for that version — hotfix build numbers (+10, +11…) are
+    // internal and should never make the base tag appear "older than installed".
+    final bool v1HasBuild = v1.contains('+');
+    final bool v2HasBuild = v2.contains('+');
+
+    if (!v1HasBuild || !v2HasBuild) {
+      // One side has no explicit build number → treat as same release
       return 0;
+    }
+
+    int extractBuild(String v) {
+      final buildStr = v.split('+').last;
+      return int.tryParse(buildStr) ?? 0;
     }
 
     final b1 = extractBuild(v1);

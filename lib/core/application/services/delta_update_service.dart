@@ -207,10 +207,13 @@ class DeltaUpdateService {
       final targetAppDir = appDirectory;
       final exeName = p.basename(Platform.resolvedExecutable);
 
-      // Create detached swap batch script and invisible VBS wrapper in system temp
+      // Write the swap batch script to system temp.
+      // NOTE: No VBS silent-runner wrapper — WScript.Shell.Run with window=0 is
+      // flagged as Trojan:Win32/Bearfoos.A!ml by Windows Defender ML heuristics
+      // because it matches dropper behaviour (dynamic script → silent detached exec → self-exit).
+      // Using cmd /c start /min instead: minimized window, same result, no AV trigger.
       final batFile = File(p.join(Directory.systemTemp.path, 'resonance_swap.bat'));
-      final vbsFile = File(p.join(Directory.systemTemp.path, 'resonance_swap_launcher.vbs'));
-      
+
       final batchContent = '''
 @echo off
 setlocal
@@ -222,35 +225,28 @@ robocopy "${stagedDir.path}" "${targetAppDir.path}" /E /IS /IT /MOVE /R:5 /W:1 >
 :: Clean up staging folder
 if exist "${stagedDir.path}" rmdir /S /Q "${stagedDir.path}" >nul 2>&1
 
+:: Silently run installer if bundled alongside the app (updates Windows Apps registry entry)
+:: The /DIR flag ensures it registers the current install path, not the default.
+for %%f in ("${targetAppDir.path}\\Resonance-v*-Windows.exe") do (
+  "%%f" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR="${targetAppDir.path}" >nul 2>&1
+)
+
 :: Relaunch Resonance cleanly
 start "" "${p.join(targetAppDir.path, exeName)}"
 
-:: Self-destruct temporary scripts
-del "${vbsFile.path}" >nul 2>&1
+:: Self-destruct
 del "%~f0" >nul 2>&1
 exit
 ''';
 
       await batFile.writeAsString(batchContent);
 
-      // VBScript runs the batch file with window style 0 (100% invisible, no CMD flash)
-      final vbsContent = 'CreateObject("WScript.Shell").Run """${batFile.path}""", 0, False';
-      await vbsFile.writeAsString(vbsContent);
-
-      // Launch invisible wscript and terminate current process immediately
-      try {
-        await Process.start(
-          'wscript.exe',
-          [vbsFile.path],
-          mode: ProcessStartMode.detached,
-        );
-      } catch (_) {
-        await Process.start(
-          'cmd.exe',
-          ['/c', batFile.path],
-          mode: ProcessStartMode.detached,
-        );
-      }
+      // Launch via cmd /c start /min — minimized CMD, no VBS wrapper needed
+      await Process.start(
+        'cmd.exe',
+        ['/c', 'start', '/min', '', batFile.path],
+        mode: ProcessStartMode.detached,
+      );
 
       exit(0);
     } catch (e) {
