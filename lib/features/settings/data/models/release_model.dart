@@ -38,18 +38,22 @@ class AppRelease {
     if (!isNewerThanCurrent) return null;
 
     final cleanCurrent = currentVersion.replaceAll(RegExp(r'^[vV]'), '').toLowerCase();
+    // Normalize + → . for matching against GitHub-safe filenames (e.g. "0.1.6-beta+8" → "0.1.6-beta.8")
+    final normalizedCurrent = cleanCurrent.replaceAll('+', '.');
     final baseCurrent = cleanCurrent.split('-')[0].split('+')[0];
 
     for (var asset in assets) {
       if (asset is! Map<String, dynamic>) continue;
-      final name = asset['name'].toString().toLowerCase();
+      final rawName = asset['name'].toString().toLowerCase();
+      // Normalize asset name: decode %2b back to . and replace any + with . for consistent matching
+      final name = rawName.replaceAll('%2b', '.').replaceAll('+', '.');
       if (name.endsWith('.patch') && name.contains('-to-')) {
         // 2. Strict matching: patch must be specifically built for the user's current version
         final fromPart = name.split('-to-').first;
-        if (fromPart.contains(cleanCurrent) ||
-            fromPart.contains('v$cleanCurrent') ||
-            fromPart.contains('-$cleanCurrent-') ||
-            fromPart.endsWith('-$cleanCurrent') ||
+        if (fromPart.contains(normalizedCurrent) ||
+            fromPart.contains('v$normalizedCurrent') ||
+            fromPart.contains('-$normalizedCurrent-') ||
+            fromPart.endsWith('-$normalizedCurrent') ||
             fromPart.contains('-$baseCurrent-') ||
             fromPart.endsWith('-$baseCurrent') ||
             fromPart.endsWith('-v$baseCurrent') ||
@@ -109,10 +113,24 @@ class AppRelease {
     int highestBuild = 0;
     for (var asset in assets) {
       if (asset is! Map<String, dynamic>) continue;
-      final name = asset['name'].toString().toLowerCase();
-      if (name.endsWith('.patch') && name.contains('-to-')) {
-        final toPart = name.split('-to-').last.replaceAll('-delta.patch', '').replaceAll('.patch', '');
-        if (toPart.contains('+')) {
+      final assetName = asset['name'].toString().toLowerCase();
+      if (assetName.endsWith('.patch') && assetName.contains('-to-')) {
+        // Normalize %2b and + to . before parsing (GitHub-safe filenames use . as build separator)
+        final normalized = assetName.replaceAll('%2b', '.').replaceAll('+', '.');
+        final toPart = normalized.split('-to-').last
+            .replaceAll('-delta.patch', '')
+            .replaceAll('.patch', '');
+        // toPart is like "v0.1.7-beta.1" — extract trailing build number after last dot
+        final dotBuildMatch = RegExp(r'\.([0-9]+)$').firstMatch(toPart);
+        if (dotBuildMatch != null) {
+          final b = int.tryParse(dotBuildMatch.group(1)!) ?? 0;
+          if (b > highestBuild) {
+            highestBuild = b;
+            final base = rawTag.split('+')[0];
+            effectiveVersion = '$base+$highestBuild';
+          }
+        } else if (toPart.contains('+')) {
+          // Legacy: handle old + style just in case
           final buildStr = toPart.split('+').last;
           final b = int.tryParse(buildStr) ?? 0;
           if (b > highestBuild) {

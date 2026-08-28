@@ -121,7 +121,9 @@ if ($BuildNumber -gt 0) {
     if (-not (Test-Path $SnapshotsDir)) {
         New-Item -ItemType Directory -Path $SnapshotsDir -Force | Out-Null
     }
-    $BuildSnapshotDir = Join-Path $SnapshotsDir "Release_v$FullVersion"
+    # Sanitize version string for filesystem/GitHub: replace + with . (+ is illegal in GitHub asset names)
+    $SafeFullVersion = $FullVersion -replace '\+', '.'
+    $BuildSnapshotDir = Join-Path $SnapshotsDir "Release_v$SafeFullVersion"
     if (Test-Path $BuildSnapshotDir) {
         Remove-Item -Recurse -Force $BuildSnapshotDir
     }
@@ -196,8 +198,11 @@ if (-not [string]::IsNullOrWhiteSpace($PreviousVersion)) {
     $SnapshotsDir = Join-Path $WindowsOutputDir "snapshots"
     if (Test-Path $SnapshotsDir) {
         Get-ChildItem -Path $SnapshotsDir -Directory | Where-Object { $_.Name -like "Release_v*" } | ForEach-Object {
+            # Snapshot dirs use dot-separated build (e.g. Release_v0.1.6-beta.8)
             $snapVer = $_.Name.Replace("Release_v", "")
-            $snapTuple = Get-SemVerTuple $snapVer
+            # Normalize back to + for SemVer tuple comparison (0.1.6-beta.8 -> 0.1.6-beta+8)
+            $snapVerNorm = $snapVer -replace '([\w-]+)\.([0-9]+)$', '$1+$2'
+            $snapTuple = Get-SemVerTuple $snapVerNorm
             if ($snapTuple -lt $CurrentTuple) {
                 $DiscoveredCandidates += @{
                     Tuple = $snapTuple
@@ -240,7 +245,10 @@ if ((Test-Path $HDiffzExe) -and ($TargetPrevReleases.Count -gt 0)) {
     foreach ($prev in $TargetPrevReleases) {
         $prevVer = $prev.Version
         $prevPath = $prev.Path
-        $PatchName = "Resonance-v$prevVer-to-v$TargetVersionLabel-delta.patch"
+        # Sanitize: replace + with . for GitHub-safe filenames (+ gets mangled to %2B)
+        $SafePrevVer = $prevVer -replace '\+', '.'
+        $SafeTargetVer = $TargetVersionLabel -replace '\+', '.'
+        $PatchName = "Resonance-v$SafePrevVer-to-v$SafeTargetVer-delta.patch"
         $PatchFile = Join-Path $WindowsOutputDir $PatchName
         if (Test-Path $PatchFile) { Remove-Item -Force $PatchFile }
 

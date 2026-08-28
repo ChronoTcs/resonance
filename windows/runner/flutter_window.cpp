@@ -271,6 +271,18 @@ LRESULT
 FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                               WPARAM const wparam,
                               LPARAM const lparam) noexcept {
+  static const UINT wm_show_instance = ::RegisterWindowMessage(L"WM_SHOW_RESONANCE_INSTANCE");
+  if (message == wm_show_instance) {
+    ::ShowWindow(hwnd, SW_SHOW);
+    if (::IsIconic(hwnd)) {
+      ::ShowWindow(hwnd, SW_RESTORE);
+    }
+    ::SetForegroundWindow(hwnd);
+    ::BringWindowToTop(hwnd);
+    ::SetFocus(hwnd);
+    return 0;
+  }
+
   // 1. Let window_manager process messages first (it may install its own subclass on WM_SHOWWINDOW).
   std::optional<LRESULT> flutter_result;
   if (flutter_controller_) {
