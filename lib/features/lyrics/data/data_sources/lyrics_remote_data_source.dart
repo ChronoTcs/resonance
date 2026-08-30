@@ -123,8 +123,13 @@ class LyricsRemoteDataSource {
     return null;
   }
 
-  /// 2b. LRCLIB API SEARCH (Flexible query fallback)
-  Future<String?> fetchFromLrcLibSearch(Map<String, String> params) async {
+  /// 2b. LRCLIB API SEARCH (Flexible query fallback with weighted candidate ranking)
+  Future<String?> fetchFromLrcLibSearch(
+    Map<String, String> params, {
+    int? targetDurationSecs,
+    String? targetTitle,
+    String? targetArtist,
+  }) async {
     if (_isOffline) {
       debugPrint('[LyricsRemote] Skipping LRCLIB SEARCH — offline');
       return null;
@@ -136,17 +141,104 @@ class LyricsRemoteDataSource {
         _ref.read(dataUsageServiceProvider).addBytes(response.bodyBytes.length);
         final List<dynamic> data = jsonDecode(response.body);
         if (data.isNotEmpty) {
-          // Prefer synced matches first
+          final targetTitleLower = (targetTitle ?? '').toLowerCase();
+          final targetArtistLower = (targetArtist ?? '').toLowerCase();
+          final bool targetHasFeat = targetTitleLower.contains('feat') || targetTitleLower.contains('ft.') || targetArtistLower.contains('feat') || targetArtistLower.contains('ft.');
+          final bool targetHasRemix = targetTitleLower.contains('remix');
+          final bool targetHasAcoustic = targetTitleLower.contains('acoustic');
+          final bool targetHasLive = targetTitleLower.contains('live');
+
+          Map<String, dynamic>? bestCandidate;
+          double bestScore = -1.0;
+
           for (var item in data) {
+            if (item is! Map<String, dynamic>) continue;
             final synced = item['syncedLyrics'] as String?;
-            if (synced != null && synced.trim().isNotEmpty) {
-              return synced;
+            final plain = item['plainLyrics'] as String?;
+            final candTrack = (item['trackName']?.toString() ?? '').toLowerCase();
+            final candArtist = (item['artistName']?.toString() ?? '').toLowerCase();
+            final candDuration = (item['duration'] is num) ? (item['duration'] as num).toDouble() : (double.tryParse(item['duration']?.toString() ?? '') ?? 0.0);
+
+            if ((synced == null || synced.trim().isEmpty) && (plain == null || plain.trim().isEmpty)) {
+              continue;
+            }
+
+            double score = (synced != null && synced.trim().isNotEmpty) ? 50.0 : 10.0;
+
+            // 1. Duration proximity scoring
+            if (targetDurationSecs != null && targetDurationSecs > 0 && candDuration > 0) {
+              final diff = (candDuration - targetDurationSecs).abs();
+              if (diff <= 2) {
+                score += 35.0;
+              } else if (diff <= 5) {
+                score += 25.0;
+              } else if (diff <= 10) {
+                score += 15.0;
+              } else if (diff > 25) {
+                score -= 30.0;
+              }
+            }
+
+            // 2. Featuring artist / Remix / Acoustic match scoring
+            final candHasFeat = candTrack.contains('feat') || candTrack.contains('ft.') || candArtist.contains('feat') || candArtist.contains('ft.');
+            final candHasRemix = candTrack.contains('remix');
+            final candHasAcoustic = candTrack.contains('acoustic');
+            final candHasLive = candTrack.contains('live');
+
+            if (targetHasFeat) {
+              if (candHasFeat) {
+                score += 30.0;
+              } else {
+                score -= 15.0; // Penalize solo version when user is playing a featuring track
+              }
+            }
+            if (targetHasRemix) {
+              if (candHasRemix) {
+                score += 30.0;
+              } else {
+                score -= 20.0;
+              }
+            } else if (candHasRemix) {
+              score -= 20.0; // Don't give remix when track is original
+            }
+
+            if (targetHasAcoustic) {
+              if (candHasAcoustic) {
+                score += 30.0;
+              } else {
+                score -= 20.0;
+              }
+            } else if (candHasAcoustic) {
+              score -= 20.0;
+            }
+
+            if (targetHasLive) {
+              if (candHasLive) {
+                score += 30.0;
+              } else {
+                score -= 20.0;
+              }
+            } else if (candHasLive) {
+              score -= 20.0;
+            }
+
+            if (score > bestScore) {
+              bestScore = score;
+              bestCandidate = item;
             }
           }
-          // Fallback to plain
-          final plain = data.first['plainLyrics'] as String?;
-          if (plain != null && plain.trim().isNotEmpty) {
-            return plain;
+
+          if (bestCandidate != null) {
+            final synced = bestCandidate['syncedLyrics'] as String?;
+            if (synced != null && synced.trim().isNotEmpty) {
+              debugPrint('[LyricsRemote] Picked best ranked LRCLIB search match: "${bestCandidate['trackName']}" by "${bestCandidate['artistName']}" (score: $bestScore)');
+              return synced;
+            }
+            final plain = bestCandidate['plainLyrics'] as String?;
+            if (plain != null && plain.trim().isNotEmpty) {
+              debugPrint('[LyricsRemote] Picked best ranked plain LRCLIB search match: "${bestCandidate['trackName']}" (score: $bestScore)');
+              return plain;
+            }
           }
         }
       }

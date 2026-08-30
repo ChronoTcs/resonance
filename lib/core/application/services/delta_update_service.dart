@@ -234,17 +234,16 @@ for %%f in ("${targetAppDir.path}\\Resonance-v*-Windows.exe") do (
 :: Relaunch Resonance cleanly
 start "" "${p.join(targetAppDir.path, exeName)}"
 
-:: Self-destruct
-del "%~f0" >nul 2>&1
-exit
+:: Self-destruct in single atomic compound statement to prevent "The batch file cannot be found"
+(goto) 2>nul & del "%~f0"
 ''';
 
       await batFile.writeAsString(batchContent);
 
-      // Launch via cmd /c start /min — minimized CMD, no VBS wrapper needed
+      // Launch detached cmd.exe directly — runs in background and terminates cleanly
       await Process.start(
         'cmd.exe',
-        ['/c', 'start', '/min', '', batFile.path],
+        ['/c', batFile.path],
         mode: ProcessStartMode.detached,
       );
 

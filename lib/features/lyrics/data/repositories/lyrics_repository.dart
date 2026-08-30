@@ -106,13 +106,22 @@ class LyricsRepository {
     if (track.isStreaming && track.title.isNotEmpty) {
       String? foundContent;
       bool isUnisonVideo = false;
+      final durationSecs = track.duration?.inSeconds ?? 0;
 
-      // 4a. Unison API (First Priority - Word-Synced)
-      debugPrint(
-        '[LyricsRepo] Querying Unison API for word-synced lyrics...',
+      // Prepare metadata: Variant-Preserving (Priority) & Base/Stripped (Fallback)
+      final variantParsed = LyricsParser.parseHyphenatedTitle(
+        track.title,
+        track.artist ?? '',
+        preserveFeatures: true,
+      );
+      final baseParsed = LyricsParser.parseHyphenatedTitle(
+        track.title,
+        track.artist ?? '',
+        preserveFeatures: false,
       );
 
-      // Try video ID first (video-synced)
+      // 4a. Unison API (First Priority - Word-Synced)
+      debugPrint('[LyricsRepo] Querying Unison API for word-synced lyrics...');
       final videoId = track.id ?? track.path;
       if (videoId.isNotEmpty) {
         foundContent = await remoteSource.fetchFromUnison(track);
@@ -125,55 +134,73 @@ class LyricsRepository {
       if (foundContent != null) {
         final parsedLyrics = LyricsParser.parse(foundContent);
         if (!_verifyDurationMatch(parsedLyrics, track.duration)) {
-          debugPrint(
-            '[LyricsRepo] Discarding Unison lyrics due to duration mismatch.',
-          );
+          debugPrint('[LyricsRepo] Discarding Unison lyrics due to duration mismatch.');
           foundContent = null;
           isUnisonVideo = false;
         } else {
-          debugPrint(
-            '[LyricsRepo] Successfully matched and fetched Unison lyrics',
-          );
+          debugPrint('[LyricsRepo] Successfully matched and fetched Unison lyrics');
         }
       }
 
-      // 4b. LRCLIB API (Second Priority - Line-Synced)
+      // 4b. LRCLIB API (Second Priority - Line-Synced with Staged Variant Priority)
       if (foundContent == null) {
-        debugPrint(
-          '[LyricsRepo] Querying LRCLIB API for line-synced lyrics...',
-        );
-        final durationSecs = track.duration?.inSeconds ?? 0;
-        final parsed = LyricsParser.parseHyphenatedTitle(
-          track.title,
-          track.artist ?? '',
-        );
+        debugPrint('[LyricsRepo] Querying LRCLIB API with variant-preserving priority...');
 
-        if (parsed.artist.isNotEmpty) {
-          if (durationSecs > 0) {
+        // Stage 1: Exact Variant GET with duration
+        if (variantParsed.artist.isNotEmpty && durationSecs > 0) {
+          foundContent = await remoteSource.fetchFromLrcLibGet({
+            'track_name': variantParsed.title,
+            'artist_name': variantParsed.artist,
+            'duration': durationSecs.toString(),
+          });
+        }
+
+        // Stage 2: Exact Variant GET without duration
+        if (foundContent == null && variantParsed.artist.isNotEmpty) {
+          foundContent = await remoteSource.fetchFromLrcLibGet({
+            'track_name': variantParsed.title,
+            'artist_name': variantParsed.artist,
+          });
+        }
+
+        // Stage 3: Scored Search with Variant keywords
+        if (foundContent == null) {
+          final query = variantParsed.artist.isNotEmpty
+              ? '${variantParsed.title} ${variantParsed.artist}'
+              : variantParsed.title;
+          foundContent = await remoteSource.fetchFromLrcLibSearch(
+            {'q': query},
+            targetDurationSecs: durationSecs,
+            targetTitle: variantParsed.title,
+            targetArtist: variantParsed.artist,
+          );
+        }
+
+        // Stage 4: Base / Solo fallback (if variant search failed and base title differs)
+        if (foundContent == null && (baseParsed.title != variantParsed.title || baseParsed.artist != variantParsed.artist)) {
+          debugPrint('[LyricsRepo] Variant search empty — falling back to base/solo LRCLIB match...');
+          if (baseParsed.artist.isNotEmpty && durationSecs > 0) {
             foundContent = await remoteSource.fetchFromLrcLibGet({
-              'track_name': parsed.title,
-              'artist_name': parsed.artist,
+              'track_name': baseParsed.title,
+              'artist_name': baseParsed.artist,
               'duration': durationSecs.toString(),
             });
           }
           foundContent ??= await remoteSource.fetchFromLrcLibGet({
-            'track_name': parsed.title,
-            'artist_name': parsed.artist,
+            'track_name': baseParsed.title,
+            'artist_name': baseParsed.artist,
           });
-        }
-
-        // Search Fallback query
-        if (foundContent == null) {
-          final queryArtist = parsed.artist.isNotEmpty
-              ? parsed.artist
-              : LyricsParser.cleanArtist(track.artist ?? '');
-          final queryTitle = parsed.artist.isNotEmpty
-              ? parsed.title
-              : LyricsParser.cleanTitle(track.title);
-          final query = queryArtist.isNotEmpty
-              ? '$queryTitle $queryArtist'
-              : queryTitle;
-          foundContent = await remoteSource.fetchFromLrcLibSearch({'q': query});
+          if (foundContent == null) {
+            final baseQuery = baseParsed.artist.isNotEmpty
+                ? '${baseParsed.title} ${baseParsed.artist}'
+                : baseParsed.title;
+            foundContent = await remoteSource.fetchFromLrcLibSearch(
+              {'q': baseQuery},
+              targetDurationSecs: durationSecs,
+              targetTitle: baseParsed.title,
+              targetArtist: baseParsed.artist,
+            );
+          }
         }
 
         if (foundContent != null) {
@@ -184,30 +211,35 @@ class LyricsRepository {
       // 4c. Musixmatch API Bypass (Third Priority - Fallback Synced)
       if (foundContent == null) {
         debugPrint('[LyricsRepo] Querying Musixmatch API fallback...');
-        final parsed = LyricsParser.parseHyphenatedTitle(
-          track.title,
-          track.artist ?? '',
-        );
         foundContent = await remoteSource.fetchFromMusixmatch(
-          parsed.title,
-          parsed.artist,
+          variantParsed.title,
+          variantParsed.artist,
         );
-        if (foundContent != null) {
-          debugPrint(
-            '[LyricsRepo] Successfully fetched Musixmatch lyrics',
+        if (foundContent == null && (baseParsed.title != variantParsed.title || baseParsed.artist != variantParsed.artist)) {
+          foundContent = await remoteSource.fetchFromMusixmatch(
+            baseParsed.title,
+            baseParsed.artist,
           );
+        }
+        if (foundContent != null) {
+          debugPrint('[LyricsRepo] Successfully fetched Musixmatch lyrics');
         }
       }
 
       // 4d. Genius API Bypass (Fourth Priority - Plain Text Fallback)
       if (foundContent == null) {
-        debugPrint(
-          '[LyricsRepo] Querying Genius API plain text fallback...',
-        );
-        final query = track.artist != null
-            ? '${track.title} ${track.artist}'
-            : track.title;
-        foundContent = await remoteSource.fetchFromGenius(query);
+        debugPrint('[LyricsRepo] Querying Genius API plain text fallback...');
+        final variantGeniusQuery = variantParsed.artist.isNotEmpty
+            ? '${variantParsed.title} ${variantParsed.artist}'
+            : variantParsed.title;
+        foundContent = await remoteSource.fetchFromGenius(variantGeniusQuery);
+
+        if (foundContent == null && (baseParsed.title != variantParsed.title || baseParsed.artist != variantParsed.artist)) {
+          final baseGeniusQuery = baseParsed.artist.isNotEmpty
+              ? '${baseParsed.title} ${baseParsed.artist}'
+              : baseParsed.title;
+          foundContent = await remoteSource.fetchFromGenius(baseGeniusQuery);
+        }
         if (foundContent != null) {
           debugPrint('[LyricsRepo] Successfully fetched Genius lyrics');
         }

@@ -13,6 +13,7 @@ import 'stream_cache_tracker_service.dart';
 import '../../../features/settings/application/maintenance_provider.dart';
 import '../../utils/thumbnail_utils.dart';
 import '../../application/services/network_connectivity_service.dart';
+import 'package:flutter/painting.dart';
 
 int _scanDirectoryBytesIsolate(String path) {
   int total = 0;
@@ -649,17 +650,25 @@ class MediaCacheService {
       }
 
       if (dir != null && await dir.exists()) {
-        final List<FileSystemEntity> entities = dir.listSync();
-        for (final entity in entities) {
-          if (entity is File) {
-            try {
-              await entity.delete();
-            } catch (_) {}
+        try {
+          final List<FileSystemEntity> entities = await dir.list(followLinks: false).toList();
+          for (final entity in entities) {
+            if (entity is File) {
+              try {
+                await entity.delete();
+              } catch (_) {
+                // Silently skip files locked by audio player engine or OS
+              }
+            }
           }
-        }
+        } catch (_) {}
         resetCategorySize(category);
         debugPrint('[MediaCache] Cleared category $category');
       }
+
+      // Evict Flutter's memory image cache so deleted artwork doesn't cause decoding crashes
+      PaintingBinding.instance.imageCache.clear();
+      PaintingBinding.instance.imageCache.clearLiveImages();
     } catch (e) {
       debugPrint('[MediaCache] Clear category error: $e');
     }
@@ -678,20 +687,26 @@ class MediaCacheService {
 
       for (var dir in dirs) {
         if (!dir.existsSync()) continue;
-        final List<FileSystemEntity> entities = dir.listSync();
-        for (final entity in entities) {
-          if (entity is File) {
-            try {
-              await entity.delete();
-            } catch (_) {}
+        try {
+          final List<FileSystemEntity> entities = await dir.list(followLinks: false).toList();
+          for (final entity in entities) {
+            if (entity is File) {
+              try {
+                await entity.delete();
+              } catch (_) {
+                // Silently skip in-use/locked files
+              }
+            }
           }
-        }
+        } catch (_) {}
       }
       resetCategorySize('stream_audio');
       resetCategorySize('stream_images');
       resetCategorySize('stream_lyrics');
       resetCategorySize('metadata');
       resetCategorySize('translate');
+      PaintingBinding.instance.imageCache.clear();
+      PaintingBinding.instance.imageCache.clearLiveImages();
       debugPrint('[MediaCache] FULL CACHE CLEARED');
     } catch (e) {
       debugPrint('[MediaCache] Clear full cache error: $e');

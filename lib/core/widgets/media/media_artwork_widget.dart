@@ -133,19 +133,32 @@ class _MediaArtworkWidgetState extends ConsumerState<MediaArtworkWidget> {
         );
       } else {
         final file = File(_resolvedThumbnailUrl!);
-        final cacheKey = file.existsSync()
-            ? '${_resolvedThumbnailUrl!}-${file.lastModifiedSync().millisecondsSinceEpoch}'
-            : _resolvedThumbnailUrl!;
-        imageWidget = Image.file(
-          file,
-          key: ValueKey(cacheKey),
-          width: widget.width,
-          height: widget.height,
-          fit: widget.fit,
-          color: widget.color,
-          colorBlendMode: widget.colorBlendMode,
-          errorBuilder: (_, _, _) => fallback,
-        );
+        String cacheKey = _resolvedThumbnailUrl!;
+        bool fileExists = false;
+        try {
+          if (file.existsSync()) {
+            fileExists = true;
+            cacheKey = '${_resolvedThumbnailUrl!}-${file.lastModifiedSync().millisecondsSinceEpoch}';
+          }
+        } catch (_) {
+          // File was deleted mid-render during cache clear — fallback safely
+          fileExists = false;
+        }
+
+        if (fileExists) {
+          imageWidget = Image.file(
+            file,
+            key: ValueKey(cacheKey),
+            width: widget.width,
+            height: widget.height,
+            fit: widget.fit,
+            color: widget.color,
+            colorBlendMode: widget.colorBlendMode,
+            errorBuilder: (_, _, _) => fallback,
+          );
+        } else {
+          imageWidget = fallback;
+        }
       }
     } else {
       imageWidget = fallback;

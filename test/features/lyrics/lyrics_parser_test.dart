@@ -47,5 +47,38 @@ void main() {
       expect(LyricsParser.cleanTitle('Blinding Lights (Official Video)'), equals('Blinding Lights'));
       expect(LyricsParser.cleanTitle('Song Name (feat. Artist B)'), equals('Song Name'));
     });
+
+    test('cleanVideoNoise should strip video packaging but preserve musical variants', () {
+      expect(
+        LyricsParser.cleanVideoNoise('Starboy (Official Music Video) (feat. Daft Punk)'),
+        equals('Starboy (feat. Daft Punk)'),
+      );
+      expect(
+        LyricsParser.cleanVideoNoise('Save Your Tears (Official Audio) (Remix) [feat. Ariana Grande]'),
+        equals('Save Your Tears (Remix) [feat. Ariana Grande]'),
+      );
+      expect(
+        LyricsParser.cleanVideoNoise('Hotel California (Live on MTV) [4K Remastered]'),
+        equals('Hotel California (Live on MTV)'),
+      );
+    });
+
+    test('cleanArtist should support preserving and stripping collaborators', () {
+      expect(LyricsParser.cleanArtist('The Weeknd - Topic'), equals('The Weeknd'));
+      expect(LyricsParser.cleanArtist('Taylor Swift feat. Kendrick Lamar', preserveCollaborators: true), equals('Taylor Swift feat. Kendrick Lamar'));
+      expect(LyricsParser.cleanArtist('Taylor Swift feat. Kendrick Lamar', preserveCollaborators: false), equals('Taylor Swift'));
+      expect(LyricsParser.cleanArtist('B.o.B & Bruno Mars', preserveCollaborators: false), equals('B.o.B'));
+      expect(LyricsParser.cleanArtist('B.o.B & Bruno Mars', preserveCollaborators: true), equals('B.o.B & Bruno Mars'));
+    });
+
+    test('parseHyphenatedTitle should respect preserveFeatures flag', () {
+      final preserved = LyricsParser.parseHyphenatedTitle('B.o.B - Nothin\' on You (Official Video) (feat. Bruno Mars)', 'B.o.B', preserveFeatures: true);
+      expect(preserved.artist, equals('B.o.B'));
+      expect(preserved.title, equals('Nothin\' on You (feat. Bruno Mars)'));
+
+      final stripped = LyricsParser.parseHyphenatedTitle('B.o.B - Nothin\' on You (Official Video) (feat. Bruno Mars)', 'B.o.B', preserveFeatures: false);
+      expect(stripped.artist, equals('B.o.B'));
+      expect(stripped.title, equals('Nothin\' on You'));
+    });
   });
 }

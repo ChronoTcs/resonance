@@ -122,57 +122,86 @@ class LyricsParser {
     return parsedLines;
   }
 
-  /// Cleans YouTube titles
-  static String cleanTitle(String title) {
+  /// Strips YouTube video packaging noise while PRESERVING musical variants
+  /// (e.g. keeps "(feat. ...)", "[feat. ...]", "(Remix)", "(Acoustic)", "(Live)").
+  static String cleanVideoNoise(String title) {
     if (title.isEmpty) return "";
     String clean = title;
 
-    final titleCleanupPatterns = [
-      RegExp(r'\s*\(.*?(official|video|audio|lyrics|lyric|visualizer|hd|hq|4k|remaster|remix|live|acoustic|version|edit|extended|radio|clean|explicit).*?\)', caseSensitive: false),
-      RegExp(r'\s*\[.*?(official|video|audio|lyrics|lyric|visualizer|hd|hq|4k|remaster|remix|live|acoustic|version|edit|extended|radio|clean|explicit).*?\]', caseSensitive: false),
+    final videoNoisePatterns = [
+      RegExp(r'\s*\(.*?(official\s*(music\s*)?video|official\s*audio|lyric\s*video|lyrics|visualizer|hd|hq|4k|1080p|remaster(ed)?).*?\)', caseSensitive: false),
+      RegExp(r'\s*\[.*?(official\s*(music\s*)?video|official\s*audio|lyric\s*video|lyrics|visualizer|hd|hq|4k|1080p|remaster(ed)?).*?\]', caseSensitive: false),
       RegExp(r'\s*【.*?】'),
       RegExp(r'\s*\|.*$'),
-      RegExp(r'\s*-\s*(official|video|audio|lyrics|lyric|visualizer).*$', caseSensitive: false),
-      RegExp(r'\s*\((feat\.|ft\.).*?\)', caseSensitive: false),
-      RegExp(r'\s*(feat\.|ft\.).*$', caseSensitive: false),
+      RegExp(r'\s*-\s*(official\s*(music\s*)?video|official\s*audio|lyric\s*video|lyrics|visualizer).*$', caseSensitive: false),
     ];
 
-    for (var pattern in titleCleanupPatterns) {
+    for (var pattern in videoNoisePatterns) {
       clean = clean.replaceAll(pattern, '');
     }
 
     return clean.trim();
   }
 
-  /// Cleans artist names
-  static String cleanArtist(String artist) {
-    if (artist.isEmpty) return "";
-    String primary = artist.split('•')[0];
+  /// Cleans title completely (stripping features & variants too) for fallback search stages
+  static String cleanTitle(String title) {
+    if (title.isEmpty) return "";
+    String clean = cleanVideoNoise(title);
 
-    final artistSeparators = [' & ', ' and ', ', ', ' x ', ' X ', ' feat. ', ' feat ', ' ft. ', ' ft ', ' featuring ', ' with '];
-    for (var sep in artistSeparators) {
-      if (primary.contains(sep)) {
-        primary = primary.split(sep)[0];
-      }
+    final variantPatterns = [
+      RegExp(r'\s*\(.*?(remix|live|acoustic|version|edit|extended|radio|clean|explicit).*?\)', caseSensitive: false),
+      RegExp(r'\s*\[.*?(remix|live|acoustic|version|edit|extended|radio|clean|explicit).*?\]', caseSensitive: false),
+      RegExp(r'\s*\((feat\.|ft\.|featuring|with).*?\)', caseSensitive: false),
+      RegExp(r'\s*\[(feat\.|ft\.|featuring|with).*?\]', caseSensitive: false),
+      RegExp(r'\s*(feat\.|ft\.|featuring|with)\s+.*$', caseSensitive: false),
+    ];
+
+    for (var pattern in variantPatterns) {
+      clean = clean.replaceAll(pattern, '');
     }
+
+    return clean.trim();
+  }
+
+  /// Cleans artist names.
+  /// When [preserveCollaborators] is true, keeps secondary artists ("Artist A & Artist B" or "Artist A feat. B").
+  /// When false, extracts only the primary artist name.
+  static String cleanArtist(String artist, {bool preserveCollaborators = false}) {
+    if (artist.isEmpty) return "";
+    String result = artist.split('•')[0].trim();
 
     final suffixes = [" - Topic", "VEVO", " Official", " Music", " TV"];
     for (var suffix in suffixes) {
-      if (primary.endsWith(suffix)) {
-        primary = primary.substring(0, primary.length - suffix.length).trim();
+      if (result.toLowerCase().endsWith(suffix.toLowerCase())) {
+        result = result.substring(0, result.length - suffix.length).trim();
       }
     }
-    return primary.trim();
+
+    if (!preserveCollaborators) {
+      final artistSeparators = [' & ', ' and ', ', ', ' x ', ' X ', ' feat. ', ' feat ', ' ft. ', ' ft ', ' featuring ', ' with '];
+      for (var sep in artistSeparators) {
+        if (result.contains(sep)) {
+          result = result.split(sep)[0].trim();
+        }
+      }
+    }
+
+    return result.trim();
   }
 
-  /// Parses hyphenated track title
-  static ({String artist, String title}) parseHyphenatedTitle(String title, String defaultArtist) {
-    String cleanedTitle = cleanTitle(title);
+  /// Parses hyphenated track title (e.g. "Artist - Title (feat. Someone)")
+  /// When [preserveFeatures] is true, keeps "(feat. ...)" or variant tags in title.
+  static ({String artist, String title}) parseHyphenatedTitle(
+    String title,
+    String defaultArtist, {
+    bool preserveFeatures = true,
+  }) {
+    String cleanedTitle = preserveFeatures ? cleanVideoNoise(title) : cleanTitle(title);
     if (cleanedTitle.contains('|')) {
       cleanedTitle = cleanedTitle.split('|')[0].trim();
     }
-    final cleanDefaultArtist = cleanArtist(defaultArtist);
-    if (cleanDefaultArtist.isNotEmpty && cleanedTitle.startsWith(cleanDefaultArtist)) {
+    final cleanDefaultArtist = cleanArtist(defaultArtist, preserveCollaborators: preserveFeatures);
+    if (cleanDefaultArtist.isNotEmpty && cleanedTitle.toLowerCase().startsWith(cleanDefaultArtist.toLowerCase())) {
       cleanedTitle = cleanedTitle.substring(cleanDefaultArtist.length).trim();
       if (cleanedTitle.startsWith('-')) {
         cleanedTitle = cleanedTitle.substring(1).trim();
