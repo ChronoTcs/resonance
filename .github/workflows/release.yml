@@ -17,7 +17,7 @@ permissions:
 jobs:
   # ── 1. ANDROID BUILD ──
   build-android:
-    name: Build Android Universal APK
+    name: Build Android APKs (Split & Universal)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -63,17 +63,25 @@ jobs:
       - name: Install Flutter Dependencies
         run: flutter pub get
 
-      - name: Build Android Universal Release APK
-        run: flutter build apk --release
-
-      - name: Package & Brand Universal APK
+      - name: Build Android Release APKs (Split per ABI & Universal)
         run: |
           mkdir -p Output
           BASE_VER="${{ steps.version_info.outputs.base_version }}"
           BUILD_NUM="${{ steps.version_info.outputs.build_num }}"
-          APK_NAME="Resonance-v${BASE_VER}.${BUILD_NUM}-Android.apk"
-          cp build/app/outputs/flutter-apk/app-release.apk "Output/$APK_NAME"
-          echo "Packaged: Output/$APK_NAME"
+
+          # 1. Build Split-per-ABI APKs (~35MB for arm64-v8a, ~30MB for armeabi-v7a)
+          flutter build apk --release --split-per-abi
+
+          # Proposal B Naming: Clear, beginner-friendly architecture labeling
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk "Output/Resonance-v${BASE_VER}.${BUILD_NUM}-Android-64bit-arm64.apk"
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk "Output/Resonance-v${BASE_VER}.${BUILD_NUM}-Android-32bit-v7a.apk"
+
+          # 2. Build Universal APK (Cached compilation, ~96MB fallback for all architectures)
+          flutter build apk --release
+          cp build/app/outputs/flutter-apk/app-release.apk "Output/Resonance-v${BASE_VER}.${BUILD_NUM}-Android-Universal.apk"
+
+          echo "Packaged Android Binaries:"
+          ls -lh Output/
 
       - name: Upload Android Binaries
         uses: actions/upload-artifact@v4

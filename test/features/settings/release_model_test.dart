@@ -1,3 +1,4 @@
+import 'dart:ffi';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:resonance/features/settings/data/models/release_model.dart';
 
@@ -148,6 +149,50 @@ void main() {
       expect(AppRelease.compareSemVer('0.1.8.12', '0.1.8.11'), greaterThan(0));
       expect(AppRelease.compareSemVer('0.1.8.12', '0.1.8.12'), equals(0));
       expect(AppRelease.compareSemVer('0.1.8.11', '0.1.8.12'), lessThan(0));
+    });
+
+    test('Proposal B Android APK naming: extracts build and matches ABI variants', () {
+      final proposalBReleaseJson = {
+        'tag_name': 'v0.1.8-beta',
+        'name': 'Resonance v0.1.8-beta',
+        'body': 'Release notes',
+        'prerelease': false,
+        'published_at': '2026-09-12T12:00:00Z',
+        'assets': [
+          {
+            'name': 'Resonance-v0.1.8.12-Android-64bit-arm64.apk',
+            'browser_download_url': 'https://github.com/.../arm64.apk',
+            'size': 35500000,
+          },
+          {
+            'name': 'Resonance-v0.1.8.12-Android-32bit-v7a.apk',
+            'browser_download_url': 'https://github.com/.../v7a.apk',
+            'size': 30200000,
+          },
+          {
+            'name': 'Resonance-v0.1.8.12-Android-Universal.apk',
+            'browser_download_url': 'https://github.com/.../universal.apk',
+            'size': 96800000,
+          },
+        ]
+      };
+
+      final release = AppRelease.fromJson(proposalBReleaseJson, '0.1.8+11');
+      expect(release.isNewerThanCurrent, isTrue);
+
+      // 64-bit arm64 test
+      final arm64Asset = release.getCompatibleInstallerAsset(isAndroidOverride: true, abiOverride: Abi.androidArm64);
+      expect(arm64Asset, isNotNull);
+      expect(arm64Asset!['name'], equals('Resonance-v0.1.8.12-Android-64bit-arm64.apk'));
+      final arm64Desc = release.getCompatibleInstallerDescription(isAndroidOverride: true, abiOverride: Abi.androidArm64);
+      expect(arm64Desc, contains('64-bit (arm64)'));
+
+      // 32-bit v7a test
+      final v7aAsset = release.getCompatibleInstallerAsset(isAndroidOverride: true, abiOverride: Abi.androidArm);
+      expect(v7aAsset, isNotNull);
+      expect(v7aAsset!['name'], equals('Resonance-v0.1.8.12-Android-32bit-v7a.apk'));
+      final v7aDesc = release.getCompatibleInstallerDescription(isAndroidOverride: true, abiOverride: Abi.androidArm);
+      expect(v7aDesc, contains('32-bit (v7a)'));
     });
   });
 }
