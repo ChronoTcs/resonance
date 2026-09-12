@@ -8,6 +8,7 @@ class MainNavigationNotifier extends Notifier<int> {
   void setIndex(int index) {
     ref.read(nowPlayingOverlayProvider.notifier).setVisible(false);
     ref.read(lyricsOverlayProvider.notifier).setVisible(false);
+    ref.read(queueOverlayProvider.notifier).setVisible(false);
     state = index;
   }
 }

@@ -30,8 +30,8 @@ OUTPUT_DIR = SCRIPT_DIR / "dist"
 def generate_version_info():
     """Generates version_info.txt dynamically from root pubspec.yaml."""
     pubspec_path = SCRIPT_DIR.parent / "pubspec.yaml"
-    version_str = "0.1.7-beta"
-    build_num = 10
+    version_str = "0.1.8-beta"
+    build_num = 12
 
     if pubspec_path.exists():
         content = pubspec_path.read_text(encoding="utf-8")

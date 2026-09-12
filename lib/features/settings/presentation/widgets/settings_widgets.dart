@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:resonance/core/configs/app_breakpoints.dart';
 
 /// Base tile for most settings items.
 /// Supporting both Desktop (ListTile trailing) and Mobile (Column layout) responsively.
@@ -19,7 +20,7 @@ class SettingsItemTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isMobile = MediaQuery.of(context).size.width < 600;
+    final isMobile = AppBreakpoints.isCompact(context);
 
     if (isMobile) {
       return Container(
@@ -110,12 +111,22 @@ class SettingsDropdownTile extends StatelessWidget {
         child: Theme(
           data: theme.copyWith(dividerColor: Colors.transparent),
           child: ExpansionTile(
-            tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+            dense: true,
+            tilePadding: const EdgeInsets.symmetric(horizontal: 16),
             collapsedBackgroundColor: Colors.transparent,
             backgroundColor: Colors.transparent,
             leading: Icon(icon, size: 18, color: theme.primaryColor),
-            title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-            subtitle: Text(subtitle),
+            title: Text(
+              title,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            ),
+            subtitle: Text(
+              subtitle,
+              style: TextStyle(
+                fontSize: 12,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
             children: children,
           ),
         ),

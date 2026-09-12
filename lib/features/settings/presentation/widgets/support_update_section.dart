@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance/core/application/providers/app_config_provider.dart';
 import 'package:resonance/core/utils/uicons.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../widgets/about_card.dart';
 import '../screens/help_screen.dart';
+import 'package:resonance/features/settings/application/notification_provider.dart';
 import 'settings_widgets.dart';
 
 class SupportUpdateSection extends ConsumerWidget {
@@ -20,7 +20,6 @@ class SupportUpdateSection extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const AboutCard(),
         _buildNavigationItem(
           context,
           icon: UIcons.regular.question,
@@ -61,17 +60,6 @@ class SupportUpdateSection extends ConsumerWidget {
               onTap: () => _handleDonation(context, ref),
             ),
           ],
-        ),
-        _buildNavigationItem(
-          context,
-          icon: UIcons.regular.download,
-          title: 'Check for Updates',
-          subtitle: 'Browse releases, view changelogs, or update',
-          onTap: () {
-            if (onOpenUpdates != null) {
-              onOpenUpdates!();
-            }
-          },
         ),
       ],
     );
@@ -127,11 +115,12 @@ class SupportUpdateSection extends ConsumerWidget {
       }
       throw Exception('Could not launch donate url');
     } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not open donation link.')),
-        );
-      }
+      ref.read(notificationProvider.notifier).showNotification(
+        'Donation Error',
+        'Could not open donation link.',
+        isError: true,
+        silentOsNotification: true,
+      );
     }
   }
 }

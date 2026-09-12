@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:resonance/core/providers/cached_stream_music_provider.dart';
 import '../../../library/data/models/media_item.dart';
 import '../providers/audio_provider.dart';
 
@@ -25,20 +26,32 @@ class QueueOrchestrator {
     }
   }
 
-  /// Turns shuffle ON, places chosen track first, and fills the rest with random local tracks.
+  /// Turns shuffle ON, places chosen track first, and fills the rest with random local tracks & cached streams.
   void playWithLocalRadioFallback(MediaItem track, List<MediaItem> allLocalTracks) {
     final notifier = _ref.read(audioProvider.notifier);
 
-    // 1. Deduplication
+    // 1. Blend local library with cached stream music
+    final cachedAsync = _ref.read(cachedStreamMusicProvider);
+    final cachedTracks = cachedAsync.asData?.value ?? const <MediaItem>[];
+    final combinedPool = [...allLocalTracks, ...cachedTracks];
+
+    // 2. Deduplication
     final trackId = track.id ?? track.path;
-    final filteredLocal = allLocalTracks
-        .where((t) => (t.id ?? t.path) != trackId)
-        .toList();
+    final seen = <String>{trackId};
+    final filteredPool = <MediaItem>[];
 
-    // 2. Construct Queue: [Selected] + [Remaining Local]
-    final radioQueue = [track, ...filteredLocal];
+    for (final t in combinedPool) {
+      final tid = t.id ?? t.path;
+      if (!seen.contains(tid)) {
+        seen.add(tid);
+        filteredPool.add(t);
+      }
+    }
 
-    // 3. Force Shuffle ON and play from start
+    // 3. Construct Queue: [Selected] + [Remaining Offline Pool]
+    final radioQueue = [track, ...filteredPool];
+
+    // 4. Force Shuffle ON and play from start
     notifier.setShuffle(true);
     notifier.playPlaylist(radioQueue, initialIndex: 0);
   }

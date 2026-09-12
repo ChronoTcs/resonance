@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance/core/utils/uicons.dart';
 
 import '../../../player/application/providers/audio_provider.dart';
+import '../../application/notification_provider.dart';
 
 class AudioSettingsSection extends ConsumerWidget {
   const AudioSettingsSection({super.key});
@@ -16,8 +17,11 @@ class AudioSettingsSection extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 12,
+          runSpacing: 8,
           children: [
             const Text(
               'Playback & Audio',
@@ -33,8 +37,11 @@ class AudioSettingsSection extends ConsumerWidget {
                     confirmLabel: 'Reset',
                     onConfirm: () {
                       audioNotifier.restoreToDefault();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Audio settings restored to default.')),
+                      ref.read(notificationProvider.notifier).showNotification(
+                        'Audio Settings',
+                        'Audio settings restored to default.',
+                        target: 'target:settings:audio',
+                        silentOsNotification: true,
                       );
                     },
                   ),

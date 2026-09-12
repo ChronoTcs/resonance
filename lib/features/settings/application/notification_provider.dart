@@ -4,6 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:resonance/core/providers/navigation_provider.dart';
+import 'package:resonance/core/providers/overlay_provider.dart';
+import 'package:resonance/features/library/presentation/widgets/morphing_library_bar.dart';
+import 'package:resonance/features/playlist/application/playlist_provider.dart';
+import 'package:resonance/features/settings/presentation/screens/settings_screen.dart';
 
 class NotificationItem {
   final String id;
@@ -13,6 +17,8 @@ class NotificationItem {
   final bool isRead;
   final bool isError;
   final String? targetScreen;
+  final String? actionLabel;
+  final VoidCallback? onAction;
 
   NotificationItem({
     required this.id,
@@ -22,6 +28,8 @@ class NotificationItem {
     this.isRead = false,
     this.isError = false,
     this.targetScreen,
+    this.actionLabel,
+    this.onAction,
   });
 
   NotificationItem copyWith({
@@ -32,6 +40,8 @@ class NotificationItem {
     bool? isRead,
     bool? isError,
     String? targetScreen,
+    String? actionLabel,
+    VoidCallback? onAction,
   }) {
     return NotificationItem(
       id: id ?? this.id,
@@ -41,6 +51,8 @@ class NotificationItem {
       isRead: isRead ?? this.isRead,
       isError: isError ?? this.isError,
       targetScreen: targetScreen ?? this.targetScreen,
+      actionLabel: actionLabel ?? this.actionLabel,
+      onAction: onAction ?? this.onAction,
     );
   }
 }
@@ -118,11 +130,48 @@ class NotificationNotifier extends Notifier<NotificationState> {
         await windowManager.show();
         await windowManager.focus();
       }
-      
-      if (targetScreen == 'target:download') {
-        ref.read(mainNavigationProvider.notifier).setIndex(4);
-      } else if (targetScreen == 'target:settings') {
+
+      if (targetScreen == null) {
+        state = state.copyWith(isDropdownVisible: true);
+        return;
+      }
+
+      final isDesktop = Platform.isWindows || Platform.isLinux || Platform.isMacOS;
+
+      if (targetScreen == 'target:blocked_tracks') {
         ref.read(mainNavigationProvider.notifier).setIndex(5);
+        ref.read(settingsSubViewProvider.notifier).setSubView(SettingsSubView.blocked);
+      } else if (targetScreen == 'target:queue') {
+        ref.read(queueOverlayProvider.notifier).setVisible(true);
+      } else if (targetScreen == 'target:download') {
+        if (isDesktop) {
+          ref.read(mainNavigationProvider.notifier).setIndex(4);
+        } else {
+          ref.read(mainNavigationProvider.notifier).setIndex(2);
+          ref.read(libraryNavModeProvider.notifier).setMode(LibraryNavMode.downloads);
+        }
+      } else if (targetScreen == 'target:library') {
+        ref.read(mainNavigationProvider.notifier).setIndex(2);
+        ref.read(libraryNavModeProvider.notifier).setMode(LibraryNavMode.music);
+      } else if (targetScreen == 'target:playlists') {
+        if (isDesktop) {
+          ref.read(mainNavigationProvider.notifier).setIndex(3);
+        } else {
+          ref.read(mainNavigationProvider.notifier).setIndex(2);
+          ref.read(libraryNavModeProvider.notifier).setMode(LibraryNavMode.playlists);
+        }
+      } else if (targetScreen.startsWith('target:playlist:')) {
+        final playlistId = targetScreen.substring('target:playlist:'.length);
+        if (isDesktop) {
+          ref.read(mainNavigationProvider.notifier).setIndex(3);
+        } else {
+          ref.read(mainNavigationProvider.notifier).setIndex(2);
+          ref.read(libraryNavModeProvider.notifier).setMode(LibraryNavMode.playlists);
+        }
+        ref.read(selectedPlaylistIdProvider.notifier).setSelectedId(playlistId);
+      } else if (targetScreen.startsWith('target:settings')) {
+        ref.read(mainNavigationProvider.notifier).setIndex(5);
+        ref.read(settingsSubViewProvider.notifier).close();
       } else {
         state = state.copyWith(isDropdownVisible: true);
       }
@@ -136,6 +185,9 @@ class NotificationNotifier extends Notifier<NotificationState> {
     String message, {
     bool isError = false,
     String? target,
+    String? actionLabel,
+    VoidCallback? onAction,
+    bool silentOsNotification = false,
   }) async {
     debugPrint('[Notification]${isError ? " [ERROR]" : ""} $title: $message');
 
@@ -147,9 +199,13 @@ class NotificationNotifier extends Notifier<NotificationState> {
       timestamp: DateTime.now(),
       isError: isError,
       targetScreen: target,
+      actionLabel: actionLabel,
+      onAction: onAction,
     );
 
     state = state.copyWith(items: [newItem, ...state.items]);
+
+    if (silentOsNotification) return;
 
     // 2. Trigger native desktop notification on Windows
     if (Platform.isWindows && _isInitialized) {

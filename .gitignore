@@ -55,6 +55,7 @@ app.*.map.json
 windows/Output/
 Output/
 *.exe
+!windows/tools/*.exe
 *.dll
 *.pdb
 *.msix
@@ -91,5 +92,15 @@ node_modules/
 graphify-out/
 
 # Local Reports & Maintenance Logs
-reports/
-/reports/
+reports/*
+!reports/releases/
+!reports/releases/**
+scratch/
+
+# Android release keystore & signing secrets
+**/key.properties
+!key.properties.example
+*.keystore
+**/*.keystore
+*.jks
+**/*.jks

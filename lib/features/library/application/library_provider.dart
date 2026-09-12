@@ -13,6 +13,7 @@ import '../data/repositories/library_repository.dart';
 import '../../download/application/providers/download_settings_provider.dart';
 import '../../playlist/application/playlist_provider.dart';
 import '../../player/application/providers/audio_provider.dart';
+import '../../settings/application/notification_provider.dart';
 import '../../../core/utils/path_utils.dart';
 
 class LibraryState {
@@ -373,7 +374,24 @@ class LibraryNotifier extends Notifier<LibraryState> {
 
 
   void addMediaItem(MediaItem item) {
-    if (state.allMedia.any((m) => m.path == item.path)) return;
+    final existingIndex = state.allMedia.indexWhere((m) => m.path == item.path);
+    if (existingIndex != -1) {
+      final existing = state.allMedia[existingIndex];
+      const badArtists = {'Lagu', 'Song', 'Unknown Artist', 'Unknown'};
+      final isBadExisting = existing.artist == null || badArtists.contains(existing.artist!.trim());
+      final hasGoodIncoming = item.artist != null && item.artist!.isNotEmpty && !badArtists.contains(item.artist!.trim());
+      if (isBadExisting && hasGoodIncoming) {
+        final updatedList = List<MediaItem>.from(state.allMedia);
+        updatedList[existingIndex] = existing.copyWith(
+          artist: item.artist,
+          album: (existing.album == null || existing.album == 'Resonance Downloads') ? item.album : existing.album,
+          thumbnailUrl: item.thumbnailUrl ?? existing.thumbnailUrl,
+        );
+        state = state.copyWith(allMedia: updatedList);
+        _scheduleSave();
+      }
+      return;
+    }
     
     final newList = [...state.allMedia, item];
     newList.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
@@ -408,14 +426,34 @@ class LibraryNotifier extends Notifier<LibraryState> {
       final validPaths = result.paths.whereType<String>().toList();
       if (validPaths.isEmpty) return;
 
-      state = state.copyWith(isLoading: true);
+      if (!context.mounted) return;
+      await importAudioPaths(validPaths, context: context);
+    } catch (e) {
+      debugPrint('[LibraryNotifier] Failed to pick audio files: $e');
+      state = state.copyWith(isLoading: false);
+      ref.read(notificationProvider.notifier).showNotification(
+        'Library Import',
+        'Failed to select audio files.',
+        isError: true,
+        silentOsNotification: true,
+      );
+    }
+  }
 
+  /// Imports external audio files directly from paths (e.g. from drag-and-drop or picker)
+  /// with automatic ID3 metadata/artwork extraction and persistent cache syncing.
+  Future<int> importAudioPaths(List<String> paths, {BuildContext? context}) async {
+    if (paths.isEmpty) return 0;
+
+    state = state.copyWith(isLoading: true);
+
+    try {
       final repo = ref.read(libraryRepositoryProvider);
       final rpcService = ref.read(discordRpcServiceProvider);
       final mediaCacheService = ref.read(mediaCacheServiceProvider);
 
       final importedItems = await repo.importExternalAudioFiles(
-        sourcePaths: validPaths,
+        sourcePaths: paths,
         musicFolderPath: state.musicFolderPath,
         rpcService: rpcService,
         mediaCacheService: mediaCacheService,
@@ -423,7 +461,7 @@ class LibraryNotifier extends Notifier<LibraryState> {
 
       if (importedItems.isEmpty) {
         state = state.copyWith(isLoading: false);
-        return;
+        return 0;
       }
 
       // Merge and deduplicate by path
@@ -446,23 +484,23 @@ class LibraryNotifier extends Notifier<LibraryState> {
       // Save updated cache
       await repo.saveLibraryCache(updatedList);
 
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Added ${importedItems.length} song${importedItems.length > 1 ? 's' : ''} to Library.',
-            ),
-          ),
-        );
-      }
+      ref.read(notificationProvider.notifier).showNotification(
+        'Audio Imported',
+        'Added ${importedItems.length} song${importedItems.length > 1 ? 's' : ''} to Library.',
+        target: 'target:library',
+        silentOsNotification: true,
+      );
+      return importedItems.length;
     } catch (e) {
       debugPrint('[LibraryNotifier] Failed to import audio files: $e');
       state = state.copyWith(isLoading: false);
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to import audio files.')),
-        );
-      }
+      ref.read(notificationProvider.notifier).showNotification(
+        'Import Failed',
+        'Failed to import audio files.',
+        isError: true,
+        silentOsNotification: true,
+      );
+      return 0;
     }
   }
 }

@@ -262,21 +262,9 @@ class UpdateNotifier extends Notifier<UpdateState> {
       }
 
       // 2. Standard Fallback to Full Installer (.exe / .apk)
-      String? downloadUrl;
-      String? fileName;
-
-      for (var asset in release.assets) {
-        final name = asset['name'].toString().toLowerCase();
-        if (Platform.isAndroid && name.endsWith('.apk')) {
-          downloadUrl = asset['browser_download_url'];
-          fileName = asset['name'];
-          break;
-        } else if (Platform.isWindows && name.endsWith('.exe')) {
-          downloadUrl = asset['browser_download_url'];
-          fileName = asset['name'];
-          break;
-        }
-      }
+      final compatibleAsset = release.getCompatibleInstallerAsset();
+      final downloadUrl = compatibleAsset?['browser_download_url'] as String?;
+      final fileName = compatibleAsset?['name'] as String?;
 
       if (downloadUrl == null) {
         state = state.copyWith(
@@ -288,7 +276,7 @@ class UpdateNotifier extends Notifier<UpdateState> {
       }
 
       final directory = Platform.isAndroid
-          ? await getTemporaryDirectory()
+          ? await getApplicationSupportDirectory()
           : await getDownloadsDirectory() ?? await getTemporaryDirectory();
 
       final filePath = '${directory.path}/$fileName';
@@ -339,18 +327,11 @@ class UpdateNotifier extends Notifier<UpdateState> {
         debugPrint('[UpdateNotifier] Failed to delete installer: $e');
       }
     } else {
-      String? fileName;
-      for (var asset in release.assets) {
-        final name = asset['name'].toString().toLowerCase();
-        if ((Platform.isAndroid && name.endsWith('.apk')) ||
-            (Platform.isWindows && name.endsWith('.exe'))) {
-          fileName = asset['name'];
-          break;
-        }
-      }
+      final compatibleAsset = release.getCompatibleInstallerAsset();
+      final fileName = compatibleAsset?['name'] as String?;
       if (fileName != null) {
         final directory = Platform.isAndroid
-            ? await getTemporaryDirectory()
+            ? await getApplicationSupportDirectory()
             : await getDownloadsDirectory() ?? await getTemporaryDirectory();
         final filePath = '${directory.path}/$fileName';
         if (File(filePath).existsSync()) {
@@ -442,20 +423,13 @@ class UpdateNotifier extends Notifier<UpdateState> {
 
     if (release.assets.isEmpty) return;
 
-    String? fileName;
-    for (var asset in release.assets) {
-      final name = asset['name'].toString().toLowerCase();
-      if ((Platform.isAndroid && name.endsWith('.apk')) ||
-          (Platform.isWindows && name.endsWith('.exe'))) {
-        fileName = asset['name'];
-        break;
-      }
-    }
+    final compatibleAsset = release.getCompatibleInstallerAsset();
+    final fileName = compatibleAsset?['name'] as String?;
 
     if (fileName == null) return;
 
     final directory = Platform.isAndroid
-        ? await getTemporaryDirectory()
+        ? await getApplicationSupportDirectory()
         : await getDownloadsDirectory() ?? await getTemporaryDirectory();
     final filePath = '${directory.path}/$fileName';
 

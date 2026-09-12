@@ -129,7 +129,22 @@ class _MediaArtworkWidgetState extends ConsumerState<MediaArtworkWidget> {
           color: widget.color,
           colorBlendMode: widget.colorBlendMode,
           placeholder: (context, url) => fallback,
-          errorWidget: (context, url, error) => fallback,
+          errorWidget: (context, url, error) {
+            final fallbackUrl = ThumbnailUtils.getFallbackResolution(url);
+            if (fallbackUrl != null && fallbackUrl != url) {
+              return CachedNetworkImage(
+                imageUrl: fallbackUrl,
+                width: widget.width,
+                height: widget.height,
+                fit: widget.fit,
+                color: widget.color,
+                colorBlendMode: widget.colorBlendMode,
+                placeholder: (context, _) => fallback,
+                errorWidget: (context, _, _) => fallback,
+              );
+            }
+            return fallback;
+          },
         );
       } else {
         final file = File(_resolvedThumbnailUrl!);

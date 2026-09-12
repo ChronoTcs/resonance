@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nativeapi/nativeapi.dart' as napi;
 import 'package:path/path.dart' as p;
 import 'package:window_manager/window_manager.dart';
-import 'package:resonance/core/data/services/po_token_provider_service.dart';
+import 'package:resonance/features/stream/platform/windows/windows_po_token_service.dart';
 import 'package:resonance/features/player/application/providers/audio_provider.dart';
 import 'package:resonance/features/library/data/models/media_item.dart';
 import 'package:resonance/features/player/application/services/windows_system_media_service.dart';
@@ -178,7 +178,7 @@ class TrayService {
   }
 
   Future<void> handleExit() async {
-    poTokenProviderService.stop();
+    WindowsPoTokenService().stop();
     await destroy();
     exit(0);
   }

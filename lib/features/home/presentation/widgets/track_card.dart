@@ -6,7 +6,7 @@ import 'package:resonance/features/library/application/library_provider.dart';
 import 'package:resonance/features/player/application/providers/audio_provider.dart';
 import 'package:resonance/features/player/application/services/queue_orchestrator.dart';
 
-import 'package:resonance/features/library/presentation/widgets/media_actions_bottom_sheet.dart';
+import 'package:resonance/features/player/utils/media_action_utils.dart';
 
 class TrackCard extends ConsumerWidget {
   const TrackCard({super.key, required this.track});
@@ -19,6 +19,7 @@ class TrackCard extends ConsumerWidget {
     return Padding(
       padding: const EdgeInsets.only(right: 12),
       child: InkWell(
+        mouseCursor: SystemMouseCursors.click,
         onTap: () {
           if (track.isStreaming) {
             ref.read(audioProvider.notifier).playYouTubeTrack(track);
@@ -28,12 +29,13 @@ class TrackCard extends ConsumerWidget {
             ref.read(queueOrchestratorProvider).playWithLocalRadioFallback(track, audioTracks);
           }
         },
-        onLongPress: () {
-          showModalBottomSheet(
-            context: context,
-            builder: (_) => MediaActionsBottomSheet(item: track),
-          );
-        },
+        onSecondaryTapDown: (details) => MediaActionUtils.showTrackContextMenu(
+          context: context,
+          ref: ref,
+          item: track,
+          position: details.globalPosition,
+        ),
+        onLongPress: () => MediaActionUtils.showMediaActions(context: context, ref: ref, item: track),
         borderRadius: BorderRadius.circular(10),
         child: SizedBox(
           width: 140,

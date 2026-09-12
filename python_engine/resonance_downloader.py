@@ -360,6 +360,27 @@ def handle_resolve_stream(cmd: dict):
     sys.stderr.flush()
     try:
         url = f"https://www.youtube.com/watch?v={video_id}"
+        # Probe bgutil-pot liveness at hardcoded port 4416 before attaching extractor arg
+        bgutil_url = "http://127.0.0.1:4416"
+        bgutil_alive = False
+        try:
+            import urllib.request
+            urllib.request.urlopen(bgutil_url, timeout=0.5)
+            bgutil_alive = True
+        except Exception:
+            pass
+
+        extractor_args = {
+            "youtube": {
+                "player_client": ["android", "ios", "web", "mweb"]
+            }
+        }
+        if bgutil_alive:
+            extractor_args["youtubepot-bgutilhttp"] = {"base_url": bgutil_url}
+        else:
+            sys.stderr.write(f"[resolve] INFO: bgutil-pot not reachable at {bgutil_url} — resolving without PoToken\n")
+            sys.stderr.flush()
+
         ydl_opts = {
             "quiet": True,
             "no_warnings": True,
@@ -367,14 +388,7 @@ def handle_resolve_stream(cmd: dict):
             "format": "ba[ext=m4a]/ba[ext=mp4]/bestaudio/best",
             "youtube_include_dash_manifest": False,
             "youtube_include_hls_playlist": False,
-            "extractor_args": {
-                "youtube": {
-                    "player_client": ["android", "ios", "web", "mweb"]
-                },
-                "youtubepot-bgutilhttp": {
-                    "base_url": "http://127.0.0.1:4416"
-                }
-            }
+            "extractor_args": extractor_args,
         }
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)

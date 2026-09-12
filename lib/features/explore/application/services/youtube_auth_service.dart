@@ -2,26 +2,39 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import '../../../../core/data/services/storage_service.dart';
 import '../../../../core/utils/crypto_utils.dart';
+import '../../../stream/application/platform_stream_provider.dart';
 
 final youtubeAuthServiceProvider = Provider<YoutubeAuthService>((ref) {
   final prefs = ref.watch(sharedPreferencesProvider);
-  return YoutubeAuthService(prefs);
+  return YoutubeAuthService(
+    prefs,
+    getNativeSignatureTimestamp: () =>
+        ref.read(platformPoTokenServiceProvider).getSignatureTimestamp(),
+  );
 });
 
 class YoutubeAuthService {
   final SharedPreferences _prefs;
+  final Future<int?> Function()? getNativeSignatureTimestamp;
   
   static const String _kCookiesKey = 'yt_cookies';
   static const String _kVisitorDataKey = 'yt_visitor_data';
   static const String _kDataSyncIdKey = 'yt_datasync_id';
+  static const int _kDefaultSts = 20697;
+  static const String _kStsKey = 'yt_sts';
+  static const String _apiKey = 'AIzaSyC15S986sV10pNo757C36Wq71986sV10pN';
 
-  YoutubeAuthService(this._prefs);
+  YoutubeAuthService(
+    this._prefs, {
+    this.getNativeSignatureTimestamp,
+  });
 
   bool get isLoggedIn => _prefs.getString(_kCookiesKey) != null;
 
@@ -114,11 +127,90 @@ class YoutubeAuthService {
   String? get visitorData => _prefs.getString(_kVisitorDataKey);
   String? get dataSyncId => _prefs.getString(_kDataSyncIdKey);
 
+  int get signatureTimestamp => _prefs.getInt(_kStsKey) ?? _kDefaultSts;
+
+  Future<void> updateSignatureTimestamp(int sts) async {
+    if (sts > 0) {
+      await _prefs.setInt(_kStsKey, sts);
+      debugPrint('[YoutubeAuth] Updated signatureTimestamp: $sts');
+    }
+  }
+
+  /// Refreshes signatureTimestamp from YouTube embed player JS in the background
+  Future<int> refreshSignatureTimestamp() async {
+    try {
+      final getSts = getNativeSignatureTimestamp;
+      if (getSts != null) {
+        final nativeSts = await getSts();
+        if (nativeSts != null && nativeSts > 0) {
+          await updateSignatureTimestamp(nativeSts);
+          return nativeSts;
+        }
+      }
+
+      final res = await http.get(
+        Uri.parse('https://www.youtube.com/s/player/f572e43c/player_embed.vflset/id_ID/base.js'),
+        headers: {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Gecko/20100101 Firefox/140.0'},
+      ).timeout(const Duration(seconds: 6));
+      if (res.statusCode == 200) {
+        final match = RegExp(r'signatureTimestamp[=:](\d+)').firstMatch(res.body);
+        if (match != null) {
+          final sts = int.parse(match.group(1)!);
+          await updateSignatureTimestamp(sts);
+          return sts;
+        }
+      }
+    } catch (e) {
+      debugPrint('[YoutubeAuth] Could not dynamically refresh signatureTimestamp: $e');
+    }
+    return signatureTimestamp;
+  }
+
   /// Caches a real visitorData fetched from YouTube InnerTube response.
   Future<void> cacheVisitorData(String visitorData) async {
     if (visitorData.isNotEmpty) {
       await _prefs.setString(_kVisitorDataKey, visitorData);
     }
+  }
+
+  /// Guarantees that a valid visitorData exists. If not cached, fetches one synchronously from InnerTube.
+  Future<String> ensureVisitorData() async {
+    final cached = visitorData;
+    if (cached != null && cached.isNotEmpty) return cached;
+
+    try {
+      debugPrint('[YoutubeAuth] Fetching fresh visitorData from YouTube...');
+      final response = await http.post(
+        Uri.parse('https://www.youtube.com/youtubei/v1/visitor_id?key=$_apiKey'),
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0',
+        },
+        body: jsonEncode({
+          'context': {
+            'client': {
+              'clientName': 'WEB_REMIX',
+              'clientVersion': '1.20260707.12.00',
+              'hl': 'en',
+              'gl': 'US',
+            }
+          }
+        }),
+      ).timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = jsonDecode(response.body);
+        final String? vd = data['responseContext']?['visitorData'] as String?;
+        if (vd != null && vd.isNotEmpty) {
+          await cacheVisitorData(vd);
+          debugPrint('[YoutubeAuth] Acquired visitorData: ${vd.substring(0, 12)}...');
+          return vd;
+        }
+      }
+    } catch (e) {
+      debugPrint('[YoutubeAuth] ensureVisitorData failed: $e');
+    }
+    return '';
   }
 
   /// Builds the authenticated headers for InnerTube requests.

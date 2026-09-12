@@ -55,6 +55,12 @@ class PathUtils {
     if (Platform.isWindows) {
       return p.join(_windowsBaseDir, 'cache');
     }
+    if (Platform.isAndroid) {
+      try {
+        final tempDir = await getTemporaryDirectory();
+        return p.join(tempDir.path, 'cache');
+      } catch (_) {}
+    }
     final docDir = await getApplicationDocumentsDirectory();
     return p.join(docDir.path, 'resonance_cache');
   }
@@ -62,6 +68,12 @@ class PathUtils {
   static Future<String> getStreamDefault() async {
     if (Platform.isWindows) {
       return p.join(_windowsBaseDir, 'stream');
+    }
+    if (Platform.isAndroid) {
+      try {
+        final tempDir = await getTemporaryDirectory();
+        return p.join(tempDir.path, 'stream');
+      } catch (_) {}
     }
     final docDir = await getApplicationDocumentsDirectory();
     return p.join(docDir.path, 'stream');

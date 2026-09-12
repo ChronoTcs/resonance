@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
+import 'package:resonance/core/configs/app_breakpoints.dart';
 import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/core/theme/theme_provider.dart';
 import 'package:resonance/features/dashboard/presentation/widgets/notification_bell.dart';
@@ -141,137 +142,145 @@ class _CustomTitleBarState extends ConsumerState<CustomTitleBar> with WindowList
     final double luminance = gradientColors.first.computeLuminance();
     final Color contentColor = luminance > 0.5 ? Colors.black87 : Colors.white;
 
-    return Container(
-      height: 32,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: gradientColors,
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: Row(
-        children: [
-          // Left side: Native-styled App Icon & Title Drag Area
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: DragToMoveArea(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = AppBreakpoints.isCompactWidth(constraints.maxWidth);
+
+        return Container(
+          height: 32,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: gradientColors,
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+          child: Row(
+            children: [
+              // Left side: Native-styled App Icon & Title Drag Area
+              Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.only(left: 8, right: 12),
-                  child: Row(
-                    children: [
-                      Image.asset(
-                        'assets/icons/app_icon.png',
-                        width: 16,
-                        height: 16,
-                        fit: BoxFit.contain,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          titleText,
-                          style: TextStyle(
-                            fontFamily: 'Segoe UI',
-                            fontSize: 12,
-                            fontWeight: FontWeight.normal,
-                            color: contentColor,
+                  padding: const EdgeInsets.only(top: 4),
+                  child: DragToMoveArea(
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 8, right: 12),
+                      child: Row(
+                        children: [
+                          Image.asset(
+                            'assets/icons/app_icon.png',
+                            width: 16,
+                            height: 16,
+                            fit: BoxFit.contain,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              titleText,
+                              style: TextStyle(
+                                fontFamily: 'Segoe UI',
+                                fontSize: 12,
+                                fontWeight: FontWeight.normal,
+                                color: contentColor,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
                 ),
               ),
-            ),
-          ),
 
-          // Right side: Custom Toggles & Windows 11 styled Controls
-          Row(
-            children: [
-              // Smart 2-in-1 Update Button (Download when available -> Restart when staged)
-              _TitleBarUpdateButton(
-                updateState: updateState,
-                contentColor: contentColor,
-              ),
-              // Notification Bell (UIcons.regular.bell)
-              NotificationBell(
-                isTitleBar: true,
-                iconColor: contentColor,
-              ),
-              // Accent Color Cycle
-              _TitleBarCompactButton(
-                icon: UIcons.regular.paint_brush,
-                tooltip: accentMode == null
-                    ? 'Accent: Default'
-                    : accentMode == 'windows'
-                        ? 'Accent: Windows Theme'
-                        : 'Accent: Palette ${accentMode.replaceAll("palette", "")}',
-                onTap: _toggleAccent,
-                contentColor: contentColor,
-              ),
-              // Theme Cycle
-              _TitleBarCompactButton(
-                icon: _getThemeIcon(themeMode),
-                tooltip: _getThemeTooltip(themeMode),
-                onTap: _toggleTheme,
-                contentColor: contentColor,
-              ),
-              const SizedBox(width: 8),
+              // Right side: Custom Toggles & Windows 11 styled Controls
+              Row(
+                children: [
+                  if (!isCompact) ...[
+                    // Smart 2-in-1 Update Button (Download when available -> Restart when staged)
+                    _TitleBarUpdateButton(
+                      updateState: updateState,
+                      contentColor: contentColor,
+                    ),
+                    // Notification Bell (UIcons.regular.bell)
+                    NotificationBell(
+                      isTitleBar: true,
+                      iconColor: contentColor,
+                    ),
+                    // Accent Color Cycle
+                    _TitleBarCompactButton(
+                      icon: UIcons.regular.paint_brush,
+                      tooltip: accentMode == null
+                          ? 'Accent: Default'
+                          : accentMode == 'windows'
+                              ? 'Accent: Windows Theme'
+                              : 'Accent: Palette ${accentMode.replaceAll("palette", "")}',
+                      onTap: _toggleAccent,
+                      contentColor: contentColor,
+                    ),
+                    // Theme Cycle
+                    _TitleBarCompactButton(
+                      icon: _getThemeIcon(themeMode),
+                      tooltip: _getThemeTooltip(themeMode),
+                      onTap: _toggleTheme,
+                      contentColor: contentColor,
+                    ),
+                    const SizedBox(width: 8),
+                  ],
 
-              // Windows 11 Native Control Button Mockups
-              _WindowControlButton(
-                tooltip: 'Minimize',
-                onTap: windowManager.minimize,
-                contentColor: contentColor,
-                child: Container(
-                  width: 10,
-                  height: 1.0,
-                  color: contentColor,
-                ),
-              ),
-              _WindowControlButton(
-                tooltip: _isMaximized ? 'Restore Down' : 'Maximize',
-                showTooltip: false, // Disable Flutter tooltip so native Windows 11 Snap Layouts hover handles it
-                isHoveredOverride: _isMaximizeHovered,
-                onTap: () async {
-                  if (await windowManager.isMaximized()) {
-                    await windowManager.unmaximize();
-                  } else {
-                    await windowManager.maximize();
-                  }
-                },
-                contentColor: contentColor,
-                child: Icon(
-                  _isMaximized ? UIcons.regular.copy : UIcons.regular.square,
-                  size: 11,
-                  color: contentColor,
-                ),
-              ),
-              _WindowControlButton(
-                tooltip: 'Close',
-                onTap: () {
-                  final closeToTray = ref.read(appBehaviorProvider).closeToTray;
-                  if (closeToTray) {
-                    windowManager.hide();
-                  } else {
-                    ref.read(trayServiceProvider).handleExit();
-                  }
-                },
-                contentColor: contentColor,
-                isClose: true,
-                child: Icon(
-                  Icons.close,
-                  size: 14,
-                  color: contentColor,
-                ),
+                  // Windows 11 Native Control Button Mockups
+                  _WindowControlButton(
+                    tooltip: 'Minimize',
+                    onTap: windowManager.minimize,
+                    contentColor: contentColor,
+                    child: Container(
+                      width: 10,
+                      height: 1.0,
+                      color: contentColor,
+                    ),
+                  ),
+                  _WindowControlButton(
+                    tooltip: _isMaximized ? 'Restore Down' : 'Maximize',
+                    showTooltip: false, // Disable Flutter tooltip so native Windows 11 Snap Layouts hover handles it
+                    isHoveredOverride: _isMaximizeHovered,
+                    onTap: () async {
+                      if (await windowManager.isMaximized()) {
+                        await windowManager.unmaximize();
+                      } else {
+                        await windowManager.maximize();
+                      }
+                    },
+                    contentColor: contentColor,
+                    child: Icon(
+                      _isMaximized ? UIcons.regular.copy : UIcons.regular.square,
+                      size: 11,
+                      color: contentColor,
+                    ),
+                  ),
+                  _WindowControlButton(
+                    tooltip: 'Close',
+                    onTap: () {
+                      final closeToTray = ref.read(appBehaviorProvider).closeToTray;
+                      if (closeToTray) {
+                        windowManager.hide();
+                      } else {
+                        ref.read(trayServiceProvider).handleExit();
+                      }
+                    },
+                    contentColor: contentColor,
+                    isClose: true,
+                    child: Icon(
+                      Icons.close,
+                      size: 14,
+                      color: contentColor,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -305,6 +314,7 @@ class _TitleBarCompactButtonState extends State<_TitleBarCompactButton> {
     final hoverFgColor = isLight ? Colors.white : Colors.black;
 
     return MouseRegion(
+      cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
       child: Tooltip(
@@ -356,6 +366,7 @@ class _TitleBarUpdateButtonState extends ConsumerState<_TitleBarUpdateButton> {
       final hoverFgColor = isLight ? Colors.white : Colors.black;
 
       return MouseRegion(
+        cursor: SystemMouseCursors.click,
         onEnter: (_) => setState(() => _isHovered = true),
         onExit: (_) => setState(() => _isHovered = false),
         child: Tooltip(
@@ -410,6 +421,7 @@ class _TitleBarUpdateButtonState extends ConsumerState<_TitleBarUpdateButton> {
       final hoverFgColor = isLight ? Colors.white : Colors.black;
 
       return MouseRegion(
+        cursor: SystemMouseCursors.click,
         onEnter: (_) => setState(() => _isHovered = true),
         onExit: (_) => setState(() => _isHovered = false),
         child: Tooltip(

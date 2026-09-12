@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance/core/utils/uicons.dart';
 import '../../application/maintenance_provider.dart';
+import '../../application/notification_provider.dart';
 
 class CacheManagementSection extends ConsumerWidget {
   const CacheManagementSection({super.key});
@@ -52,26 +53,26 @@ class CacheManagementSection extends ConsumerWidget {
               context,
               title: 'Downloaded Music Files',
               size: notifier.formatBytes(folderSizes['local_music'] ?? 0),
-              onClear: () => _showClearDialog(context, 'local_music', 'Downloaded Music Files', notifier),
+              onClear: () => _showClearDialog(context, ref, 'local_music', 'Downloaded Music Files', notifier),
             ),
             _buildCacheTile(
               context,
               title: 'Local Lyrics',
               size: notifier.formatBytes(folderSizes['local_lyrics'] ?? 0),
-              onClear: () => _showClearDialog(context, 'local_lyrics', 'Local Lyrics', notifier),
+              onClear: () => _showClearDialog(context, ref, 'local_lyrics', 'Local Lyrics', notifier),
             ),
             _buildCacheTile(
               context,
               title: 'Local Thumbnails',
               size: notifier.formatBytes(folderSizes['local_images'] ?? 0),
-              onClear: () => _showClearDialog(context, 'local_images', 'Local Thumbnails', notifier),
+              onClear: () => _showClearDialog(context, ref, 'local_images', 'Local Thumbnails', notifier),
             ),
             const Divider(height: 1),
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Center(
                 child: ResonanceButton(
-                  onPressed: () => _showClearDialog(context, 'group_local', 'Local Music Cache', notifier),
+                  onPressed: () => _showClearDialog(context, ref, 'group_local', 'Local Music Cache', notifier),
                   icon: UIcons.regular.trash,
                   label: 'Clear Local Music Cache',
                   style: ResonanceButtonStyle.danger,
@@ -101,19 +102,19 @@ class CacheManagementSection extends ConsumerWidget {
               context,
               title: 'Streamed Audio',
               size: notifier.formatBytes(folderSizes['stream_audio'] ?? 0),
-              onClear: () => _showClearDialog(context, 'stream_audio', 'Streamed Audio Cache', notifier),
+              onClear: () => _showClearDialog(context, ref, 'stream_audio', 'Streamed Audio Cache', notifier),
             ),
             _buildCacheTile(
               context,
               title: 'Streamed Images',
               size: notifier.formatBytes(folderSizes['stream_images'] ?? 0),
-              onClear: () => _showClearDialog(context, 'stream_images', 'Streamed Images Cache', notifier),
+              onClear: () => _showClearDialog(context, ref, 'stream_images', 'Streamed Images Cache', notifier),
             ),
             _buildCacheTile(
               context,
               title: 'Streamed Lyrics',
               size: notifier.formatBytes(folderSizes['stream_lyrics'] ?? 0),
-              onClear: () => _showClearDialog(context, 'stream_lyrics', 'Streamed Lyrics Cache', notifier),
+              onClear: () => _showClearDialog(context, ref, 'stream_lyrics', 'Streamed Lyrics Cache', notifier),
             ),
             const Divider(height: 1),
             // ── Stream Cache Settings (Single Horizontal Row Option Selectors) ──
@@ -171,7 +172,7 @@ class CacheManagementSection extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Center(
                 child: ResonanceButton(
-                  onPressed: () => _showClearDialog(context, 'group_stream', 'Stream Music Cache', notifier),
+                  onPressed: () => _showClearDialog(context, ref, 'group_stream', 'Stream Music Cache', notifier),
                   icon: UIcons.regular.trash,
                   label: 'Clear Stream Music Cache',
                   style: ResonanceButtonStyle.danger,
@@ -201,26 +202,26 @@ class CacheManagementSection extends ConsumerWidget {
               context,
               title: 'Track Metadata',
               size: notifier.formatBytes(folderSizes['metadata'] ?? 0),
-              onClear: () => _showClearDialog(context, 'metadata', 'Track Metadata Cache', notifier),
+              onClear: () => _showClearDialog(context, ref, 'metadata', 'Track Metadata Cache', notifier),
             ),
             _buildCacheTile(
               context,
               title: 'Translation Cache',
               size: notifier.formatBytes(folderSizes['translate'] ?? 0),
-              onClear: () => _showClearDialog(context, 'translate', 'Translation Cache', notifier),
+              onClear: () => _showClearDialog(context, ref, 'translate', 'Translation Cache', notifier),
             ),
             _buildCacheTile(
               context,
               title: 'System Images',
               size: notifier.formatBytes(folderSizes['images'] ?? 0),
-              onClear: () => _showClearDialog(context, 'images', 'System Images Cache', notifier),
+              onClear: () => _showClearDialog(context, ref, 'images', 'System Images Cache', notifier),
             ),
             const Divider(height: 1),
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Center(
                 child: ResonanceButton(
-                  onPressed: () => _showClearDialog(context, 'group_system', 'System App Cache', notifier),
+                  onPressed: () => _showClearDialog(context, ref, 'group_system', 'System App Cache', notifier),
                   icon: UIcons.regular.trash,
                   label: 'Clear System App Cache',
                   style: ResonanceButtonStyle.danger,
@@ -289,6 +290,7 @@ class CacheManagementSection extends ConsumerWidget {
 
   Future<void> _showClearDialog(
     BuildContext context,
+    WidgetRef ref,
     String category,
     String label,
     MaintenanceNotifier notifier, {
@@ -324,9 +326,11 @@ class CacheManagementSection extends ConsumerWidget {
     }
 
     await notifier.clearCategory(category);
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Successfully cleared $label.')),
+    ref.read(notificationProvider.notifier).showNotification(
+      'Cache Cleared',
+      'Successfully cleared $label.',
+      target: 'target:settings:storage',
+      silentOsNotification: true,
     );
   }
 }

@@ -39,54 +39,7 @@ class FullScreenBottomBar extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
             child: Row(
               children: [
-                // LEFT: Track Info
-                Expanded(
-                  flex: 1,
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: Row(
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(4),
-                          child: SizedBox(
-                            width: 56,
-                            height: 56,
-                            child: MediaArtworkWidget(item: track),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              track.title,
-                              style: TextStyle(
-                                color: colorScheme.onSurface,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            Text(
-                              track.artist ?? 'Artist',
-                              style: TextStyle(
-                                color: colorScheme.onSurface.withValues(alpha: 0.7),
-                                fontSize: 12,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                // CENTER: Playback Controls
+                _BottomBarTrackInfo(track: track),
                 const Expanded(
                   flex: 1,
                   child: FittedBox(
@@ -95,34 +48,98 @@ class FullScreenBottomBar extends StatelessWidget {
                     child: FullScreenControls(),
                   ),
                 ),
-
-                // RIGHT: Utility Buttons + Volume + Exit
-                Expanded(
-                  flex: 1,
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerRight,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        FullScreenUtilityButtons(context: context),
-                        const SizedBox(width: 8),
-                        const FullScreenVolumeSlider(),
-                        ReusableHoverIconButton(
-                          icon: UIcons.regular.compress,
-                          iconSize: 20,
-                          color: colorScheme.onSurface.withValues(alpha: 0.7),
-                          tooltip: 'Exit',
-                          onTap: () => Navigator.maybePop(context),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+                const _BottomBarActionsTray(),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _BottomBarTrackInfo extends StatelessWidget {
+  final dynamic track;
+
+  const _BottomBarTrackInfo({required this.track});
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Expanded(
+      flex: 1,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerLeft,
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: SizedBox(
+                width: 56,
+                height: 56,
+                child: MediaArtworkWidget(item: track),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  track.title,
+                  style: TextStyle(
+                    color: colorScheme.onSurface,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  track.artist ?? 'Artist',
+                  style: TextStyle(
+                    color: colorScheme.onSurface.withValues(alpha: 0.7),
+                    fontSize: 12,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BottomBarActionsTray extends StatelessWidget {
+  const _BottomBarActionsTray();
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Expanded(
+      flex: 1,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerRight,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            FullScreenUtilityButtons(context: context),
+            const SizedBox(width: 8),
+            const FullScreenVolumeSlider(),
+            ReusableHoverIconButton(
+              icon: UIcons.regular.compress,
+              iconSize: 20,
+              color: colorScheme.onSurface.withValues(alpha: 0.7),
+              tooltip: 'Exit',
+              onTap: () => Navigator.maybePop(context),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -324,6 +341,13 @@ class FullScreenUtilityButtons extends ConsumerWidget {
 
     return Row(
       children: [
+        ReusableHoverIconButton(
+          icon: UIcons.regular.list_music,
+          iconSize: 20,
+          color: colorScheme.onSurface.withValues(alpha: 0.7),
+          tooltip: 'Queue',
+          onTap: () => ref.read(queueOverlayProvider.notifier).toggle(),
+        ),
         ReusableHoverIconButton(
           icon: UIcons.regular.microphone,
           iconSize: 20,

@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 /// Hover animation
@@ -51,8 +51,6 @@ class ReusableHoverIconButton extends StatefulWidget {
 class _ReusableHoverIconButtonState extends State<ReusableHoverIconButton> with SingleTickerProviderStateMixin {
   bool _isHovered = false;
   AnimationController? _controller;
-
-  bool get _isWindows => Platform.isWindows;
 
   @override
   void initState() {
@@ -137,7 +135,7 @@ class _ReusableHoverIconButtonState extends State<ReusableHoverIconButton> with 
     // iconColor shouldn't change to activeColor on hover if a custom color/iconColor is specified.
     final finalIconColor = (widget.backgroundColor != null && _isHovered && !widget.isDisabled)
         ? (widget.iconColor ?? Colors.white)
-        : (_isHovered && !widget.isDisabled && _isWindows
+        : (_isHovered && !widget.isDisabled
             ? (widget.iconColor ?? widget.color ?? activeColor)
             : baseColor);
 
@@ -201,44 +199,40 @@ class _ReusableHoverIconButtonState extends State<ReusableHoverIconButton> with 
     // Bentuk standar Resonance: Rounded Rectangle
     final borderRadius = widget.borderRadius ?? BorderRadius.circular(8);
 
-    Widget buttonContent = GestureDetector(
-      onTap: widget.isDisabled ? null : widget.onTap,
-      child: AnimatedScale(
-        duration: const Duration(milliseconds: 200),
-        scale: _isHovered && !widget.isDisabled ? widget.scaleOnHover : 1.0,
-        curve: Curves.easeOutBack,
-        child: ClipRect(
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            padding: EdgeInsets.all(widget.padding),
-            decoration: BoxDecoration(
-              color: _isHovered && !widget.isDisabled
-                  ? (widget.backgroundColor != null 
-                      ? Color.lerp(widget.backgroundColor, Colors.white, 0.2) // Lighter on hover
-                      : activeColor.withValues(alpha: 0.12))
-                  : (widget.isSelected 
-                      ? (widget.backgroundColor ?? Colors.transparent) 
-                      : (widget.backgroundColor ?? Colors.transparent)),
+    Widget buttonContent = AnimatedScale(
+      duration: const Duration(milliseconds: 200),
+      scale: _isHovered && !widget.isDisabled ? widget.scaleOnHover : 1.0,
+      curve: Curves.easeOutBack,
+      child: ClipRect(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          decoration: BoxDecoration(
+            color: _isHovered && !widget.isDisabled
+                ? (widget.backgroundColor != null 
+                    ? Color.lerp(widget.backgroundColor, Colors.white, 0.2) // Lighter on hover
+                    : activeColor.withValues(alpha: 0.12))
+                : (widget.isSelected 
+                    ? (widget.backgroundColor ?? Colors.transparent) 
+                    : (widget.backgroundColor ?? Colors.transparent)),
+            borderRadius: borderRadius,
+            shape: BoxShape.rectangle,
+            border: widget.backgroundColor != null && _isHovered && !widget.isDisabled
+                ? Border.all(color: Colors.white.withValues(alpha: 0.3), width: 1) 
+                : null,
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: widget.isDisabled ? null : widget.onTap,
               borderRadius: borderRadius,
-              shape: BoxShape.rectangle,
-              border: widget.backgroundColor != null && _isHovered && !widget.isDisabled
-                  ? Border.all(color: Colors.white.withValues(alpha: 0.3), width: 1) 
-                  : null,
+              hoverColor: Colors.transparent,
+              highlightColor: Colors.transparent,
+              splashColor: (widget.backgroundColor ?? activeColor).withValues(alpha: 0.12),
+              child: Padding(
+                padding: EdgeInsets.all(widget.padding),
+                child: content,
+              ),
             ),
-            child: !_isWindows && !widget.isDisabled
-                ? Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: widget.onTap,
-                      borderRadius: borderRadius,
-                      splashColor: (widget.backgroundColor ?? activeColor).withValues(alpha: 0.12),
-                      child: Padding(
-                        padding: const EdgeInsets.all(4.0),
-                        child: content,
-                      ),
-                    ),
-                  )
-                : content,
           ),
         ),
       ),
@@ -248,20 +242,23 @@ class _ReusableHoverIconButtonState extends State<ReusableHoverIconButton> with 
       padding: widget.margin ?? EdgeInsets.zero,
       child: MouseRegion(
         cursor: widget.isDisabled ? SystemMouseCursors.basic : SystemMouseCursors.click,
-        onEnter: (_) {
+        onEnter: (event) {
+          if (event.kind == PointerDeviceKind.touch) return;
           if (!widget.isDisabled) {
             setState(() => _isHovered = true);
           }
         },
         onExit: (_) {
-          setState(() => _isHovered = false);
+          if (_isHovered) {
+            setState(() => _isHovered = false);
+          }
         },
         child: _isHovered && !widget.isDisabled
             ? Tooltip(
                 message: widget.tooltip,
                 preferBelow: false,
                 verticalOffset: 28, // Adjusted for clarity
-                triggerMode: _isWindows ? TooltipTriggerMode.manual : TooltipTriggerMode.longPress,
+                triggerMode: TooltipTriggerMode.manual,
                 ignorePointer: true,
                 child: buttonContent,
               )

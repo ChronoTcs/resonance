@@ -215,16 +215,23 @@ class CacheManager {
   // ---------------- Enforce Bounds (Limit/Cleanup) ---------------- 
 
   /// Enforce MB limit strictly on stream/audio.
-  Future<void> enforceStreamAudioLimit(int limitMb) async {
+  /// [pinnedIds] — safe filename stems (no extension) of tracks that are in a
+  /// user playlist and must never be evicted by the dynamic eraser.
+  Future<void> enforceStreamAudioLimit(int limitMb, {Set<String> pinnedIds = const {}}) async {
     try {
       final dir = await getStreamAudioDir();
       if (!dir.existsSync()) return;
 
-      final result = await Isolate.run(() => _scanAndSortFiles(dir.path, limitMb));
+      final result = await Isolate.run(
+        () => _scanAndSortFiles(dir.path, limitMb, pinnedIds),
+      );
       final List<File> filesToDelete = result.pathsToDelete.map((p) => File(p)).toList();
       if (filesToDelete.isEmpty) return;
 
-      debugPrint('Stream audio limit exceeded: ${result.currentSizeMb.toStringAsFixed(2)}MB > ${limitMb}MB. Cleaning up...');
+      debugPrint(
+        'Stream audio limit exceeded: ${result.currentSizeMb.toStringAsFixed(2)}MB > ${limitMb}MB. '
+        'Cleaning up ${filesToDelete.length} file(s) (${pinnedIds.length} pinned, protected)...',
+      );
       for (var file in filesToDelete) {
         try {
           await file.delete();
@@ -285,37 +292,44 @@ class CacheManager {
     }
   }
 
-  static _CacheScanResult _scanAndSortFiles(String dirPath, int limitMb) {
+  static _CacheScanResult _scanAndSortFiles(
+    String dirPath,
+    int limitMb,
+    Set<String> pinnedIds,
+  ) {
     final dir = Directory(dirPath);
     final allEntities = dir.listSync(recursive: false);
     final List<File> allFiles = [];
     int currentTotal = 0;
-    
+
     for (var entity in allEntities) {
       if (entity is File) {
         allFiles.add(entity);
         currentTotal += entity.lengthSync();
       }
     }
-    
-    int limitBytes = limitMb * 1024 * 1024;
+
+    final int limitBytes = limitMb * 1024 * 1024;
     if (currentTotal <= limitBytes) {
       return _CacheScanResult(currentSizeMb: currentTotal / 1024 / 1024, pathsToDelete: []);
     }
-    
-    // Sort oldest first
+
+    // Sort oldest first (LRU eviction order)
     allFiles.sort((a, b) => a.lastModifiedSync().compareTo(b.lastModifiedSync()));
-    
+
     final List<String> pathsToDelete = [];
     int bytesToRemove = currentTotal - limitBytes;
     int removedSoFar = 0;
-    
+
     for (var file in allFiles) {
       if (removedSoFar >= bytesToRemove) break;
+      // Skip playlist-pinned files — they are protected from eviction
+      final stemId = p.basenameWithoutExtension(file.path);
+      if (pinnedIds.contains(stemId)) continue;
       pathsToDelete.add(file.path);
       removedSoFar += file.lengthSync();
     }
-    
+
     return _CacheScanResult(currentSizeMb: currentTotal / 1024 / 1024, pathsToDelete: pathsToDelete);
   }
 }

@@ -2,6 +2,7 @@ import 'package:resonance/core/widgets/widgets.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:resonance/core/configs/app_breakpoints.dart';
 import 'package:silky_scroll/silky_scroll.dart';
 import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/core/utils/app_icons.dart';
@@ -10,9 +11,12 @@ import 'package:resonance/features/download/data/models/download_item.dart';
 import 'package:resonance/features/download/application/providers/download_provider.dart';
 import 'package:resonance/features/download/application/providers/download_settings_provider.dart';
 import 'package:resonance/features/dashboard/presentation/widgets/top_navigation_header.dart';
+import 'package:resonance/features/settings/application/notification_provider.dart';
+import 'package:resonance/features/download/application/utils/download_input_detector.dart';
 
 class DownloadScreen extends ConsumerStatefulWidget {
-  const DownloadScreen({super.key});
+  final bool showHeader;
+  const DownloadScreen({super.key, this.showHeader = true});
 
   @override
   ConsumerState<DownloadScreen> createState() => _DownloadScreenState();
@@ -22,7 +26,6 @@ class _DownloadScreenState extends ConsumerState<DownloadScreen>
     with SingleTickerProviderStateMixin {
   final _urlController = TextEditingController();
   DownloadType _selectedType = DownloadType.audio;
-  DownloadSource _selectedSource = DownloadSource.ytmusic;
 
   @override
   void initState() {
@@ -48,25 +51,32 @@ class _DownloadScreenState extends ConsumerState<DownloadScreen>
     final text = _urlController.text.trim();
     if (text.isEmpty) return;
 
-    // Split by newline to support multiple URLs at once
-    final urls = text
-        .split('\n')
-        .map((s) => s.trim())
-        .where((s) => s.isNotEmpty)
-        .toList();
+    final analysis = DownloadInputDetector.analyze(text);
+    if (!analysis.isValid) {
+      ref.read(notificationProvider.notifier).showNotification(
+        'Invalid Input',
+        analysis.warningMessage ?? 'Please provide valid YouTube URLs or song titles.',
+        isError: true,
+        target: 'target:download',
+      );
+      return;
+    }
 
-    ref
-        .read(downloadProvider.notifier)
-        .addToQueue(urls, type: _selectedType, source: _selectedSource);
+    final validUrls = analysis.items.where((i) => i.isValid).map((i) => i.raw).toList();
+    if (validUrls.isEmpty) return;
+
+    ref.read(downloadProvider.notifier).addToQueue(
+      validUrls,
+      type: _selectedType,
+      source: analysis.resolvedSource,
+    );
     _urlController.clear();
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Added ${urls.length} item${urls.length == 1 ? '' : 's'} to queue',
-        ),
-        duration: const Duration(seconds: 2),
-      ),
+    ref.read(notificationProvider.notifier).showNotification(
+      'Download Queue',
+      'Added ${validUrls.length} item${validUrls.length == 1 ? '' : 's'} to queue',
+      target: 'target:download',
+      silentOsNotification: true,
     );
   }
 
@@ -76,239 +86,87 @@ class _DownloadScreenState extends ConsumerState<DownloadScreen>
     final theme = Theme.of(context);
     final settingsAsync = ref.watch(downloadSettingsProvider);
     final settings = settingsAsync.value;
+    final isDesktop = AppBreakpoints.isWide(context);
 
-    final activeCount = queue
-        .where((i) => i.status == DownloadStatus.downloading)
-        .length;
-    final queuedCount = queue
-        .where((i) => i.status == DownloadStatus.queued)
-        .length;
-    final doneCount = queue
-        .where((i) => i.status == DownloadStatus.done)
-        .length;
-
-    final bool isDesktop = MediaQuery.of(context).size.width > 600;
+    final activeCount =
+        queue.where((e) => e.status == DownloadStatus.downloading).length;
+    final queuedCount =
+        queue.where((e) => e.status == DownloadStatus.queued).length;
+    final doneCount =
+        queue.where((e) => e.status == DownloadStatus.done).length;
 
     return Scaffold(
       body: Column(
         children: [
-          if (isDesktop) ...[
-            TopNavigationHeader(
-              left: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Text(
-                    'Download Manager',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
+          if (widget.showHeader) ...[
+            if (isDesktop) ...[
+              TopNavigationHeader(
+                left: Row(
+                  children: [
+                    SizedBox(
+                      width: 140,
+                      child: Text(
+                        'Downloads',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 24),
+                    Text(
+                      '$activeCount active · $queuedCount queued · $doneCount done',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.hintColor,
+                      ),
+                    ),
+                  ],
+                ),
+                right: const SizedBox(),
+              ),
+            ] else ...[
+              TopNavigationHeader(
+                left: Text(
+                  'Download Manager',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                right: const SizedBox(),
+              ),
+              Container(
+                height: 28,
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                alignment: Alignment.centerLeft,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surface,
+                  border: Border(
+                    bottom: BorderSide(
+                      color: theme.dividerColor.withValues(alpha: 0.05),
+                      width: 1,
                     ),
                   ),
-                  const SizedBox(width: 24),
-                  Text(
-                    '$activeCount active · $queuedCount queued · $doneCount done',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.hintColor,
-                    ),
-                  ),
-                ],
-              ),
-              right: const SizedBox(),
-            ),
-          ] else ...[
-            TopNavigationHeader(
-              left: Text(
-                'Download Manager',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
                 ),
-              ),
-              right: const SizedBox(),
-            ),
-            Container(
-              height: 28,
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              alignment: Alignment.centerLeft,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surface,
-                border: Border(
-                  bottom: BorderSide(
-                    color: theme.dividerColor.withValues(alpha: 0.05),
-                    width: 1,
+                child: Text(
+                  '$activeCount active · $queuedCount queued · $doneCount done',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.hintColor,
                   ),
                 ),
               ),
-              child: Text(
-                '$activeCount active · $queuedCount queued · $doneCount done',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.hintColor,
-                ),
-              ),
-            ),
+            ],
           ],
           Expanded(
             child: SilkyCustomScrollView(
               slivers: [
 
-          // ─── Android Notice Banner ─────────────────────────────────
-          if (Platform.isAndroid)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.amber.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.amber.withValues(alpha: 0.4)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.info_outline, color: Colors.amber, size: 20),
-                      const SizedBox(width: 10),
-                      const Expanded(
-                        child: Text(
-                          'Direct URL downloads require the desktop Python bridge (unavailable on Android). '
-                          'Use the Explore tab to stream or save tracks instead.',
-                          style: TextStyle(fontSize: 12, color: Colors.amber),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
           // ─── Input Panel ──────────────────────────────────────────
           SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Card(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // URL input — modern filled style with pinned clear button
-                      Stack(
-                        children: [
-                          TextField(
-                            controller: _urlController,
-                            maxLines: 4,
-                            minLines: 2,
-                            style: theme.textTheme.bodyMedium,
-                            decoration: InputDecoration(
-                              hintText: 'Paste URL(s) or song name…\nOne per line for batch',
-                              hintStyle: TextStyle(
-                                color: theme.hintColor.withValues(alpha: 0.6),
-                                fontSize: 13,
-                              ),
-                              filled: true,
-                              fillColor: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
-                              contentPadding: const EdgeInsets.fromLTRB(14, 12, 44, 12),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                borderSide: BorderSide.none,
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                borderSide: BorderSide(
-                                  color: theme.dividerColor.withValues(alpha: 0.08),
-                                ),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                borderSide: BorderSide(
-                                  color: theme.colorScheme.primary.withValues(alpha: 0.5),
-                                  width: 1.5,
-                                ),
-                              ),
-                            ),
-                          ),
-                          Positioned(
-                            top: 0,
-                            bottom: 0,
-                            right: 8,
-                            child: Center(
-                              child: ReusableHoverIconButton(
-                                icon: UIcons.regular.cross_small,
-                                iconSize: 14,
-                                padding: 4.0,
-                                scaleOnHover: 1.0,
-                                borderRadius: BorderRadius.circular(6),
-                                tooltip: 'Clear',
-                                onTap: () => _urlController.clear(),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Source selector
-                      ResonanceSelector<DownloadSource>(
-                        icon: AppIcons.download,
-                        title: 'Source',
-                        subtitle: 'Where to fetch from',
-                        value: _selectedSource,
-                        onChanged: (v) => setState(() => _selectedSource = v),
-                        items: const [
-                          ResonanceSelectorItem(
-                            value: DownloadSource.ytmusic,
-                            label: 'YouTube Music',
-                          ),
-                          ResonanceSelectorItem(
-                            value: DownloadSource.youtube,
-                            label: 'YouTube',
-                          ),
-                          ResonanceSelectorItem(
-                            value: DownloadSource.auto,
-                            label: 'Auto-detect',
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Output path info
-                      if (settings != null)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 4),
-                          child: Row(
-                            children: [
-                              Icon(Icons.folder_outlined, size: 13, color: theme.hintColor),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  _selectedType == DownloadType.audio
-                                      ? settings.musicOutputPath
-                                      : settings.videoOutputPath,
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: theme.hintColor,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-
-                      const SizedBox(height: 12),
-
-                      // Add button
-                      ResonanceButton(
-                        onPressed: _addToQueue,
-                        icon: AppIcons.add,
-                        label: 'Add to Queue',
-                        isFullWidth: true,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+            child: _DownloadInputPanel(
+              urlController: _urlController,
+              selectedType: _selectedType,
+              settings: settings,
+              onAddToQueue: _addToQueue,
             ),
           ),
 
@@ -583,117 +441,9 @@ class _DownloadTileState extends ConsumerState<_DownloadTile> {
 
           // ─── Expanded Logs Section ──────────────────────────────
           if (_isExpanded)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Divider(),
-                  const SizedBox(height: 4),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'LOGS / STATUS',
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).brightness == Brightness.light
-                              ? Colors.black.withValues(alpha: 0.6)
-                              : Colors.white.withValues(alpha: 0.6),
-                          letterSpacing: 1.2,
-                        ),
-                      ),
-                      if (item.eta != null &&
-                          item.status == DownloadStatus.downloading)
-                        Text(
-                          'ETA: ${_formatEta(item.eta!)}',
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: theme.hintColor,
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  // Logs container
-                  Container(
-                    width: double.infinity,
-                    constraints: const BoxConstraints(maxHeight: 150),
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
-                    ),
-                    child: item.logs.isEmpty && item.errorMessage == null
-                        ? Center(
-                            child: Text(
-                              'No logs yet...',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.hintColor,
-                                fontStyle: FontStyle.italic,
-                              ),
-                            ),
-                          )
-                        : SilkySingleChildScrollView(
-                            reverse: true, // Always show newest logs
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                ...item.logs.map(
-                                  (log) => Padding(
-                                    padding: const EdgeInsets.only(bottom: 2),
-                                    child: Text(
-                                      '> $log',
-                                      style: theme.textTheme.bodySmall
-                                          ?.copyWith(
-                                            fontFamily: 'monospace',
-                                            fontSize: 10,
-                                            color: theme
-                                                .colorScheme
-                                                .onSurfaceVariant,
-                                          ),
-                                    ),
-                                  ),
-                                ),
-                                if (item.status == DownloadStatus.error &&
-                                    item.errorMessage != null)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 4),
-                                    child: Text(
-                                      'ERROR: ${item.errorMessage}',
-                                      style: theme.textTheme.bodySmall
-                                          ?.copyWith(
-                                            color: Colors.red.shade300,
-                                            fontWeight: FontWeight.bold,
-                                            fontFamily: 'monospace',
-                                            fontSize: 10,
-                                          ),
-                                    ),
-                                  ),
-                                if (item.status == DownloadStatus.done &&
-                                    item.outputPath != null)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 4),
-                                    child: Text(
-                                      'SUCCESS: File saved to ${item.outputPath}',
-                                      style: theme.textTheme.bodySmall
-                                          ?.copyWith(
-                                            color: Colors.green.shade300,
-                                            fontFamily: 'monospace',
-                                            fontSize: 10,
-                                          ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                  ),
-                ],
-              ),
+            _DownloadTileExpandedLogs(
+              item: item,
+              etaFormatted: item.eta != null ? _formatEta(item.eta!) : null,
             ),
         ],
       ),
@@ -707,3 +457,413 @@ class _DownloadTileState extends ConsumerState<_DownloadTile> {
     return '${m}m ${s}s';
   }
 }
+
+class _DownloadInputPanel extends StatelessWidget {
+  const _DownloadInputPanel({
+    required this.urlController,
+    required this.selectedType,
+    required this.settings,
+    required this.onAddToQueue,
+  });
+
+  final TextEditingController urlController;
+  final DownloadType selectedType;
+  final dynamic settings;
+  final VoidCallback onAddToQueue;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final analysis = DownloadInputDetector.analyze(urlController.text);
+    final hasInput = urlController.text.trim().isNotEmpty;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Card(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // URL input — modern filled style with pinned clear button
+              Stack(
+                children: [
+                  TextField(
+                    controller: urlController,
+                    maxLines: 4,
+                    minLines: 2,
+                    style: theme.textTheme.bodyMedium,
+                    decoration: InputDecoration(
+                      hintText:
+                          'Paste URL(s) or song name…\nOne per line for batch',
+                      hintStyle: TextStyle(
+                        color: theme.hintColor.withValues(alpha: 0.6),
+                        fontSize: 13,
+                      ),
+                      filled: true,
+                      fillColor: theme.colorScheme.surfaceContainerHighest
+                          .withValues(alpha: 0.35),
+                      contentPadding:
+                          const EdgeInsets.fromLTRB(14, 12, 44, 12),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide.none,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(
+                          color: theme.dividerColor.withValues(alpha: 0.08),
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(
+                          color: theme.colorScheme.primary
+                              .withValues(alpha: 0.5),
+                          width: 1.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: 0,
+                    bottom: 0,
+                    right: 8,
+                    child: Center(
+                      child: ReusableHoverIconButton(
+                        icon: UIcons.regular.cross_small,
+                        iconSize: 14,
+                        padding: 4.0,
+                        scaleOnHover: 1.0,
+                        borderRadius: BorderRadius.circular(6),
+                        tooltip: 'Clear',
+                        onTap: () => urlController.clear(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              // ─── Real-Time Detection Pill & Feedback ─────────────────────
+              if (hasInput) ...[
+                const SizedBox(height: 10),
+                if (analysis.hasUnsupportedUrl)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.error.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: theme.colorScheme.error.withValues(alpha: 0.3),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          UIcons.regular.cross_circle,
+                          size: 16,
+                          color: theme.colorScheme.error,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            analysis.warningMessage ?? 'Unsupported link format.',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.error,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else ...[
+                  Row(
+                    children: [
+                      _buildDetectedFormatBadge(theme, analysis),
+                      const Spacer(),
+                      if (analysis.totalCount > 1)
+                        Text(
+                          '${analysis.validCount} valid / ${analysis.totalCount} total',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.hintColor,
+                            fontSize: 11,
+                          ),
+                        ),
+                    ],
+                  ),
+                  if (analysis.hasPlaylist) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: Colors.amber.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.playlist_play_rounded,
+                            size: 18,
+                            color: Colors.amber,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              analysis.warningMessage ??
+                                  'Playlist link detected. Use Library > Playlists to auto-cache.',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: Colors.amber.shade300,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ],
+
+              // ─── Output path info ───────────────────────────────────────
+              if (settings != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12, bottom: 4),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.folder_outlined,
+                        size: 13,
+                        color: theme.hintColor,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          selectedType == DownloadType.audio
+                              ? settings.musicOutputPath
+                              : settings.videoOutputPath,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.hintColor,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+              const SizedBox(height: 12),
+
+              // Add button
+              ResonanceButton(
+                onPressed: (hasInput && analysis.isValid) ? onAddToQueue : null,
+                icon: AppIcons.add,
+                label: 'Add to Queue',
+                isFullWidth: true,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetectedFormatBadge(ThemeData theme, DownloadInputAnalysis analysis) {
+    final IconData icon;
+    final String label;
+    final Color badgeColor;
+
+    if (analysis.totalCount > 1) {
+      icon = Icons.dynamic_feed_rounded;
+      label = 'Batch Input (${analysis.validCount} items)';
+      badgeColor = theme.colorScheme.primary;
+    } else {
+      switch (analysis.primaryType) {
+        case DownloadInputType.youtubeMusic:
+          icon = Icons.music_note_rounded;
+          label = 'YouTube Music (Audio)';
+          badgeColor = const Color(0xFF00BFA5);
+          break;
+        case DownloadInputType.youtubeVideo:
+          icon = Icons.play_circle_filled_rounded;
+          label = 'YouTube (Audio)';
+          badgeColor = const Color(0xFFFF5252);
+          break;
+        case DownloadInputType.youtubePlaylist:
+          icon = Icons.playlist_play_rounded;
+          label = 'YouTube Playlist';
+          badgeColor = Colors.amber;
+          break;
+        case DownloadInputType.songSearch:
+          icon = Icons.search_rounded;
+          label = 'Song Search (Top match)';
+          badgeColor = theme.colorScheme.primary;
+          break;
+        default:
+          icon = Icons.help_outline_rounded;
+          label = 'Auto-detect';
+          badgeColor = theme.hintColor;
+      }
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: badgeColor.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: badgeColor.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: badgeColor),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: badgeColor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DownloadTileExpandedLogs extends StatelessWidget {
+  const _DownloadTileExpandedLogs({
+    required this.item,
+    required this.etaFormatted,
+  });
+
+  final DownloadItem item;
+  final String? etaFormatted;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest
+            .withValues(alpha: 0.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Divider(),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'LOGS / STATUS',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: theme.brightness == Brightness.light
+                      ? Colors.black.withValues(alpha: 0.6)
+                      : Colors.white.withValues(alpha: 0.6),
+                  letterSpacing: 1.2,
+                ),
+              ),
+              if (etaFormatted != null &&
+                  item.status == DownloadStatus.downloading)
+                Text(
+                  'ETA: $etaFormatted',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.hintColor,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // Logs container
+          Container(
+            width: double.infinity,
+            constraints: const BoxConstraints(maxHeight: 150),
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHighest
+                  .withValues(alpha: 0.3),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: theme.colorScheme.outlineVariant
+                    .withValues(alpha: 0.5),
+              ),
+            ),
+            child: item.logs.isEmpty && item.errorMessage == null
+                ? Center(
+                    child: Text(
+                      'No logs yet...',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.hintColor,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  )
+                : SilkySingleChildScrollView(
+                    reverse: true,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ...item.logs.map(
+                          (log) => Padding(
+                            padding: const EdgeInsets.only(bottom: 2),
+                            child: Text(
+                              '> $log',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                fontFamily: 'monospace',
+                                fontSize: 10,
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (item.status == DownloadStatus.error &&
+                            item.errorMessage != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              'ERROR: ${item.errorMessage}',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: Colors.red.shade300,
+                                fontWeight: FontWeight.bold,
+                                fontFamily: 'monospace',
+                                fontSize: 10,
+                              ),
+                            ),
+                          ),
+                        if (item.status == DownloadStatus.done &&
+                            item.outputPath != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              'SUCCESS: File saved to ${item.outputPath}',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: Colors.green.shade300,
+                                fontFamily: 'monospace',
+                                fontSize: 10,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+

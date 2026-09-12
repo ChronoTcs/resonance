@@ -1,4 +1,5 @@
 import 'package:resonance/core/widgets/widgets.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance/core/utils/uicons.dart';
@@ -7,9 +8,9 @@ import 'package:resonance/features/library/application/library_provider.dart';
 import 'package:resonance/features/player/application/services/queue_orchestrator.dart';
 import 'package:resonance/features/player/application/providers/audio_provider.dart';
 import 'package:resonance/features/playlist/application/playlist_provider.dart';
-import 'package:resonance/features/playlist/data/models/playlist_model.dart';
 
 import 'package:resonance/features/library/presentation/widgets/media_actions_bottom_sheet.dart';
+import 'package:resonance/features/player/utils/media_action_utils.dart';
 
 class HoverTrackCard extends ConsumerStatefulWidget {
   const HoverTrackCard({super.key, required this.track});
@@ -25,127 +26,130 @@ class _HoverTrackCardState extends ConsumerState<HoverTrackCard> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final playlistState = ref.watch(playlistProvider).value;
-    
-    bool isLoved = false;
-    String? likedPlaylistId;
-    if (playlistState != null) {
-      final likedPl = playlistState.local.cast<Playlist?>().firstWhere(
-            (p) => p?.name == 'Liked Songs',
-            orElse: () => null,
-          );
-      if (likedPl != null) {
-        likedPlaylistId = likedPl.id;
-        final trackId = widget.track.id ?? widget.track.path;
-        isLoved = likedPl.tracks.any((t) => (t.id ?? t.path) == trackId);
-      }
-    }
+    ref.watch(playlistProvider);
+    final isLoved = ref.read(playlistProvider.notifier).isLiked(widget.track);
 
-    return Padding(
-      padding: const EdgeInsets.only(right: 12),
+    return Container(
+      width: 140,
+      margin: const EdgeInsets.symmetric(horizontal: 4),
       child: MouseRegion(
-        onEnter: (_) => setState(() => _isHovered = true),
-        onExit: (_) => setState(() => _isHovered = false),
+        cursor: SystemMouseCursors.click,
+        onEnter: (event) {
+          if (event.kind == PointerDeviceKind.touch) return;
+          setState(() => _isHovered = true);
+        },
+        onExit: (_) {
+          if (_isHovered) {
+            setState(() => _isHovered = false);
+          }
+        },
         child: InkWell(
+          mouseCursor: SystemMouseCursors.click,
           onTap: () {
             if (widget.track.isStreaming) {
-            ref.read(audioProvider.notifier).playYouTubeTrack(widget.track);
-          } else {
-            final library = ref.read(libraryProvider);
-            final audioTracks = library.allMedia.where((m) => m.type == 'audio').toList();
-            ref.read(queueOrchestratorProvider).playWithLocalRadioFallback(widget.track, audioTracks);
-          }
+              ref.read(audioProvider.notifier).playYouTubeTrack(widget.track);
+            } else {
+              final library = ref.read(libraryProvider);
+              final audioTracks = library.allMedia.where((m) => m.type == 'audio').toList();
+              ref.read(queueOrchestratorProvider).playWithLocalRadioFallback(widget.track, audioTracks);
+            }
           },
-          onLongPress: () {
-            showModalBottomSheet(
-              context: context,
-              builder: (_) => MediaActionsBottomSheet(item: widget.track),
-            );
-          },
-          borderRadius: BorderRadius.circular(10),
-          child: SizedBox(
-            width: 140,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Stack(
-                  children: [
-                    MediaArtworkWidget(
-                      item: widget.track,
-                      width: 140,
-                      height: 140,
-                      borderRadius: 10,
+          onSecondaryTapDown: (details) => MediaActionUtils.showTrackContextMenu(
+            context: context,
+            ref: ref,
+            item: widget.track,
+            position: details.globalPosition,
+          ),
+          onLongPress: () => MediaActionUtils.showMediaActions(context: context, ref: ref, item: widget.track),
+          borderRadius: BorderRadius.circular(8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Stack(
+                children: [
+                  MediaArtworkWidget(
+                    item: widget.track,
+                    width: 140,
+                    height: 140,
+                    borderRadius: 8,
+                  ),
+                  if (_isHovered)
+                    _HoverTrackActionOverlay(
+                      track: widget.track,
+                      isLoved: isLoved,
                     ),
-                    if (_isHovered)
-                      Positioned.fill(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.5),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Center(
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                 IconButton(
-                                   icon: Icon(UIcons.regular.add, color: Colors.white),
-                                   iconSize: 22,
-                                   tooltip: 'Add to Playlist',
-                                   onPressed: () => MediaActionsBottomSheet.showPlaylistPicker(context, widget.track),
-                                 ),
-                                const SizedBox(width: 8),
-                                IconButton(
-                                  icon: Icon(
-                                    isLoved ? UIcons.solid.heart : UIcons.regular.heart,
-                                    color: isLoved ? Colors.red : Colors.white,
-                                  ),
-                                  iconSize: 22,
-                                  onPressed: () async {
-                                    final notifier = ref.read(playlistProvider.notifier);
-                                    if (likedPlaylistId == null) {
-                                      await notifier.createPlaylist('Liked Songs');
-                                      await Future.delayed(const Duration(milliseconds: 200));
-                                      final updatedState = ref.read(playlistProvider).value;
-                                      final newLikedPl = updatedState?.local.firstWhere((p) => p.name == 'Liked Songs');
-                                      if (newLikedPl != null) {
-                                        likedPlaylistId = newLikedPl.id;
-                                      }
-                                    }
-                                    if (likedPlaylistId != null) {
-                                      if (isLoved) {
-                                        await notifier.removeTrackFromPlaylist(likedPlaylistId!, widget.track.id ?? widget.track.path);
-                                      } else {
-                                        await notifier.addTrackToPlaylist(likedPlaylistId!, widget.track);
-                                      }
-                                    }
-                                  },
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
+                ],
+              ),
+
+              const SizedBox(height: 6),
+              Text(
+                widget.track.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12.5,
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  widget.track.title,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                widget.track.artist ?? 'Unknown Artist',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontSize: 11,
                 ),
-                Text(
-                  widget.track.artist ?? 'Unknown Artist',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.hintColor,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HoverTrackActionOverlay extends ConsumerWidget {
+  final MediaItem track;
+  final bool isLoved;
+
+  const _HoverTrackActionOverlay({
+    required this.track,
+    required this.isLoved,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Positioned.fill(
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Center(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              ReusableHoverIconButton(
+                icon: UIcons.regular.add,
+                iconColor: Colors.white,
+                iconSize: 20,
+                padding: 6,
+                tooltip: 'Add to Playlist',
+                onTap: () => MediaActionsBottomSheet.showPlaylistPicker(context, track),
+              ),
+              const SizedBox(width: 8),
+              ReusableHoverIconButton(
+                icon: isLoved ? UIcons.solid.heart : UIcons.regular.heart,
+                iconColor: isLoved ? Colors.red : Colors.white,
+                iconSize: 20,
+                padding: 6,
+                tooltip: isLoved ? 'Remove from Liked' : 'Like',
+                onTap: () => ref
+                    .read(playlistProvider.notifier)
+                    .toggleLike(track),
+              ),
+            ],
           ),
         ),
       ),

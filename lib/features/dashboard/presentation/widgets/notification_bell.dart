@@ -37,7 +37,6 @@ class _NotificationBellState extends ConsumerState<NotificationBell> {
 
   void _showOverlay(BuildContext context, NotificationState notifState) {
     _hideOverlay();
-    final theme = Theme.of(context);
     final overlay = Overlay.of(context);
 
     _overlayEntry = OverlayEntry(
@@ -53,113 +52,9 @@ class _NotificationBellState extends ConsumerState<NotificationBell> {
                 color: Colors.transparent,
               ),
             ),
-            Positioned(
-              width: 320,
-              child: CompositedTransformFollower(
-                link: _layerLink,
-                showWhenUnlinked: false,
-                offset: widget.isTitleBar ? const Offset(-280, 32) : const Offset(-270, 40),
-                child: Material(
-                  elevation: 8,
-                  borderRadius: BorderRadius.circular(10),
-                  color: theme.colorScheme.surface.withValues(alpha: 0.95),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: theme.primaryColor.withValues(alpha: 0.2),
-                        width: 1,
-                      ),
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'Notifications',
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              if (notifState.items.isNotEmpty)
-                                ResonanceButton(
-                                  onPressed: () {
-                                    ref.read(notificationProvider.notifier).clearAll();
-                                    ref.read(notificationProvider.notifier).toggleDropdown(visible: false);
-                                  },
-                                  icon: UIcons.regular.trash,
-                                  label: 'Clear All',
-                                  style: ResonanceButtonStyle.secondary,
-                                ),
-                            ],
-                          ),
-                        ),
-                        const Divider(height: 1),
-                        ConstrainedBox(
-                          constraints: const BoxConstraints(maxHeight: 280),
-                          child: notifState.items.isEmpty
-                              ? SizedBox(
-                                  height: 52,
-                                  child: Center(
-                                    child: Text(
-                                      'No new notifications',
-                                      style: TextStyle(
-                                        color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ),
-                                )
-                              : ListView.separated(
-                                  shrinkWrap: true,
-                                  padding: EdgeInsets.zero,
-                                  itemCount: notifState.items.length,
-                                  separatorBuilder: (_, _) => const Divider(height: 1),
-                                  itemBuilder: (context, index) {
-                                    final item = notifState.items[index];
-                                    return ListTile(
-                                      dense: true,
-                                      leading: Icon(
-                                        item.isError
-                                            ? UIcons.regular.exclamation
-                                            : UIcons.regular.check,
-                                        color: item.isError
-                                            ? theme.colorScheme.error
-                                            : theme.colorScheme.primary,
-                                        size: 16,
-                                      ),
-                                      title: Text(
-                                        item.title,
-                                        style: theme.textTheme.bodyMedium?.copyWith(
-                                          fontWeight: item.isRead
-                                              ? FontWeight.normal
-                                              : FontWeight.bold,
-                                        ),
-                                      ),
-                                      subtitle: Text(
-                                        item.message,
-                                        style: theme.textTheme.bodySmall?.copyWith(
-                                          color: Colors.grey,
-                                        ),
-                                      ),
-                                      onTap: () {
-                                        ref.read(notificationProvider.notifier).markAllAsRead();
-                                        ref.read(notificationProvider.notifier).toggleDropdown(visible: false);
-                                        ref.read(notificationProvider.notifier).handleNotificationClick(targetScreen: item.targetScreen);
-                                      },
-                                    );
-                                  },
-                                ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
+            _NotificationDropdownPanel(
+              layerLink: _layerLink,
+              isTitleBar: widget.isTitleBar,
             ),
           ],
         );
@@ -302,3 +197,153 @@ class _TitleBarBellIconButtonState extends State<_TitleBarBellIconButton> {
     );
   }
 }
+
+class _NotificationDropdownPanel extends ConsumerWidget {
+  const _NotificationDropdownPanel({
+    required this.layerLink,
+    required this.isTitleBar,
+  });
+
+  final LayerLink layerLink;
+  final bool isTitleBar;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final notifState = ref.watch(notificationProvider);
+
+    return Positioned(
+      width: 320,
+      child: CompositedTransformFollower(
+        link: layerLink,
+        showWhenUnlinked: false,
+        offset: isTitleBar ? const Offset(-280, 32) : const Offset(-270, 40),
+        child: Material(
+          elevation: 8,
+          borderRadius: BorderRadius.circular(10),
+          color: theme.colorScheme.surface.withValues(alpha: 0.95),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: theme.primaryColor.withValues(alpha: 0.2),
+                width: 1,
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildHeader(ref, theme, notifState),
+                const Divider(height: 1),
+                _buildContent(context, ref, theme, notifState),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader(
+    WidgetRef ref,
+    ThemeData theme,
+    NotificationState notifState,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            'Notifications',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          if (notifState.items.isNotEmpty)
+            ResonanceButton(
+              onPressed: () {
+                ref.read(notificationProvider.notifier).clearAll();
+                ref
+                    .read(notificationProvider.notifier)
+                    .toggleDropdown(visible: false);
+              },
+              icon: UIcons.regular.trash,
+              label: 'Clear All',
+              style: ResonanceButtonStyle.secondary,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildContent(
+    BuildContext context,
+    WidgetRef ref,
+    ThemeData theme,
+    NotificationState notifState,
+  ) {
+    if (notifState.items.isEmpty) {
+      return SizedBox(
+        height: 52,
+        child: Center(
+          child: Text(
+            'No new notifications',
+            style: TextStyle(
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+              fontSize: 12,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxHeight: 280),
+      child: ListView.separated(
+        shrinkWrap: true,
+        padding: EdgeInsets.zero,
+        itemCount: notifState.items.length,
+        separatorBuilder: (_, _) => const Divider(height: 1),
+        itemBuilder: (context, index) {
+          final item = notifState.items[index];
+          return ListTile(
+            dense: true,
+            leading: Icon(
+              item.isError
+                  ? UIcons.regular.exclamation
+                  : UIcons.regular.check,
+              color: item.isError
+                  ? theme.colorScheme.error
+                  : theme.colorScheme.primary,
+              size: 16,
+            ),
+            title: Text(
+              item.title,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight:
+                    item.isRead ? FontWeight.normal : FontWeight.bold,
+              ),
+            ),
+            subtitle: Text(
+              item.message,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: Colors.grey,
+              ),
+            ),
+            onTap: () {
+              ref.read(notificationProvider.notifier).markAllAsRead();
+              ref
+                  .read(notificationProvider.notifier)
+                  .toggleDropdown(visible: false);
+              ref
+                  .read(notificationProvider.notifier)
+                  .handleNotificationClick(targetScreen: item.targetScreen);
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+

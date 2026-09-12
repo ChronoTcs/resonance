@@ -10,6 +10,8 @@
 #include <flutter/method_channel.h>
 #include <flutter/standard_method_codec.h>
 
+#include "jump_list.h"
+
 static bool g_subclassed = false;
 static bool g_child_subclassed = false;
 static bool g_is_hovered_state = false;
@@ -17,6 +19,16 @@ static bool g_is_hovered_state = false;
 static constexpr UINT_PTR kSubclassId = 100;
 
 std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> g_hover_channel = nullptr;
+std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> g_jump_list_channel = nullptr;
+
+static std::wstring Utf8ToWide(const std::string& str) {
+  if (str.empty()) return std::wstring();
+  int size = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, nullptr, 0);
+  if (size <= 0) return std::wstring();
+  std::wstring result(size - 1, 0);
+  MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, &result[0], size);
+  return result;
+}
 
 // Helper: check if hwnd currently covers its monitor (i.e. is truly fullscreen).
 // O(1), called from NCHITTEST and NCLBUTTONDOWN guards.
@@ -236,6 +248,90 @@ bool FlutterWindow::OnCreate() {
 
   g_is_hovered_state = false;
 
+  // Initialize MethodChannel for Windows Jump List integration
+  g_jump_list_channel = std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+      flutter_controller_->engine()->messenger(),
+      "resonance/jump_list",
+      &flutter::StandardMethodCodec::GetInstance());
+
+  g_jump_list_channel->SetMethodCallHandler(
+      [](const flutter::MethodCall<flutter::EncodableValue>& call,
+         std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
+        if (call.method_name() == "updateJumpList") {
+          const auto* args = std::get_if<flutter::EncodableMap>(call.arguments());
+          if (!args) {
+            result->Error("INVALID_ARGUMENT", "Expected map argument");
+            return;
+          }
+
+          std::vector<JumpListItem> recent_items;
+          auto it_recent = args->find(flutter::EncodableValue("recentlyPlayed"));
+          if (it_recent != args->end()) {
+            if (const auto* list = std::get_if<flutter::EncodableList>(&it_recent->second)) {
+              for (const auto& val : *list) {
+                if (const auto* item_map = std::get_if<flutter::EncodableMap>(&val)) {
+                  JumpListItem item;
+                  auto it_t = item_map->find(flutter::EncodableValue("title"));
+                  auto it_a = item_map->find(flutter::EncodableValue("artist"));
+                  auto it_id = item_map->find(flutter::EncodableValue("id"));
+                  if (it_t != item_map->end() && it_id != item_map->end()) {
+                    if (const auto* s_t = std::get_if<std::string>(&it_t->second)) {
+                      item.title = Utf8ToWide(*s_t);
+                    }
+                    if (it_a != item_map->end()) {
+                      if (const auto* s_a = std::get_if<std::string>(&it_a->second)) {
+                        item.artist = Utf8ToWide(*s_a);
+                      }
+                    }
+                    if (const auto* s_id = std::get_if<std::string>(&it_id->second)) {
+                      item.track_id = Utf8ToWide(*s_id);
+                    }
+                    recent_items.push_back(std::move(item));
+                  }
+                }
+              }
+            }
+          }
+
+          std::vector<JumpListItem> quick_picks;
+          auto it_qp = args->find(flutter::EncodableValue("quickPicks"));
+          if (it_qp != args->end()) {
+            if (const auto* list = std::get_if<flutter::EncodableList>(&it_qp->second)) {
+              for (const auto& val : *list) {
+                if (const auto* item_map = std::get_if<flutter::EncodableMap>(&val)) {
+                  JumpListItem item;
+                  auto it_t = item_map->find(flutter::EncodableValue("title"));
+                  auto it_a = item_map->find(flutter::EncodableValue("artist"));
+                  auto it_id = item_map->find(flutter::EncodableValue("id"));
+                  if (it_t != item_map->end() && it_id != item_map->end()) {
+                    if (const auto* s_t = std::get_if<std::string>(&it_t->second)) {
+                      item.title = Utf8ToWide(*s_t);
+                    }
+                    if (it_a != item_map->end()) {
+                      if (const auto* s_a = std::get_if<std::string>(&it_a->second)) {
+                        item.artist = Utf8ToWide(*s_a);
+                      }
+                    }
+                    if (const auto* s_id = std::get_if<std::string>(&it_id->second)) {
+                      item.track_id = Utf8ToWide(*s_id);
+                    }
+                    quick_picks.push_back(std::move(item));
+                  }
+                }
+              }
+            }
+          }
+
+          bool ok = JumpListManager::UpdateJumpList(recent_items, quick_picks);
+          result->Success(flutter::EncodableValue(ok));
+        } else if (call.method_name() == "clearJumpList") {
+          JumpListManager::ClearJumpList();
+          result->Success(flutter::EncodableValue(true));
+        } else {
+          result->NotImplemented();
+        }
+      });
+
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
     // Keep window hidden initially; Dart window_manager will show it after configuring hidden titlebar style.
   });
@@ -259,6 +355,7 @@ void FlutterWindow::OnDestroy() {
   }
 
   g_hover_channel = nullptr;
+  g_jump_list_channel = nullptr;
 
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
@@ -281,6 +378,22 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
     ::BringWindowToTop(hwnd);
     ::SetFocus(hwnd);
     return 0;
+  }
+
+  if (message == WM_COPYDATA) {
+    PCOPYDATASTRUCT cds = reinterpret_cast<PCOPYDATASTRUCT>(lparam);
+    if (cds && cds->dwData == 1 && cds->lpData) {
+      std::wstring cmd_line(reinterpret_cast<const wchar_t*>(cds->lpData));
+      int utf8_size = WideCharToMultiByte(CP_UTF8, 0, cmd_line.c_str(), -1, nullptr, 0, nullptr, nullptr);
+      if (utf8_size > 0) {
+        std::string utf8_cmd(utf8_size - 1, 0);
+        WideCharToMultiByte(CP_UTF8, 0, cmd_line.c_str(), -1, &utf8_cmd[0], utf8_size, nullptr, nullptr);
+        if (g_jump_list_channel) {
+          g_jump_list_channel->InvokeMethod("onCommandReceived", std::make_unique<flutter::EncodableValue>(utf8_cmd));
+        }
+      }
+    }
+    return TRUE;
   }
 
   // 1. Let window_manager process messages first (it may install its own subclass on WM_SHOWWINDOW).

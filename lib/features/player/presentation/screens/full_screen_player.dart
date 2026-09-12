@@ -8,6 +8,7 @@ import 'package:window_manager/window_manager.dart';
 
 import 'package:resonance/core/providers/overlay_provider.dart';
 import 'package:resonance/features/lyrics/presentation/screens/lyrics_screen.dart';
+import 'package:resonance/features/player/presentation/screens/queue_screen.dart';
 
 import 'package:resonance/features/player/application/providers/audio_provider.dart';
 import 'package:resonance/features/player/presentation/widgets/full_screen_player/full_screen_audio_view.dart';
@@ -40,12 +41,17 @@ class _FullScreenPlayerState extends ConsumerState<FullScreenPlayer> {
 
   bool _handleKey(KeyEvent event) {
     if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.escape) {
+      final showQueue = ref.read(queueOverlayProvider);
+      if (showQueue) {
+        ref.read(queueOverlayProvider.notifier).setVisible(false);
+        return true;
+      }
       final showFullLyrics = ref.read(lyricsOverlayProvider);
       if (showFullLyrics) {
         ref.read(lyricsOverlayProvider.notifier).toggle();
-      } else {
-        _exitWithBlur();
+        return true;
       }
+      _exitWithBlur();
       return true;
     }
     return false;
@@ -83,6 +89,7 @@ class _FullScreenPlayerState extends ConsumerState<FullScreenPlayer> {
   Future<void> _exitFullScreen() async {
     if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
       await windowManager.setFullScreen(false);
+      await windowManager.setMinimumSize(const Size(800, 600));
     } else if (Platform.isAndroid) {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     }
@@ -101,6 +108,7 @@ class _FullScreenPlayerState extends ConsumerState<FullScreenPlayer> {
     final audioState = ref.watch(audioProvider);
     final currentTrack = audioState.currentTrack;
     final showFullLyrics = ref.watch(lyricsOverlayProvider);
+    final showQueue = ref.watch(queueOverlayProvider);
 
     return Focus(
       focusNode: _focusNode,
@@ -124,73 +132,156 @@ class _FullScreenPlayerState extends ConsumerState<FullScreenPlayer> {
 
               return Stack(
                 children: [
-                  // 1. DYNAMIC BLURRED BACKGROUND
-                  Positioned.fill(
-                    child: Consumer(
-                      builder: (context, ref, _) {
-                        if (currentTrack == null) {
-                          return Container(color: theme.colorScheme.surface);
-                        }
-                        return MediaArtworkWidget(
-                          item: currentTrack,
-                          fit: BoxFit.cover,
-                          color: isLight
-                              ? Colors.white.withValues(alpha: 0.6)
-                              : Colors.black.withValues(alpha: 0.6),
-                          colorBlendMode:
-                              isLight ? BlendMode.lighten : BlendMode.darken,
-                        );
-                      },
-                    ),
+                  _FullScreenDynamicBackground(
+                    currentTrack: currentTrack,
+                    isLight: isLight,
+                    surfaceColor: theme.colorScheme.surface,
                   ),
                   Positioned.fill(
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 80, sigmaY: 80),
-                      child: Container(
-                        color: (isLight ? Colors.white : Colors.black)
-                            .withValues(alpha: 0.4),
-                      ),
+                    child: _FullScreenAudioStage(
+                      currentTrack: currentTrack,
+                      showFullLyrics: showFullLyrics,
+                      showQueue: showQueue,
                     ),
                   ),
-
-                  // 2. THE AUDIO VIEW
-                  if (currentTrack != null)
-                    Positioned.fill(
-                      child: !showFullLyrics
-                          ? Stack(
-                              children: [
-                                Positioned.fill(
-                                  child: FullScreenAudioView(displayTrack: currentTrack),
-                                ),
-                                Positioned(
-                                  bottom: 0,
-                                  left: 0,
-                                  right: 0,
-                                  child: FullScreenBottomBar(track: currentTrack),
-                                ),
-                              ],
-                            )
-                          : const SizedBox.shrink(),
-                    ),
-
-                  // 3. LYRICS OVERLAY
-                  Positioned.fill(
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 300),
-                      child: showFullLyrics
-                          ? Container(
-                              key: const ValueKey('lyrics_overlay'),
-                              color: theme.colorScheme.surface,
-                              child: const LyricsScreen(isEmbedded: true),
-                            )
-                          : const SizedBox.shrink(key: ValueKey('lyrics_empty')),
-                    ),
+                  _FullScreenLyricsLayer(
+                    showFullLyrics: showFullLyrics,
+                    surfaceColor: theme.colorScheme.surface,
+                  ),
+                  _FullScreenQueueLayer(
+                    showQueue: showQueue,
+                    surfaceColor: theme.colorScheme.surface,
                   ),
                 ],
               );
             },
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _FullScreenDynamicBackground extends StatelessWidget {
+  final dynamic currentTrack;
+  final bool isLight;
+  final Color surfaceColor;
+
+  const _FullScreenDynamicBackground({
+    required this.currentTrack,
+    required this.isLight,
+    required this.surfaceColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: currentTrack == null
+              ? Container(color: surfaceColor)
+              : MediaArtworkWidget(
+                  item: currentTrack,
+                  fit: BoxFit.cover,
+                  color: isLight
+                      ? Colors.white.withValues(alpha: 0.6)
+                      : Colors.black.withValues(alpha: 0.6),
+                  colorBlendMode: isLight ? BlendMode.lighten : BlendMode.darken,
+                ),
+        ),
+        Positioned.fill(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 80, sigmaY: 80),
+            child: Container(
+              color: (isLight ? Colors.white : Colors.black).withValues(alpha: 0.4),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _FullScreenAudioStage extends StatelessWidget {
+  final dynamic currentTrack;
+  final bool showFullLyrics;
+  final bool showQueue;
+
+  const _FullScreenAudioStage({
+    required this.currentTrack,
+    required this.showFullLyrics,
+    required this.showQueue,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (currentTrack == null || showFullLyrics || showQueue) {
+      return const SizedBox.shrink();
+    }
+
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: FullScreenAudioView(displayTrack: currentTrack),
+        ),
+        Positioned(
+          bottom: 0,
+          left: 0,
+          right: 0,
+          child: FullScreenBottomBar(track: currentTrack),
+        ),
+      ],
+    );
+  }
+}
+
+class _FullScreenLyricsLayer extends StatelessWidget {
+  final bool showFullLyrics;
+  final Color surfaceColor;
+
+  const _FullScreenLyricsLayer({
+    required this.showFullLyrics,
+    required this.surfaceColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned.fill(
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 300),
+        child: showFullLyrics
+            ? Container(
+                key: const ValueKey('lyrics_overlay'),
+                color: surfaceColor,
+                child: const LyricsScreen(isEmbedded: true),
+              )
+            : const SizedBox.shrink(key: ValueKey('lyrics_empty')),
+      ),
+    );
+  }
+}
+
+class _FullScreenQueueLayer extends StatelessWidget {
+  final bool showQueue;
+  final Color surfaceColor;
+
+  const _FullScreenQueueLayer({
+    required this.showQueue,
+    required this.surfaceColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned.fill(
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 300),
+        child: showQueue
+            ? Container(
+                key: const ValueKey('queue_overlay'),
+                color: surfaceColor,
+                child: const QueueScreen(isEmbedded: true),
+              )
+            : const SizedBox.shrink(key: ValueKey('queue_empty')),
       ),
     );
   }

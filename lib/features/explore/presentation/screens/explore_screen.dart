@@ -1,17 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:silky_scroll/silky_scroll.dart';
+import 'package:resonance/core/configs/app_breakpoints.dart';
+import 'package:resonance/core/providers/search_history_provider.dart';
 import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/core/widgets/widgets.dart';
 import 'package:resonance/features/dashboard/presentation/widgets/top_navigation_header.dart';
 import 'package:resonance/features/explore/presentation/providers/explore_provider.dart';
-import 'package:resonance/features/home/presentation/providers/recently_played_provider.dart';
 import 'package:resonance/features/explore/presentation/widgets/explore_music_tile.dart';
 import 'package:resonance/features/explore/presentation/widgets/explore_playlist_card_tile.dart';
-import 'package:resonance/features/explore/presentation/widgets/explore_recent_plays_section.dart';
-import 'package:resonance/features/explore/presentation/widgets/explore_home_feed_section.dart';
-import 'package:resonance/features/explore/presentation/widgets/explore_personalized_sections.dart';
+import 'package:resonance/features/explore/presentation/widgets/mood_genre_section.dart';
+import 'package:resonance/features/explore/presentation/widgets/recent_searches_carousel_section.dart';
+import 'package:resonance/features/explore/presentation/widgets/search_suggestions_section.dart';
+import 'package:resonance/features/player/application/providers/audio_provider.dart';
 
+/// Dedicated Explore & Discovery Screen for both Windows and Android.
+///
+/// Default Discovery View:
+/// 1. Component 1: Recent Searches Horizontal Carousel (Picture 1 - "Penelusuran terbaru")
+/// 2. Component 2: Search Suggestions List (Picture 2 - "Anda mungkin juga suka")
+/// 3. Component 3: Moods & Genres 4-Row Pill Carousel (Picture 5 - "Jenis musik & suasana")
+///
+/// Live Search View:
+/// - Instant filtered results for Music tracks and Playlists with TabBar switching.
 class ExploreScreen extends ConsumerStatefulWidget {
   const ExploreScreen({super.key});
 
@@ -19,8 +30,11 @@ class ExploreScreen extends ConsumerStatefulWidget {
   ConsumerState<ExploreScreen> createState() => _ExploreScreenState();
 }
 
-class _ExploreScreenState extends ConsumerState<ExploreScreen> with SingleTickerProviderStateMixin {
+class _ExploreScreenState extends ConsumerState<ExploreScreen>
+    with SingleTickerProviderStateMixin {
   TabController? _tabController;
+  final TextEditingController _searchController = TextEditingController();
+  bool _isSearchOpen = false;
 
   @override
   void initState() {
@@ -41,23 +55,22 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> with SingleTicker
   @override
   void dispose() {
     _tabController?.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
+  void _clearSearch() {
+    ref.read(searchQueryProvider.notifier).clear();
+  }
+
   void _refreshExplore() {
-    ref.invalidate(homeFeedProvider);
-    ref.invalidate(speedDialProvider);
-    ref.invalidate(quickPicksProvider);
-    ref.invalidate(dailyDiscoverProvider);
-    ref.invalidate(forgottenFavoritesProvider);
-    ref.invalidate(similarArtistsProvider);
-    ref.invalidate(recentlyPlayedProvider);
     ref.invalidate(searchResultsProvider);
     ref.invalidate(searchPlaylistResultsProvider);
   }
 
   @override
   Widget build(BuildContext context) {
+    final isCompact = AppBreakpoints.isCompact(context);
     final theme = Theme.of(context);
     final isSearching = ref.watch(searchStateProvider);
     final searchResultsAsync = ref.watch(searchResultsProvider);
@@ -69,135 +82,299 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> with SingleTicker
       _tabController!.animateTo(activeTab);
     }
 
-    return Scaffold(
-      body: Column(
-        children: [
-          const OfflineBanner(),
-          TopNavigationHeader(
-            left: currentQuery.isEmpty
-                ? Text(
-                    'Explore',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  )
-                : SizedBox(
-                    height: 50,
-                    child: TabBar(
-                      controller: _tabController,
-                      isScrollable: true,
-                      tabAlignment: TabAlignment.start,
-                      dividerColor: Colors.transparent,
-                      indicatorSize: TabBarIndicatorSize.label,
-                      overlayColor: WidgetStateProperty.resolveWith<Color?>((states) {
-                        if (states.contains(WidgetState.hovered)) {
-                          return theme.primaryColor.withValues(alpha: 0.08);
-                        }
-                        return null;
-                      }),
-                      tabs: [
-                        Tab(
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(UIcons.regular.music, size: 14),
-                              const SizedBox(width: 6),
-                              const Text('Music'),
-                            ],
-                          ),
+    final hasQuery = currentQuery.isNotEmpty;
+    final showMobileSearch = isCompact && (_isSearchOpen || hasQuery);
+
+    if (currentQuery.isNotEmpty && _searchController.text != currentQuery) {
+      _searchController.text = currentQuery;
+    } else if (currentQuery.isEmpty && _searchController.text.isNotEmpty && !_isSearchOpen) {
+      _searchController.clear();
+    }
+
+    return PopScope(
+      canPop: !hasQuery && !_isSearchOpen,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) {
+          setState(() {
+            _isSearchOpen = false;
+            _searchController.clear();
+          });
+          if (hasQuery) {
+            _clearSearch();
+          }
+        }
+      },
+      child: Scaffold(
+        body: Column(
+          children: [
+            const OfflineBanner(),
+
+            // Top Navigation / Search Header
+            if (!isCompact)
+              TopNavigationHeader(
+                left: hasQuery
+                    ? _ExploreHeaderTabs(controller: _tabController)
+                    : Text(
+                        'Explore',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: -0.2,
                         ),
-                        Tab(
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(UIcons.regular.list_music, size: 14),
-                              const SizedBox(width: 6),
-                              const Text('Playlists'),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                actions: [
+                  ReusableHoverIconButton(
+                    icon: UIcons.regular.refresh,
+                    tooltip: 'Refresh',
+                    iconSize: 18,
+                    onTap: _refreshExplore,
                   ),
-            actions: [
-              ReusableHoverIconButton(
-                icon: UIcons.regular.refresh,
-                tooltip: 'Refresh Explore',
-                iconSize: 18,
-                onTap: _refreshExplore,
-              ),
-            ],
-          ),
-          Expanded(
-            child: SilkyCustomScrollView(
-              slivers: [
-                if (currentQuery.isEmpty) ...[
-                  const ExploreSpeedDialSection(),
-                  const ExploreRecentPlaysSection(),
-                  const ExploreQuickPicksSection(),
-                  const ExploreDailyDiscoverSection(),
-                  const ExploreForgottenFavoritesSection(),
-                  const ExploreSimilarArtistsSection(),
-                  const ExploreHomeFeedSection(),
-                  const SliverToBoxAdapter(child: SizedBox(height: 100)),
-                ] else ...[
-                  if (isSearching)
-                    const SliverFillRemaining(
-                      child: Center(child: CircularProgressIndicator()),
-                    )
-                  else if (activeTab == 0)
-                    searchResultsAsync.when(
-                      data: (results) {
-                        if (results.isEmpty) {
-                          return const SliverFillRemaining(
-                            child: Center(child: Text('No results found')),
-                          );
-                        }
-                        return SliverList(
-                          delegate: SliverChildBuilderDelegate(
-                            (context, index) => ExploreMusicTile(item: results[index]),
-                            childCount: results.length,
-                          ),
-                        );
-                      },
-                      loading: () => const SliverFillRemaining(
-                        child: Center(child: CircularProgressIndicator()),
-                      ),
-                      error: (err, stack) => SliverFillRemaining(
-                        child: Center(child: Text('Error: $err')),
-                      ),
-                    )
-                  else
-                    searchPlaylistsAsync.when(
-                      data: (playlists) {
-                        if (playlists.isEmpty) {
-                          return const SliverFillRemaining(
-                            child: Center(child: Text('No playlists found')),
-                          );
-                        }
-                        return SliverPadding(
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                          sliver: SliverList(
-                            delegate: SliverChildBuilderDelegate(
-                              (context, index) => ExplorePlaylistCardTile(playlist: playlists[index]),
-                              childCount: playlists.length,
-                            ),
-                          ),
-                        );
-                      },
-                      loading: () => const SliverFillRemaining(
-                        child: Center(child: CircularProgressIndicator()),
-                      ),
-                      error: (err, stack) => SliverFillRemaining(
-                        child: Center(child: Text('Error: $err')),
-                      ),
-                    ),
                 ],
+              )
+            else
+              TopNavigationHeader(
+                left: showMobileSearch
+                    ? TextField(
+                        controller: _searchController,
+                        autofocus: _isSearchOpen && !hasQuery,
+                        textInputAction: TextInputAction.search,
+                        onSubmitted: (query) {
+                          final trimmed = query.trim();
+                          if (trimmed.isNotEmpty) {
+                            ref.read(searchHistoryProvider.notifier).addQuery(trimmed);
+                            ref.read(searchQueryProvider.notifier).setQuery(trimmed);
+                          }
+                        },
+                        decoration: const InputDecoration(
+                          hintText: 'Search songs, artists, albums...',
+                          border: InputBorder.none,
+                        ),
+                      )
+                    : Text(
+                        'Explore',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                right: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ReusableHoverIconButton(
+                      icon: showMobileSearch
+                          ? UIcons.regular.cross_small
+                          : UIcons.regular.search,
+                      tooltip: showMobileSearch ? 'Clear search' : 'Search',
+                      iconSize: 18,
+                      onTap: () {
+                        if (showMobileSearch) {
+                          setState(() {
+                            _isSearchOpen = false;
+                            _searchController.clear();
+                          });
+                          _clearSearch();
+                        } else {
+                          setState(() {
+                            _isSearchOpen = true;
+                          });
+                        }
+                      },
+                    ),
+                    const SizedBox(width: 6),
+                    ReusableHoverIconButton(
+                      icon: UIcons.regular.refresh,
+                      tooltip: 'Refresh',
+                      iconSize: 18,
+                      onTap: _refreshExplore,
+                    ),
+                  ],
+                ),
+              ),
+
+            // Mobile Filter Tabs when search query is active (50/50 split on mobile)
+            if (isCompact && hasQuery)
+              ResonanceSegmentedBar(
+                items: [
+                  ResonanceSegmentItem(
+                    label: 'Music',
+                    icon: UIcons.regular.music,
+                  ),
+                  ResonanceSegmentItem(
+                    label: 'Playlists',
+                    icon: UIcons.regular.list_music,
+                  ),
+                ],
+                selectedIndex: activeTab,
+                onSelected: (index) {
+                  ref.read(exploreSearchTabProvider.notifier).setTab(index);
+                },
+              ),
+
+
+
+            // Body: Discovery Mode vs Live Search Mode
+            Expanded(
+              child: hasQuery
+                  ? _ExploreSearchResultsView(
+                      isSearching: isSearching,
+                      activeTab: activeTab,
+                      searchResultsAsync: searchResultsAsync,
+                      searchPlaylistsAsync: searchPlaylistsAsync,
+                    )
+                  : _buildDiscoveryFeed(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Default Discovery Feed containing the 3 core components requested
+  Widget _buildDiscoveryFeed() {
+    return SilkyCustomScrollView(
+      slivers: [
+        // ── Component 1: Recent Searches Carousel (Picture 1) ─────────────────
+        SliverToBoxAdapter(
+          child: RecentSearchesCarouselSection(
+            title: 'Recent searches',
+            onTrackSelected: (item) {
+              if (item.isLocal ||
+                  (item.path.isNotEmpty && !item.isStreaming && !item.path.startsWith('http'))) {
+                ref.read(audioProvider.notifier).playTrack(item);
+              } else {
+                ref.read(audioProvider.notifier).playYouTubeTrack(item);
+              }
+            },
+          ),
+        ),
+
+        // ── Component 2: Search Suggestions List (Picture 2) ───────────────────
+        SliverToBoxAdapter(
+          child: SearchSuggestionsSection(
+            title: 'You might also like',
+            onSubmitQuery: (query) => ref.read(searchQueryProvider.notifier).setQuery(query),
+            onInsertQuery: (query) => ref.read(searchQueryProvider.notifier).setQuery(query),
+          ),
+        ),
+
+        // ── Component 3: Moods & Genres 4-Row Pill Carousel (Picture 5) ───────
+        SliverToBoxAdapter(
+          child: MoodGenreSection(
+            title: 'Moods & genres',
+            onCategorySelected: (category) {
+              ref.read(searchQueryProvider.notifier).setQuery('$category music');
+            },
+          ),
+        ),
+
+        const SliverToBoxAdapter(child: SizedBox(height: 100)),
+      ],
+    );
+  }
+}
+
+class _ExploreHeaderTabs extends StatelessWidget {
+  final TabController? controller;
+
+  const _ExploreHeaderTabs({
+    required this.controller,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 44,
+      child: TabBar(
+        mouseCursor: SystemMouseCursors.click,
+        controller: controller,
+        isScrollable: true,
+        tabAlignment: TabAlignment.start,
+        dividerColor: Colors.transparent,
+        indicatorSize: TabBarIndicatorSize.tab,
+        tabs: [
+          Tab(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(UIcons.regular.music, size: 14),
+                const SizedBox(width: 8),
+                const Text('Music'),
+              ],
+            ),
+          ),
+          Tab(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(UIcons.regular.list_music, size: 14),
+                const SizedBox(width: 8),
+                const Text('Playlists'),
               ],
             ),
           ),
         ],
       ),
     );
+  }
+}
+
+
+class _ExploreSearchResultsView extends StatelessWidget {
+  final bool isSearching;
+  final int activeTab;
+  final AsyncValue<List<dynamic>> searchResultsAsync;
+  final AsyncValue<List<dynamic>> searchPlaylistsAsync;
+
+  const _ExploreSearchResultsView({
+    required this.isSearching,
+    required this.activeTab,
+    required this.searchResultsAsync,
+    required this.searchPlaylistsAsync,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (isSearching) {
+      // Show a skeleton that matches the current tab's card design
+      if (activeTab == 0) {
+        return const SingleChildScrollView(child: ExploreMusicListSkeleton());
+      } else {
+        return const SingleChildScrollView(child: ExplorePlaylistCardListSkeleton());
+      }
+    }
+
+    if (activeTab == 0) {
+      return searchResultsAsync.when(
+        data: (results) {
+          if (results.isEmpty) {
+            return const Center(child: Text('No tracks found'));
+          }
+          return SilkyListView.builder(
+            itemCount: results.length,
+            itemBuilder: (context, index) =>
+                ExploreMusicTile(item: results[index]),
+          );
+        },
+        loading: () => const SingleChildScrollView(child: ExploreMusicListSkeleton()),
+        error: (err, _) => Center(child: Text('Error: $err')),
+      );
+    } else {
+      return searchPlaylistsAsync.when(
+        data: (playlists) {
+          if (playlists.isEmpty) {
+            return const Center(child: Text('No playlists found'));
+          }
+          return SilkyListView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            itemCount: playlists.length,
+            itemBuilder: (context, index) =>
+                ExplorePlaylistCardTile(playlist: playlists[index]),
+          );
+        },
+        loading: () => const SingleChildScrollView(child: ExplorePlaylistCardListSkeleton()),
+        error: (err, _) => Center(child: Text('Error: $err')),
+      );
+    }
   }
 }

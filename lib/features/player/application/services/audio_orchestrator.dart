@@ -1,7 +1,11 @@
+import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/providers/overlay_provider.dart';
 import '../../../../core/application/services/maintenance_service.dart';
 import '../../../explore/data/repositories/youtube_search_repository.dart';
+import '../../../home/presentation/providers/recently_played_provider.dart';
 import '../../../library/data/models/media_item.dart';
+import '../../../stream/platform/windows/windows_jump_list_service.dart';
 import '../providers/audio_provider.dart';
 import '../../data/models/player_enums.dart';
 import 'playback_restoration_service.dart';
@@ -9,6 +13,8 @@ import 'playback_sync_service.dart';
 import 'playback_tracking_service.dart';
 import 'gapless_prefetch_service.dart';
 import 'sponsor_block_service.dart';
+import '../../../playlist/application/playlist_auto_continue_provider.dart';
+import '../../../library/application/blocked_tracks_provider.dart';
 
 /// It decouples orthogonal logic (Sync, Tracking, Maintenance) from the core 
 /// AudioNotifier using the Riverpod pattern.
@@ -24,8 +30,6 @@ class AudioOrchestrator {
   final Ref _ref;
   bool _initialized = false;
 
-  // [Radio spam guard] Minimum tracks remaining before we refill
-  static const int _radioRefillThreshold = 8;
   // [Radio spam guard] Minimum gap between consecutive radio fetches
   DateTime? _lastRadioFetch;
   static const Duration _radioCooldown = Duration(seconds: 60);
@@ -57,6 +61,9 @@ class AudioOrchestrator {
       // Artwork + Lyrics: only on track change, not on every play/pause toggle
       if (next != null && next != prev) {
         _ref.read(playbackSyncServiceProvider).syncPersistentMetadataOnTrackChange(next);
+        if (Platform.isWindows) {
+          _ref.read(windowsJumpListServiceProvider).syncJumpList();
+        }
       }
 
       // Reset Gapless Lock on track change
@@ -78,26 +85,43 @@ class AudioOrchestrator {
 
       // [Radio] Fire-and-forget radio recommendation seeding.
       // Guards:
-      //   1. Only when queue has ≤ _radioRefillThreshold tracks left ahead.
-      //   2. Cooldown: minimum 60s between fetches.
-      //   3. Suppressed when LoopMode.all — finite playlists should loop, not expand.
-      // This prevents cascading — radio tracks are also isStreaming, so
-      // without the threshold guard every radio track would re-trigger.
+      //   1. Suppressed when LoopMode.all — finite playlists should loop, not expand.
+      //   2. If in playlist mode:
+      //      - If autoContinue is OFF: never auto-refill radio.
+      //      - If autoContinue is ON: only refill when reaching end of playlist (remaining <= 0).
+      //   3. If not in playlist mode: refill when remaining <= threshold.
+      //   4. Cooldown: minimum 60s between fetches (bypassed if queue is empty).
       if (next != null && next.isStreaming) {
         final seedId = next.id ?? next.path;
         if (seedId.isNotEmpty) {
           final audioState = _ref.read(audioProvider);
           if (audioState.loopMode == LoopMode.all) return; // no radio during loop-all
+
+          if (audioState.isPlaylistMode) {
+            final activePlId = audioState.activePlaylistId;
+            final isAutoContinue = activePlId != null &&
+                _ref
+                    .read(playlistAutoContinueProvider.notifier)
+                    .isEnabled(activePlId);
+            if (!isAutoContinue) {
+              return; // strictly play playlist tracks when auto continue is disabled for this playlist
+            }
+          }
+
+          final windowSize = _ref.read(queueWindowSizeProvider);
           final remaining =
               audioState.queue.length - audioState.currentIndex - 1;
+          final threshold = audioState.isPlaylistMode
+              ? 0
+              : (windowSize <= 2 ? 1 : (windowSize ~/ 2));
+
           final now = DateTime.now();
-          // Always bypass cooldown if the remaining queue is empty (meaning a new seed track was manually played)
           final isManualSeedPlay = remaining <= 0;
           final cooldownPassed = isManualSeedPlay ||
               _lastRadioFetch == null ||
               now.difference(_lastRadioFetch!) > _radioCooldown;
 
-          if (remaining <= _radioRefillThreshold && cooldownPassed) {
+          if (remaining <= threshold && cooldownPassed) {
             _lastRadioFetch = now;
             _fetchAndAppendRadio(seedId);
           }
@@ -129,17 +153,25 @@ class AudioOrchestrator {
         _ref.read(gaplessPrefetchServiceProvider).proactiveFetch();
       }
     });
+
+    if (Platform.isWindows) {
+      _ref.listen(recentlyPlayedProvider, (_, _) {
+        _ref.read(windowsJumpListServiceProvider).syncJumpList();
+      });
+    }
   }
 
   /// Async radio fetch — fire-and-forget, never throws.
   /// Deduplicates against current queue before appending.
   Future<void> _fetchAndAppendRadio(String videoId) async {
     try {
+      final windowSize = _ref.read(queueWindowSizeProvider);
       final repo = _ref.read(youtubeSearchRepositoryProvider);
-      final recs = await repo.getRadioRecommendations(videoId);
+      final recs = await repo.getRadioRecommendations(videoId, limit: windowSize);
       if (recs.isEmpty) return;
 
       final notifier = _ref.read(audioProvider.notifier);
+      final blocked = _ref.read(blockedTracksProvider.notifier);
       final existingIds = _ref.read(audioProvider).queue
           .map((t) => t.id ?? t.path)
           .toSet();
@@ -148,9 +180,10 @@ class AudioOrchestrator {
       final newTracks = <MediaItem>[];
       for (final track in recs) {
         final id = track.id ?? track.path;
-        if (!existingIds.contains(id)) {
+        if (!existingIds.contains(id) && !blocked.isBlocked(track.id, path: track.path)) {
           newTracks.add(track);
           existingIds.add(id); // prevent duplicate within the same batch
+          if (newTracks.length >= windowSize) break;
         }
       }
       if (newTracks.isNotEmpty) {

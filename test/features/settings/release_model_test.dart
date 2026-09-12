@@ -112,5 +112,42 @@ void main() {
       expect(releaseForUser8.isCurrentVersion, isTrue);
       expect(releaseForUser8.getDeltaPatchAsset('0.1.6-beta+8'), isNull);
     });
+
+    test('Android APK build detection: extracts build from APK filename and detects updates', () {
+      final androidReleaseJson = {
+        'tag_name': 'v0.1.8-beta', // Tag stays 0.1.8-beta
+        'name': 'Resonance v0.1.8-beta',
+        'body': 'Android release notes',
+        'prerelease': true,
+        'published_at': '2026-09-12T12:00:00Z',
+        'assets': [
+          {
+            'name': 'Resonance-v0.1.8-beta.12-Android.apk',
+            'browser_download_url': 'https://github.com/.../Resonance-v0.1.8-beta.12-Android.apk',
+            'size': 36500000,
+          },
+          {
+            'name': 'Resonance-Setup-v0.1.8-beta.exe',
+            'browser_download_url': 'https://github.com/.../full_installer.exe',
+            'size': 75000000,
+          }
+        ]
+      };
+
+      // Android user on build 11 (0.1.8-beta+11) detects build 12 is available
+      final releaseForUser11 = AppRelease.fromJson(androidReleaseJson, '0.1.8-beta+11');
+      expect(releaseForUser11.isNewerThanCurrent, isTrue);
+      expect(releaseForUser11.isCurrentVersion, isFalse);
+
+      // Android user on build 12 (0.1.8-beta+12) detects already up to date
+      final releaseForUser12 = AppRelease.fromJson(androidReleaseJson, '0.1.8-beta+12');
+      expect(releaseForUser12.isNewerThanCurrent, isFalse);
+      expect(releaseForUser12.isCurrentVersion, isTrue);
+
+      // 4-number versioning support in compareSemVer
+      expect(AppRelease.compareSemVer('0.1.8.12', '0.1.8.11'), greaterThan(0));
+      expect(AppRelease.compareSemVer('0.1.8.12', '0.1.8.12'), equals(0));
+      expect(AppRelease.compareSemVer('0.1.8.11', '0.1.8.12'), lessThan(0));
+    });
   });
 }

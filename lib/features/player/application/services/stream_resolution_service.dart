@@ -5,6 +5,8 @@ import 'package:media_kit/media_kit.dart';
 import 'package:path/path.dart' as p;
 import '../../../../core/data/services/media_cache_service.dart';
 import '../../../library/data/models/media_item.dart';
+import '../../../stream/domain/interfaces/i_platform_stream_resolver.dart';
+import '../../../stream/application/platform_stream_provider.dart';
 import 'playback_architecture_service.dart';
 
 // ── Service ───────────────────────────────────────────────────────────────────
@@ -20,12 +22,9 @@ import 'playback_architecture_service.dart';
 /// The AudioNotifier simply calls [resolve] and feeds the result to media_kit.
 class StreamResolutionService {
   final Ref _ref;
+  final IPlatformStreamResolver _resolver;
 
-  static const String _defaultUserAgent =
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-      '(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
-
-  StreamResolutionService(this._ref);
+  StreamResolutionService(this._ref, this._resolver);
 
   /// Resolves the full playable path for [item].
   ///
@@ -34,7 +33,9 @@ class StreamResolutionService {
   ///
   /// Triggers background tasks (persistent cache, metadata save) as side effects.
   Future<String> resolve(MediaItem item) async {
-    final songId = item.id ?? item.path;
+    final songId = (item.id != null && item.id!.isNotEmpty && !item.id!.startsWith('http'))
+        ? item.id!
+        : (item.path.startsWith('http') ? (item.id ?? item.path) : item.path);
 
     // ── 1. Physical local file check ───────────────────────────────────────
     final hasSlash = item.path.contains('/') || item.path.contains('\\');
@@ -64,38 +65,28 @@ class StreamResolutionService {
 
     // Defer disk caching by 10s — gives player 100% bandwidth to fill demuxer buffer
     if (streamUrl.startsWith('http') && !streamUrl.contains('c=ANDROID_VR')) {
-      Future.delayed(const Duration(seconds: 10), () => cacheService.getAudioPath(songId, streamUrl));
+      Future.delayed(const Duration(seconds: 10), () {
+        final headers = _resolver.getPlaybackHeaders(streamUrl);
+        cacheService.getAudioPath(songId, streamUrl, headers: headers);
+      });
     }
     Future.microtask(() => cacheService.saveMetadata(songId, item));
 
     return streamUrl;
   }
 
-  String getUserAgent(String resolvedPath) {
-    if (!resolvedPath.startsWith('http')) return _defaultUserAgent;
-    if (resolvedPath.contains('c=ANDROID_VR')) {
-      return 'com.google.android.apps.youtube.vr.oculus/1.56.21 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1)';
-    }
-    if (resolvedPath.contains('c=ANDROID')) {
-      return 'com.google.android.youtube/19.29.37 (Linux; U; Android 14; GB) gzip';
-    }
-    if (resolvedPath.contains('c=IOS')) {
-      return 'com.google.ios.youtube/19.29.1 (iPhone14,3; U; CPU iOS 15_6_1 like Mac OS X)';
-    }
-    return _defaultUserAgent;
-  }
-
   Media buildMedia(String resolvedPath, {dynamic player}) {
     if (resolvedPath.startsWith('http')) {
-      final userAgent = getUserAgent(resolvedPath);
+      final headers = _resolver.getPlaybackHeaders(resolvedPath);
       if (player != null && Platform.isWindows) {
         try {
-          (player.platform as dynamic).setProperty('user-agent', userAgent);
+          (player.platform as dynamic).setProperty(
+            'user-agent',
+            headers['User-Agent'] ?? _resolver.userAgent,
+          );
         } catch (_) {}
       }
-      return Media(resolvedPath, httpHeaders: {
-        'User-Agent': userAgent,
-      });
+      return Media(resolvedPath, httpHeaders: headers);
     }
     return Media(resolvedPath);
   }
@@ -138,5 +129,6 @@ class MpvConfigurator {
 // ── Providers ──────────────────────────────────────────────────────────────────
 
 final streamResolutionServiceProvider = Provider<StreamResolutionService>((ref) {
-  return StreamResolutionService(ref);
+  final resolver = ref.watch(platformStreamResolverProvider);
+  return StreamResolutionService(ref, resolver);
 });

@@ -87,6 +87,7 @@ class AudioExtraActions extends ConsumerWidget {
                     : v < 50
                         ? UIcons.regular.volume_down
                         : UIcons.regular.volume,
+                iconSize: 20,
                 onTap: () {
                   final RenderBox renderBox = buttonContext.findRenderObject() as RenderBox;
                   final offset = renderBox.localToGlobal(Offset.zero);
@@ -103,7 +104,8 @@ class AudioExtraActions extends ConsumerWidget {
           ),
           ReusableHoverIconButton(
             icon: UIcons.regular.settings,
-            tooltip: 'Settings',
+            iconSize: 20,
+            tooltip: 'Audio Settings',
             onTap: () => AudioSettingsSheet.show(context),
           ),
           if (Platform.isWindows)
@@ -123,6 +125,7 @@ class AudioExtraActions extends ConsumerWidget {
             ),
           ReusableHoverIconButton(
             icon: UIcons.regular.expand,
+            iconSize: 20,
             tooltip: 'Full Screen',
             onTap: () {
               // Close PiP before fullscreen to prevent visual overlap

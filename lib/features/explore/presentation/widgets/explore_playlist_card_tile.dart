@@ -2,12 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:resonance/core/utils/app_icons.dart';
+import 'package:resonance/core/utils/thumbnail_utils.dart';
 import 'package:resonance/core/widgets/widgets.dart';
 import 'package:resonance/features/explore/data/models/explore_playlist.dart';
-import 'package:resonance/features/explore/data/repositories/youtube_playlist_repository.dart';
-import 'package:resonance/features/playlist/application/playlist_provider.dart';
-import 'package:resonance/features/player/application/providers/audio_provider.dart';
 import 'package:resonance/features/library/data/models/media_item.dart';
+import 'package:resonance/features/player/utils/media_action_utils.dart';
 
 class ExplorePlaylistCardTile extends ConsumerWidget {
   final ExplorePlaylist playlist;
@@ -20,6 +19,14 @@ class ExplorePlaylistCardTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final mediaItem = MediaItem(
+      id: playlist.id,
+      title: playlist.title,
+      artist: playlist.author,
+      thumbnailUrl: playlist.thumbnailUrl,
+      path: playlist.id,
+      type: 'playlist',
+    );
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -33,7 +40,15 @@ class ExplorePlaylistCardTile extends ConsumerWidget {
           ),
         ),
         child: InkWell(
+          mouseCursor: SystemMouseCursors.click,
           onTap: () => _playPlaylist(context, ref),
+          onSecondaryTapDown: (details) => MediaActionUtils.showTrackContextMenu(
+            context: context,
+            ref: ref,
+            item: mediaItem,
+            position: details.globalPosition,
+          ),
+          onLongPress: () => MediaActionUtils.showMediaActions(context: context, ref: ref, item: mediaItem),
           child: Padding(
             padding: const EdgeInsets.all(12),
             child: Row(
@@ -49,10 +64,29 @@ class ExplorePlaylistCardTile extends ConsumerWidget {
                       color: theme.colorScheme.surfaceContainerHighest,
                       child: Icon(AppIcons.music, color: Colors.grey),
                     ),
-                    errorWidget: (c, u, e) => Container(
-                      color: theme.colorScheme.surfaceContainerHighest,
-                      child: const Icon(Icons.playlist_play, color: Colors.grey),
-                    ),
+                    errorWidget: (c, u, e) {
+                      final fallbackUrl = ThumbnailUtils.getFallbackResolution(u);
+                      if (fallbackUrl != null && fallbackUrl != u) {
+                        return CachedNetworkImage(
+                          imageUrl: fallbackUrl,
+                          width: 80,
+                          height: 80,
+                          fit: BoxFit.cover,
+                          placeholder: (c2, u2) => Container(
+                            color: theme.colorScheme.surfaceContainerHighest,
+                            child: Icon(AppIcons.music, color: Colors.grey),
+                          ),
+                          errorWidget: (c2, u2, e2) => Container(
+                            color: theme.colorScheme.surfaceContainerHighest,
+                            child: const Icon(Icons.playlist_play, color: Colors.grey),
+                          ),
+                        );
+                      }
+                      return Container(
+                        color: theme.colorScheme.surfaceContainerHighest,
+                        child: const Icon(Icons.playlist_play, color: Colors.grey),
+                      );
+                    },
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -83,7 +117,7 @@ class ExplorePlaylistCardTile extends ConsumerWidget {
                 const SizedBox(width: 12),
                 ReusableHoverIconButton(
                   icon: Icons.playlist_add,
-                  tooltip: 'Import to Stream Playlists',
+                  tooltip: 'Save to Playlists',
                   iconSize: 20,
                   onTap: () => _importPlaylist(context, ref),
                 ),
@@ -96,80 +130,26 @@ class ExplorePlaylistCardTile extends ConsumerWidget {
   }
 
   Future<void> _playPlaylist(BuildContext context, WidgetRef ref) async {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(
-        child: CircularProgressIndicator(),
-      ),
+    final mediaItem = MediaItem(
+      id: playlist.id,
+      title: playlist.title,
+      artist: playlist.author,
+      thumbnailUrl: playlist.thumbnailUrl,
+      path: playlist.id,
+      type: 'playlist',
     );
-    try {
-      final tracks = await ref
-          .read(youtubePlaylistRepositoryProvider)
-          .fetchFullPlaylistContents(playlist.id);
-      if (context.mounted) Navigator.pop(context);
-
-      if (tracks.isNotEmpty) {
-        final mediaItems = tracks
-            .map((t) => MediaItem(
-                  id: t.id,
-                  title: t.title,
-                  artist: t.author,
-                  thumbnailUrl: t.thumbnailUrl,
-                  path: t.id,
-                  type: 'audio',
-                ))
-            .toList();
-        await ref.read(audioProvider.notifier).playYouTubeTrack(mediaItems.first);
-        if (mediaItems.length > 1) {
-          ref.read(audioProvider.notifier).addTracksToQueue(mediaItems.sublist(1));
-        }
-      }
-    } catch (e) {
-      if (context.mounted) Navigator.pop(context);
-    }
+    await MediaActionUtils.playOnlinePlaylist(context, ref, mediaItem);
   }
 
   Future<void> _importPlaylist(BuildContext context, WidgetRef ref) async {
-    try {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => const Center(child: CircularProgressIndicator()),
-      );
-      final tracks = await ref
-          .read(youtubePlaylistRepositoryProvider)
-          .fetchFullPlaylistContents(playlist.id);
-      if (context.mounted) Navigator.pop(context);
-
-      final newId = await ref.read(playlistProvider.notifier).createPlaylist(
-            playlist.title,
-            isStream: true,
-          );
-      if (newId != null && tracks.isNotEmpty) {
-        final mediaItems = tracks
-            .map((t) => MediaItem(
-                  id: t.id,
-                  title: t.title,
-                  artist: t.author,
-                  thumbnailUrl: t.thumbnailUrl,
-                  path: t.id,
-                  type: 'audio',
-                ))
-            .toList();
-        await ref.read(playlistProvider.notifier).addTracksToPlaylist(newId, mediaItems);
-      }
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Playlist imported to Stream Playlists!')),
-        );
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to import: $e')),
-        );
-      }
-    }
+    final mediaItem = MediaItem(
+      id: playlist.id,
+      title: playlist.title,
+      artist: playlist.author,
+      thumbnailUrl: playlist.thumbnailUrl,
+      path: playlist.id,
+      type: 'playlist',
+    );
+    await MediaActionUtils.saveOnlinePlaylist(context, ref, mediaItem);
   }
 }

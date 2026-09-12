@@ -10,39 +10,16 @@ class HelpScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return StickySubViewLayout(
+      title: 'Help & FAQ',
+      onBack: () {
+        if (onBack != null) {
+          onBack!();
+        } else if (Navigator.canPop(context)) {
+          Navigator.pop(context);
+        }
+      },
       children: [
-        // Header with Back Button
-        Row(
-          children: [
-            ReusableHoverIconButton(
-              icon: UIcons.regular.angle_small_left,
-              tooltip: 'Back to Settings',
-              onTap: () {
-                if (onBack != null) {
-                  onBack!();
-                } else if (Navigator.canPop(context)) {
-                  Navigator.pop(context);
-                }
-              },
-              iconSize: 20,
-            ),
-            const SizedBox(width: 12),
-            Text(
-              'Help & FAQ',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: theme.colorScheme.onSurface,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 20),
-
         // FAQ Content
         _buildSectionHeader(context, 'Frequently Asked Questions', UIcons.regular.question),
         _buildGroupedCard(context, [

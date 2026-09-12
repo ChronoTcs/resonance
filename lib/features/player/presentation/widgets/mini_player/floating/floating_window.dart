@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
+import 'package:resonance/core/domain/models/media_item.dart';
 
 import 'package:resonance/features/player/application/providers/audio_provider.dart';
 import 'package:resonance/features/player/presentation/notifiers/mini_player_view_notifier.dart';
@@ -58,10 +59,7 @@ class _FloatingWindowContent extends ConsumerWidget {
     final viewState = popState.viewState;
     final bool isHeaderVisible = viewState != MiniPlayerViewState.idle && 
                                viewState != MiniPlayerViewState.idleLyrics;
-
     final theme = Theme.of(context);
-    final headerColor = theme.colorScheme.surface.withValues(alpha: 0.9);
-    final headerIconColor = theme.colorScheme.onSurface;
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
@@ -72,14 +70,14 @@ class _FloatingWindowContent extends ConsumerWidget {
             Expanded(
               child: MouseRegion(
                 onEnter: (_) {
-                  if (popState.viewState != MiniPlayerViewState.lyrics && 
-                      popState.viewState != MiniPlayerViewState.idleLyrics) {
+                  if (viewState != MiniPlayerViewState.lyrics && 
+                      viewState != MiniPlayerViewState.idleLyrics) {
                     Future.microtask(() => popNotifier.setViewState(MiniPlayerViewState.hover));
                   }
                 },
                 onExit: (_) {
-                  if (popState.viewState != MiniPlayerViewState.lyrics && 
-                      popState.viewState != MiniPlayerViewState.idleLyrics) {
+                  if (viewState != MiniPlayerViewState.lyrics && 
+                      viewState != MiniPlayerViewState.idleLyrics) {
                     Future.microtask(() => popNotifier.setViewState(MiniPlayerViewState.normal));
                   }
                 },
@@ -87,136 +85,25 @@ class _FloatingWindowContent extends ConsumerWidget {
                 child: Stack(
                   clipBehavior: Clip.none,
                   children: [
-                    // A. Background Blurred
-                    Positioned.fill(
-                      child: ImageFiltered(
-                        imageFilter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
-                        child: MediaArtworkWidget(
-                          item: track,
-                          width: double.infinity,
-                          height: double.infinity,
-                          borderRadius: 0,
-                        ),
-                      ),
-                    ),
-                    // Background darkening overlay
-                    Positioned.fill(
-                      child: Container(color: Colors.black.withValues(alpha: 0.3)),
-                    ),
-
-                    // B. Main Artwork (1:1 Ratio)
-                    Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24.0),
-                        child: AspectRatio(
-                          aspectRatio: 1,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.5),
-                                  blurRadius: 20,
-                                  spreadRadius: 2,
-                                )
-                              ],
-                            ),
-                            child: MediaArtworkWidget(
-                              item: track,
-                              width: double.infinity,
-                              height: double.infinity,
-                              borderRadius: 8,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    // C. Interactive Overlay Controls (Tengah)
+                    Positioned.fill(child: _FloatingArtworkStage(track: track)),
                     if (viewState != MiniPlayerViewState.lyrics && viewState != MiniPlayerViewState.idleLyrics)
-                      const Positioned.fill(
-                        child: FloatingOverlayControls(),
-                      ),
-
-                    // D. Lyrics View overlay
+                      const Positioned.fill(child: FloatingOverlayControls()),
                     if (viewState == MiniPlayerViewState.lyrics || viewState == MiniPlayerViewState.idleLyrics)
-                      const Positioned.fill(
-                        child: FloatingLyricsView(),
-                      ),
-
-                    // E. Top Drag Header Bar
-                    AnimatedPositioned(
-                      duration: const Duration(milliseconds: 250),
-                      curve: Curves.easeOutCubic,
-                      top: isHeaderVisible ? 0 : -32,
-                      left: 0,
-                      right: 0,
-                      child: Container(
-                        height: 32,
-                        color: headerColor,
-                        child: Stack(
-                          children: [
-                            // 1. Icon Drag
-                            Center(
-                              child: Icon(UIcons.regular.grip_lines, color: headerIconColor.withValues(alpha: 0.4), size: 16),
-                            ),
-                            // 2. Wrap Drag functionality (without double-tap maximize)
-                            Positioned.fill(
-                              child: GestureDetector(
-                                behavior: HitTestBehavior.translucent,
-                                onPanStart: (_) => windowManager.startDragging(),
-                                child: const SizedBox(),
-                              ),
-                            ),
-                            
-                            Positioned(
-                              left: 4,
-                              top: 0,
-                              bottom: 0,
-                              child: Center(
-                                child: ReusableHoverIconButton(
-                                  icon: UIcons.regular.add,
-                                  onTap: () => _handleAddToPlaylist(context, ref),
-                                  tooltip: 'Add to Playlist',
-                                  iconSize: 16,
-                                  padding: 4,
-                                  color: headerIconColor,
-                                ),
-                              ),
-                            ),
-
-                            // 4. Right Controls (Translation & Close)
-                            Positioned(
-                              right: 4,
-                              top: 0,
-                              bottom: 0,
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  if (viewState == MiniPlayerViewState.lyrics || viewState == MiniPlayerViewState.idleLyrics)
-                                    LyricsTranslationToggle(
-                                      fontSize: 10,
-                                      padding: 4,
-                                      color: headerIconColor,
-                                    ),
-                                  ReusableHoverIconButton(
-                                    icon: UIcons.regular.cross_small,
-                                    onTap: (viewState == MiniPlayerViewState.lyrics || viewState == MiniPlayerViewState.idleLyrics)
-                                        ? () => Future.microtask(() => popNotifier.setViewState(MiniPlayerViewState.normal))
-                                        : () => BlurTransitionOverlay.run(
-                                            ref,
-                                            () async => popNotifier.togglePop(),
-                                          ),
-                                    tooltip: (viewState == MiniPlayerViewState.lyrics || viewState == MiniPlayerViewState.idleLyrics) ? 'Close Lyrics' : 'Close Miniplayer',
-                                    iconSize: 16,
-                                    padding: 4,
-                                    color: headerIconColor,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                      const Positioned.fill(child: FloatingLyricsView()),
+                    _FloatingWindowHeaderBar(
+                      isVisible: isHeaderVisible,
+                      viewState: viewState,
+                      onAddToPlaylist: () => _handleAddToPlaylist(context, ref),
+                      onClose: () {
+                        if (viewState == MiniPlayerViewState.lyrics || viewState == MiniPlayerViewState.idleLyrics) {
+                          Future.microtask(() => popNotifier.setViewState(MiniPlayerViewState.normal));
+                        } else {
+                          BlurTransitionOverlay.run(
+                            ref,
+                            () async => popNotifier.togglePop(),
+                          );
+                        }
+                      },
                     ),
                   ],
                 ),
@@ -226,6 +113,159 @@ class _FloatingWindowContent extends ConsumerWidget {
             // AREA 2: INFO & NAV BAR (Bottom)
             if (viewState != MiniPlayerViewState.lyrics && viewState != MiniPlayerViewState.idleLyrics)
               const FloatingBottomBar(),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FloatingArtworkStage extends StatelessWidget {
+  const _FloatingArtworkStage({required this.track});
+  final MediaItem track;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // Background Blurred
+        Positioned.fill(
+          child: ImageFiltered(
+            imageFilter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
+            child: MediaArtworkWidget(
+              item: track,
+              width: double.infinity,
+              height: double.infinity,
+              borderRadius: 0,
+            ),
+          ),
+        ),
+        // Background darkening overlay
+        Positioned.fill(
+          child: Container(color: Colors.black.withValues(alpha: 0.3)),
+        ),
+
+        // Main Artwork (1:1 Ratio)
+        Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: AspectRatio(
+              aspectRatio: 1,
+              child: Container(
+                decoration: BoxDecoration(
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.5),
+                      blurRadius: 20,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
+                child: MediaArtworkWidget(
+                  item: track,
+                  width: double.infinity,
+                  height: double.infinity,
+                  borderRadius: 8,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _FloatingWindowHeaderBar extends StatelessWidget {
+  const _FloatingWindowHeaderBar({
+    required this.isVisible,
+    required this.viewState,
+    required this.onAddToPlaylist,
+    required this.onClose,
+  });
+
+  final bool isVisible;
+  final MiniPlayerViewState viewState;
+  final VoidCallback onAddToPlaylist;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final headerColor = theme.colorScheme.surface.withValues(alpha: 0.9);
+    final headerIconColor = theme.colorScheme.onSurface;
+    final isLyricsMode = viewState == MiniPlayerViewState.lyrics ||
+        viewState == MiniPlayerViewState.idleLyrics;
+
+    return AnimatedPositioned(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOutCubic,
+      top: isVisible ? 0 : -32,
+      left: 0,
+      right: 0,
+      child: Container(
+        height: 32,
+        color: headerColor,
+        child: Stack(
+          children: [
+            // 1. Icon Drag
+            Center(
+              child: Icon(
+                UIcons.regular.grip_lines,
+                color: headerIconColor.withValues(alpha: 0.4),
+                size: 16,
+              ),
+            ),
+            // 2. Wrap Drag functionality
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onPanStart: (_) => windowManager.startDragging(),
+                child: const SizedBox(),
+              ),
+            ),
+            // 3. Left Controls (Add to Playlist)
+            Positioned(
+              left: 4,
+              top: 0,
+              bottom: 0,
+              child: Center(
+                child: ReusableHoverIconButton(
+                  icon: UIcons.regular.add,
+                  onTap: onAddToPlaylist,
+                  tooltip: 'Add to Playlist',
+                  iconSize: 16,
+                  padding: 4,
+                  color: headerIconColor,
+                ),
+              ),
+            ),
+            // 4. Right Controls (Translation & Close)
+            Positioned(
+              right: 4,
+              top: 0,
+              bottom: 0,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (isLyricsMode)
+                    LyricsTranslationToggle(
+                      fontSize: 10,
+                      padding: 4,
+                      color: headerIconColor,
+                    ),
+                  ReusableHoverIconButton(
+                    icon: UIcons.regular.cross_small,
+                    onTap: onClose,
+                    tooltip: isLyricsMode ? 'Close Lyrics' : 'Close Miniplayer',
+                    iconSize: 16,
+                    padding: 4,
+                    color: headerIconColor,
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),

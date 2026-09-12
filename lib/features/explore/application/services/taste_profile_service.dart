@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance/core/data/services/media_cache_service.dart';
 import 'package:resonance/core/data/services/stream_cache_tracker_service.dart';
 import 'package:resonance/features/explore/data/repositories/youtube_search_repository.dart';
+import 'package:resonance/features/explore/presentation/providers/explore_provider.dart';
 import 'package:resonance/features/home/presentation/providers/recently_played_provider.dart';
+import 'package:resonance/features/library/application/library_provider.dart';
 import 'package:resonance/features/library/data/models/media_item.dart';
 
 final tasteProfileServiceProvider = Provider<TasteProfileService>((ref) {
@@ -59,9 +61,7 @@ class TasteProfileService {
 
   /// Builds a personalized Quick Picks queue based on user's top seeds
   Future<List<MediaItem>> buildQuickPicks({int limit = 20}) async {
-    final seeds = await getQuickPickSeeds(limit: 3);
-    if (seeds.isEmpty) return [];
-
+    final seeds = await getQuickPickSeeds(limit: 5);
     final repo = _ref.read(youtubeSearchRepositoryProvider);
     final results = <MediaItem>[];
     final seenIds = <String>{};
@@ -71,43 +71,103 @@ class TasteProfileService {
       seenIds.add(localId);
     }
 
-    for (final seed in seeds) {
-      try {
-        final onlineSeedId = await _resolveToOnlineSeedId(seed);
-        if (onlineSeedId != null) {
-          seenIds.add(onlineSeedId);
-          final recs = await repo.getRadioRecommendations(onlineSeedId, limit: 10);
-          for (final track in recs) {
-            final id = track.id ?? track.path;
-            if (!seenIds.contains(id)) {
-              seenIds.add(id);
-              results.add(track);
+    if (seeds.isNotEmpty) {
+      for (final seed in seeds) {
+        try {
+          final onlineSeedId = await _resolveToOnlineSeedId(seed);
+          if (onlineSeedId != null) {
+            seenIds.add(onlineSeedId);
+            final recs = await repo.getRadioRecommendations(onlineSeedId, limit: 10);
+            for (final track in recs) {
+              final id = track.id ?? track.path;
+              if (!seenIds.contains(id)) {
+                seenIds.add(id);
+                results.add(track);
+              }
+              if (results.length >= limit) break;
             }
-            if (results.length >= limit) break;
+          } else {
+            // Fallback: search for "${artist} music" or "${title}"
+            final query = '${seed.artist ?? seed.title} music'.trim();
+            final searchItems = await repo.search(query);
+            for (final item in searchItems) {
+              if (!seenIds.contains(item.id)) {
+                seenIds.add(item.id);
+                results.add(MediaItem(
+                  id: item.id,
+                  path: item.id,
+                  title: item.title,
+                  artist: item.author,
+                  thumbnailUrl: item.thumbnailUrl,
+                  type: 'audio',
+                ));
+              }
+              if (results.length >= limit) break;
+            }
           }
-        } else {
-          // Fallback: search for "${artist} music" or "${title}"
-          final query = '${seed.artist ?? seed.title} music'.trim();
-          final searchItems = await repo.search(query);
-          for (final item in searchItems) {
-            if (!seenIds.contains(item.id)) {
-              seenIds.add(item.id);
+        } catch (e) {
+          debugPrint('[TasteProfileService] Quick Picks error for seed ${seed.title}: $e');
+        }
+        if (results.length >= limit) break;
+      }
+    }
+
+    // Fallback 1: If results < 16, pull stream tracks from homeFeedProvider
+    if (results.length < 16) {
+      try {
+        final homeSections = _ref.read(homeFeedProvider).value ?? [];
+        for (final sec in homeSections) {
+          for (final it in sec.items) {
+            if (!it.isPlaylist && !seenIds.contains(it.id)) {
+              seenIds.add(it.id);
               results.add(MediaItem(
-                id: item.id,
-                path: item.id,
-                title: item.title,
-                artist: item.author,
-                thumbnailUrl: item.thumbnailUrl,
+                id: it.id,
+                path: it.id,
+                title: it.title,
+                artist: it.subtitle,
+                thumbnailUrl: it.thumbnailUrl,
                 type: 'audio',
               ));
             }
             if (results.length >= limit) break;
           }
+          if (results.length >= limit) break;
         }
-      } catch (e) {
-        debugPrint('[TasteProfileService] Quick Picks error for seed ${seed.title}: $e');
+      } catch (_) {}
+    }
+
+    // Fallback 2: If results < 16, search popular hits
+    if (results.length < 16) {
+      try {
+        final trending = await repo.search('popular music hits');
+        for (final item in trending) {
+          if (!seenIds.contains(item.id)) {
+            seenIds.add(item.id);
+            results.add(MediaItem(
+              id: item.id,
+              path: item.id,
+              title: item.title,
+              artist: item.author,
+              thumbnailUrl: item.thumbnailUrl,
+              type: 'audio',
+            ));
+          }
+          if (results.length >= limit) break;
+        }
+      } catch (_) {}
+    }
+
+    // Fallback 3: Local audio library
+    if (results.length < 16) {
+      final localAudios = _ref.read(libraryProvider).allMedia.where((m) => m.type == 'audio');
+      for (final local in localAudios) {
+        final id = local.id ?? local.path;
+        if (!seenIds.contains(id)) {
+          seenIds.add(id);
+          results.add(local);
+        }
+        if (results.length >= limit) break;
       }
-      if (results.length >= limit) break;
     }
 
     return results;
@@ -214,11 +274,10 @@ class TasteProfileService {
     return results;
   }
 
-  /// Extracts top listened artists from history paired with their seed track
+  /// Extracts top listened artists from history paired with their seed track.
+  /// Falls back to local library audio tracks or home feed if history is empty.
   Future<List<({String artist, MediaItem seed})>> getTopArtistsWithSeeds({int limit = 3}) async {
     final recentItems = _ref.read(recentlyPlayedProvider).value ?? [];
-    if (recentItems.isEmpty) return [];
-
     final artistCounts = <String, int>{};
     final artistSeedMap = <String, MediaItem>{};
 
@@ -229,6 +288,43 @@ class TasteProfileService {
       artistCounts[artist] = (artistCounts[artist] ?? 0) + 1;
       artistSeedMap.putIfAbsent(artist, () => item);
     }
+
+    // Fallback 1: Local library audio tracks if history has no artists yet
+    if (artistCounts.isEmpty) {
+      final localAudios = _ref.read(libraryProvider).allMedia.where((m) => m.type == 'audio');
+      for (final item in localAudios) {
+        final artist = (item.artist ?? '').trim();
+        if (artist.isEmpty || artist.toLowerCase() == 'unknown artist') continue;
+        artistCounts[artist] = (artistCounts[artist] ?? 0) + 1;
+        artistSeedMap.putIfAbsent(artist, () => item);
+      }
+    }
+
+    // Fallback 2: Home feed sections if library is also empty
+    if (artistCounts.isEmpty) {
+      final homeSections = _ref.read(homeFeedProvider).value ?? [];
+      for (final sec in homeSections) {
+        for (final item in sec.items) {
+          if (item.isPlaylist) continue;
+          final artist = item.subtitle.trim();
+          if (artist.isEmpty || artist.toLowerCase() == 'unknown artist') continue;
+          artistCounts[artist] = (artistCounts[artist] ?? 0) + 1;
+          artistSeedMap.putIfAbsent(
+            artist,
+            () => MediaItem(
+              id: item.id,
+              path: item.id,
+              title: item.title,
+              artist: item.subtitle,
+              thumbnailUrl: item.thumbnailUrl,
+              type: 'audio',
+            ),
+          );
+        }
+      }
+    }
+
+    if (artistCounts.isEmpty) return [];
 
     final sortedArtists = artistCounts.keys.toList()
       ..sort((a, b) => (artistCounts[b] ?? 0).compareTo(artistCounts[a] ?? 0));
@@ -243,8 +339,8 @@ class TasteProfileService {
     return result;
   }
 
-  /// Returns items for the Speed Dial quick access grid (recent + top played blend)
-  Future<List<MediaItem>> getSpeedDialItems({int limit = 8}) async {
+  /// Returns items for the Speed Dial quick access grid (recent + top played blend + recommendations)
+  Future<List<MediaItem>> getSpeedDialItems({int limit = 18}) async {
     final recentItems = _ref.read(recentlyPlayedProvider).value ?? [];
     final cache = _ref.read(mediaCacheServiceProvider);
     final tracker = _ref.read(streamCacheTrackerServiceProvider);
@@ -252,18 +348,18 @@ class TasteProfileService {
     final result = <MediaItem>[];
     final seenIds = <String>{};
 
-    // 1. Take up to 4 most recent
+    // 1. Take up to 10 most recent
     for (final item in recentItems) {
       final id = item.id ?? item.path;
       if (id.isNotEmpty && !seenIds.contains(id)) {
         seenIds.add(id);
         result.add(item);
       }
-      if (result.length >= 4) break;
+      if (result.length >= 10) break;
     }
 
     // 2. Take top played
-    final topIds = await tracker.getTopPlayedIds(limit: 6);
+    final topIds = await tracker.getTopPlayedIds(limit: 8);
     for (final id in topIds) {
       if (!seenIds.contains(id)) {
         final meta = await cache.getCachedMetadata(id);
@@ -273,6 +369,41 @@ class TasteProfileService {
         }
       }
       if (result.length >= limit) break;
+    }
+
+    // 3. Fallback: If still under 16, pull stream tracks from homeFeedProvider
+    if (result.length < 16) {
+      final homeSections = _ref.read(homeFeedProvider).value ?? [];
+      for (final sec in homeSections) {
+        for (final it in sec.items) {
+          if (!it.isPlaylist && !seenIds.contains(it.id)) {
+            seenIds.add(it.id);
+            result.add(MediaItem(
+              id: it.id,
+              path: it.id,
+              title: it.title,
+              artist: it.subtitle,
+              thumbnailUrl: it.thumbnailUrl,
+              type: 'audio',
+            ));
+          }
+          if (result.length >= limit) break;
+        }
+        if (result.length >= limit) break;
+      }
+    }
+
+    // 4. Fallback: If still under 16, pull from local library
+    if (result.length < 16) {
+      final localAudios = _ref.read(libraryProvider).allMedia.where((m) => m.type == 'audio');
+      for (final local in localAudios) {
+        final id = local.id ?? local.path;
+        if (!seenIds.contains(id)) {
+          seenIds.add(id);
+          result.add(local);
+        }
+        if (result.length >= limit) break;
+      }
     }
 
     return result;

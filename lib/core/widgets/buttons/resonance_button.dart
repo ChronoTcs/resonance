@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 
 enum ResonanceButtonStyle {
@@ -12,6 +13,8 @@ class ResonanceButton extends StatefulWidget {
   final IconData? icon;
   final ResonanceButtonStyle style;
   final bool isFullWidth;
+  final double? height;
+  final EdgeInsetsGeometry? padding;
 
   const ResonanceButton({
     super.key,
@@ -20,6 +23,8 @@ class ResonanceButton extends StatefulWidget {
     this.icon,
     this.style = ResonanceButtonStyle.primary,
     this.isFullWidth = false,
+    this.height,
+    this.padding,
   });
 
   @override
@@ -28,6 +33,8 @@ class ResonanceButton extends StatefulWidget {
 
 class _ResonanceButtonState extends State<ResonanceButton> {
   bool _isHovered = false;
+
+  bool get _isWindows => Platform.isWindows;
 
   @override
   Widget build(BuildContext context) {
@@ -82,16 +89,45 @@ class _ResonanceButtonState extends State<ResonanceButton> {
           Icon(widget.icon, size: 14, color: fg),
           const SizedBox(width: 8),
         ],
-        Text(
-          widget.label,
-          style: TextStyle(
-            color: fg,
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
+        Flexible(
+          child: Text(
+            widget.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: fg,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       ],
     );
+
+    final content = Padding(
+      padding: widget.padding ?? const EdgeInsets.symmetric(horizontal: 16),
+      child: Center(
+        widthFactor: widget.isFullWidth ? null : 1.0,
+        heightFactor: 1.0,
+        child: buttonChild,
+      ),
+    );
+
+    final interactiveChild = _isWindows
+        ? GestureDetector(
+            onTap: widget.onPressed,
+            behavior: HitTestBehavior.opaque,
+            child: content,
+          )
+        : Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: widget.onPressed,
+              mouseCursor: isEnabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+              borderRadius: BorderRadius.circular(10),
+              child: content,
+            ),
+          );
 
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
@@ -100,7 +136,7 @@ class _ResonanceButtonState extends State<ResonanceButton> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         width: widget.isFullWidth ? double.infinity : null,
-        height: 36,
+        height: widget.height ?? 36,
         decoration: BoxDecoration(
           color: bg,
           borderRadius: BorderRadius.circular(10),
@@ -115,21 +151,7 @@ class _ResonanceButtonState extends State<ResonanceButton> {
                 ]
               : null,
         ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: widget.onPressed,
-            borderRadius: BorderRadius.circular(10),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Center(
-                widthFactor: widget.isFullWidth ? null : 1.0,
-                heightFactor: 1.0,
-                child: buttonChild,
-              ),
-            ),
-          ),
-        ),
+        child: interactiveChild,
       ),
     );
   }

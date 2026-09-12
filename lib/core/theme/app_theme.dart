@@ -22,7 +22,7 @@ class AppTheme {
           ? const Color(0xFFE9AD71)
           : const Color(0xFFAE8C50);
     }
-    if (mode == 'windows') {
+    if (mode == 'windows' || mode == 'system') {
       return SystemTheme.accentColor.accent;
     }
     
@@ -136,9 +136,27 @@ class AppTheme {
           fontWeight: FontWeight.w500,
         ),
         waitDuration: const Duration(milliseconds: 700),
-        showDuration: const Duration(seconds: 1),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         margin: const EdgeInsets.all(8),
+      ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: Colors.transparent,
+        modalBackgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
+      snackBarTheme: SnackBarThemeData(
+        backgroundColor: const Color(0xFF1E1E22).withValues(alpha: 0.95),
+        contentTextStyle: GoogleFonts.inter(
+          color: Colors.white,
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+        ),
+        behavior: SnackBarBehavior.floating,
+        elevation: 8,
       ),
     );
   }
@@ -232,6 +250,25 @@ class AppTheme {
         showDuration: const Duration(seconds: 1),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         margin: const EdgeInsets.all(8),
+      ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: Colors.transparent,
+        modalBackgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
+      snackBarTheme: SnackBarThemeData(
+        backgroundColor: const Color(0xFF18181B).withValues(alpha: 0.95),
+        contentTextStyle: GoogleFonts.inter(
+          color: Colors.white,
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+        ),
+        behavior: SnackBarBehavior.floating,
+        elevation: 8,
       ),
     );
   }

@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:silky_scroll/silky_scroll.dart';
@@ -7,6 +8,16 @@ import '../../application/providers/equalizer_controller.dart';
 
 class EqualizerSheet extends ConsumerStatefulWidget {
   const EqualizerSheet({super.key});
+
+  static void show(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black54,
+      builder: (context) => const EqualizerSheet(),
+    );
+  }
 
   static const List<String> _bandLabels = [
     '62 Hz',
@@ -37,23 +48,67 @@ class _EqualizerSheetState extends ConsumerState<EqualizerSheet> {
     final colorScheme = Theme.of(context).colorScheme;
     final onSurface = colorScheme.onSurface;
     final onSurfaceVariant = colorScheme.onSurfaceVariant;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Container(
-      height: 480,
-      padding: const EdgeInsets.only(
-        top: 24.0,
-        left: 32.0,
-        right: 32.0,
-        bottom: 16.0,
-      ),
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header Row
+    final sheetBg = isDark
+        ? colorScheme.surface.withValues(alpha: 0.90)
+        : colorScheme.surface.withValues(alpha: 0.95);
+    final borderColor = isDark
+        ? Colors.white.withValues(alpha: 0.12)
+        : Colors.black.withValues(alpha: 0.08);
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => Navigator.pop(context),
+      child: SafeArea(
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 580),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: GestureDetector(
+                onTap: () {},
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(24),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                    child: Container(
+                      height: 500,
+                      padding: const EdgeInsets.only(
+                        top: 12.0,
+                        left: 28.0,
+                        right: 28.0,
+                        bottom: 16.0,
+                      ),
+                      decoration: BoxDecoration(
+                        color: sheetBg,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: borderColor, width: 1),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: isDark ? 0.4 : 0.12),
+                            blurRadius: 24,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Pill drag handle
+                          Center(
+                            child: Container(
+                              width: 36,
+                              height: 4,
+                              margin: const EdgeInsets.only(bottom: 14),
+                              decoration: BoxDecoration(
+                                color: onSurfaceVariant.withValues(alpha: 0.3),
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                          ),
+                          // Header Row
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -162,110 +217,21 @@ class _EqualizerSheetState extends ConsumerState<EqualizerSheet> {
           Expanded(
             child: Row(
               children: [
-                // Y-Axis Labels
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      '+12 dB',
-                      style: TextStyle(color: onSurfaceVariant, fontSize: 12),
-                    ),
-                    Text(
-                      ' +6 dB',
-                      style: TextStyle(color: onSurfaceVariant, fontSize: 12),
-                    ),
-                    Text(
-                      '  0 dB',
-                      style: TextStyle(color: onSurfaceVariant, fontSize: 12),
-                    ),
-                    Text(
-                      ' -6 dB',
-                      style: TextStyle(color: onSurfaceVariant, fontSize: 12),
-                    ),
-                    Text(
-                      '-12 dB',
-                      style: TextStyle(color: onSurfaceVariant, fontSize: 12),
-                    ),
-                    const SizedBox(height: 20),
-                  ],
-                ),
+                _TickScaleColumn(onSurfaceVariant: onSurfaceVariant),
                 const SizedBox(width: 16),
-
-                // Sliders
                 Expanded(
                   child: SilkySingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.start,
                       children: List.generate(9, (index) {
-                        return SizedBox(
-                          width: 56,
-                          child: Column(
-                            children: [
-                              Expanded(
-                                child: Stack(
-                                  alignment: Alignment.center,
-                                  children: [
-                                    // Background Tick marks
-                                    Column(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: List.generate(
-                                        5,
-                                        (_) => Container(
-                                          width: 24,
-                                          height: 1,
-                                          color: colorScheme.onSurface
-                                              .withValues(alpha: 0.1),
-                                        ),
-                                      ),
-                                    ),
-                                    // Slider
-                                    RotatedBox(
-                                      quarterTurns: 3,
-                                      child: SliderTheme(
-                                        data: SliderTheme.of(context).copyWith(
-                                          trackHeight: 4,
-                                          activeTrackColor: colorScheme.primary,
-                                          inactiveTrackColor: colorScheme
-                                              .surfaceContainerHighest,
-                                          thumbColor: colorScheme.primary,
-                                          thumbShape:
-                                              const RoundSliderThumbShape(
-                                                enabledThumbRadius: 9,
-                                                elevation: 2,
-                                              ),
-                                          overlayShape:
-                                              SliderComponentShape.noOverlay,
-                                        ),
-                                        child: Slider(
-                                          value: eqState.bands[index],
-                                          min: -12.0,
-                                          max: 12.0,
-                                          onChanged: eqState.isEnabled
-                                              ? (val) {
-                                                  eqNotifier.setEqualizerBand(
-                                                    index,
-                                                    val,
-                                                  );
-                                                }
-                                              : null,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              Text(
-                                EqualizerSheet._bandLabels[index],
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: onSurfaceVariant,
-                                ),
-                              ),
-                            ],
-                          ),
+                        return _EqualizerBandSlider(
+                          label: EqualizerSheet._bandLabels[index],
+                          value: eqState.bands[index],
+                          isEnabled: eqState.isEnabled,
+                          onChanged: (val) {
+                            eqNotifier.setEqualizerBand(index, val);
+                          },
                         );
                       }),
                     ),
@@ -381,8 +347,115 @@ class _EqualizerSheetState extends ConsumerState<EqualizerSheet> {
               ),
             ],
           ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EqualizerBandSlider extends StatelessWidget {
+  const _EqualizerBandSlider({
+    required this.label,
+    required this.value,
+    required this.isEnabled,
+    required this.onChanged,
+  });
+
+  final String label;
+  final double value;
+  final bool isEnabled;
+  final ValueChanged<double> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return SizedBox(
+      width: 56,
+      child: Column(
+        children: [
+          Expanded(
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // Background Tick marks
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: List.generate(
+                    5,
+                    (_) => Container(
+                      width: 24,
+                      height: 1,
+                      color: colorScheme.onSurface.withValues(alpha: 0.1),
+                    ),
+                  ),
+                ),
+                // Slider
+                RotatedBox(
+                  quarterTurns: 3,
+                  child: SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      trackHeight: 4,
+                      activeTrackColor: colorScheme.primary,
+                      inactiveTrackColor:
+                          colorScheme.surfaceContainerHighest,
+                      thumbColor: colorScheme.primary,
+                      thumbShape: const RoundSliderThumbShape(
+                        enabledThumbRadius: 9,
+                        elevation: 2,
+                      ),
+                      overlayShape: SliderComponentShape.noOverlay,
+                    ),
+                    child: Slider(
+                      value: value,
+                      min: -12.0,
+                      max: 12.0,
+                      onChanged: isEnabled ? onChanged : null,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
         ],
       ),
+    );
+  }
+}
+
+class _TickScaleColumn extends StatelessWidget {
+  const _TickScaleColumn({required this.onSurfaceVariant});
+
+  final Color onSurfaceVariant;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text('+12 dB', style: TextStyle(color: onSurfaceVariant, fontSize: 12)),
+        Text(' +6 dB', style: TextStyle(color: onSurfaceVariant, fontSize: 12)),
+        Text('  0 dB', style: TextStyle(color: onSurfaceVariant, fontSize: 12)),
+        Text(' -6 dB', style: TextStyle(color: onSurfaceVariant, fontSize: 12)),
+        Text('-12 dB', style: TextStyle(color: onSurfaceVariant, fontSize: 12)),
+        const SizedBox(height: 20),
+      ],
     );
   }
 }

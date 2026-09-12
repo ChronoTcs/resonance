@@ -9,6 +9,7 @@ import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/features/library/application/library_provider.dart';
 import 'package:resonance/features/player/presentation/widgets/mini_player/shared/audio_settings_sheet.dart';
 import 'package:resonance/features/player/presentation/widgets/player_cards.dart';
+import 'package:resonance/features/settings/application/notification_provider.dart';
 
 /// [FullScreenAudioView]
 /// Responsible ONLY for Audio mode layout:
@@ -21,14 +22,12 @@ class FullScreenAudioView extends ConsumerWidget {
   const FullScreenAudioView({super.key, required this.displayTrack});
 
   void _showMediaActions(BuildContext context, WidgetRef ref, dynamic track) {
-    showModalBottomSheet(
+    MediaActionsBottomSheet.show(
       context: context,
-      builder: (ctx) => MediaActionsBottomSheet(
-        item: track,
-        onDelete: track.id == null
-            ? () => _confirmDelete(context, ref, track)
-            : null,
-      ),
+      item: track,
+      onDelete: track.id == null
+          ? () => _confirmDelete(context, ref, track)
+          : null,
     );
   }
 
@@ -42,8 +41,11 @@ class FullScreenAudioView extends ConsumerWidget {
         isDanger: true,
         onConfirm: () {
           ref.read(libraryProvider.notifier).deleteTrack(item.path);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('"${item.title}" deleted.')),
+          ref.read(notificationProvider.notifier).showNotification(
+            'Track Deleted',
+            '"${item.title}" deleted.',
+            target: 'target:library',
+            silentOsNotification: true,
           );
         },
       ),
@@ -108,12 +110,14 @@ class FullScreenAudioView extends ConsumerWidget {
       actions: [
         ReusableHoverIconButton(
           icon: UIcons.regular.add,
+          iconSize: 20,
           color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
           tooltip: 'Media Actions',
           onTap: () => _showMediaActions(context, ref, displayTrack),
         ),
         ReusableHoverIconButton(
           icon: UIcons.regular.menu_dots_vertical,
+          iconSize: 20,
           color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
           tooltip: 'Audio Settings',
           // [DRY PRINCIPLE] Reuses the existing, reusable AudioSettingsSheet

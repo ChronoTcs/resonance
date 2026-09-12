@@ -26,6 +26,15 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
       // 1. Post message to notify internal message handlers
       ::PostMessage(existing_hwnd, wm_show_instance, 0, 0);
 
+      // Forward command-line arguments to existing instance via WM_COPYDATA
+      if (command_line && wcslen(command_line) > 0) {
+        COPYDATASTRUCT cds;
+        cds.dwData = 1;  // 1 = command line string
+        cds.cbData = static_cast<DWORD>((wcslen(command_line) + 1) * sizeof(wchar_t));
+        cds.lpData = static_cast<PVOID>(command_line);
+        ::SendMessage(existing_hwnd, WM_COPYDATA, reinterpret_cast<WPARAM>(existing_hwnd), reinterpret_cast<LPARAM>(&cds));
+      }
+
       // 2. Un-hide from tray if hidden (SW_HIDE -> SW_SHOW)
       ::ShowWindow(existing_hwnd, SW_SHOW);
 

@@ -47,7 +47,7 @@ class PermissionService {
 
     final sdkInt = await getAndroidSdkInt();
     
-    // For Android 13+, we need notification permission for the player
+    // For Android 13+, request notification permission for the foreground media player controls
     if (sdkInt >= 33) {
       final status = await Permission.notification.status;
       if (!status.isGranted) {
@@ -61,56 +61,6 @@ class PermissionService {
         if (!context.mounted) return;
         if (proceed) {
           await Permission.notification.request();
-        }
-      }
-    }
-
-    // Storage/Audio Access
-    if (sdkInt >= 33) {
-      final status = await Permission.audio.status;
-      if (!status.isGranted) {
-        if (!context.mounted) return;
-        final proceed = await showRationaleDialog(
-          context: context,
-          icon: UIcons.regular.headphones,
-          title: 'Audio Access',
-          message: 'Resonance needs access to your audio files to play music from your device storage.',
-        );
-        if (!context.mounted) return;
-        if (proceed) {
-          await Permission.audio.request();
-        }
-      }
-    } else if (sdkInt >= 30) {
-      // Android 11 & 12: READ_EXTERNAL_STORAGE as normal popup (not settings redirect)
-      final status = await Permission.storage.status;
-      if (!status.isGranted) {
-        if (!context.mounted) return;
-        final proceed = await showRationaleDialog(
-          context: context,
-          icon: UIcons.regular.folder,
-          title: 'Storage Access',
-          message: 'Resonance needs access to your storage to scan your music library and manage downloads.',
-        );
-        if (!context.mounted) return;
-        if (proceed) {
-          await Permission.storage.request();
-        }
-      }
-    } else {
-      // Android 10 and below
-      final status = await Permission.storage.status;
-      if (!status.isGranted) {
-        if (!context.mounted) return;
-        final proceed = await showRationaleDialog(
-          context: context,
-          icon: UIcons.regular.hdd,
-          title: 'Storage Access',
-          message: 'Resonance needs access to your storage to play and download music.',
-        );
-        if (!context.mounted) return;
-        if (proceed) {
-          await Permission.storage.request();
         }
       }
     }
@@ -144,34 +94,11 @@ class PermissionService {
     return false;
   }
 
-  static Future<bool> requestStoragePermission() async {
-    if (!Platform.isAndroid) return true;
-    // delegate to download permissions — same logic
-    return requestDownloadPermissions();
-  }
+  /// Scoped storage / SAF are used for downloads and caching. No legacy storage permission required.
+  static Future<bool> requestStoragePermission() async => true;
 
-  /// Request essential permissions for downloading (specifically for Android storage).
-  /// Replaces the manual logic previously in DownloadNotifier.
-  static Future<bool> requestDownloadPermissions() async {
-    if (!Platform.isAndroid) return true;
-
-    final sdkInt = await getAndroidSdkInt();
-
-    // Android 13+ (API 33+): MediaStore handles writes — no explicit permission needed
-    if (sdkInt >= 33) return true;
-
-    // Android 11–12 (API 30–32): READ_EXTERNAL_STORAGE only
-    if (sdkInt >= 30) {
-      var status = await Permission.storage.status;
-      if (!status.isGranted) status = await Permission.storage.request();
-      return status.isGranted;
-    }
-
-    // Android 9–10 (API 28–29): both READ + WRITE
-    var readStatus = await Permission.storage.status;
-    if (!readStatus.isGranted) readStatus = await Permission.storage.request();
-    return readStatus.isGranted;
-  }
+  /// Downloads write directly to app-specific storage or SAF URI grants.
+  static Future<bool> requestDownloadPermissions() async => true;
 
   static Future<int> getAndroidSdkInt() async {
     try {

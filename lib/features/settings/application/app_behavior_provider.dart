@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:resonance/core/data/services/windows_startup_service.dart';
@@ -34,13 +35,15 @@ class AppBehaviorNotifier extends Notifier<AppBehaviorState> {
   @override
   AppBehaviorState build() {
     _loadSettings();
-    return const AppBehaviorState();
+    return AppBehaviorState(
+      closeToTray: Platform.isWindows,
+    );
   }
 
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     final autoStart = prefs.getBool(_kAutoStartKey) ?? false;
-    final closeToTray = prefs.getBool(_kCloseToTrayKey) ?? true;
+    final closeToTray = prefs.getBool(_kCloseToTrayKey) ?? (Platform.isWindows ? true : false);
     final autoUpdate = prefs.getBool(_kAutoUpdateKey) ?? true;
 
     state = AppBehaviorState(

@@ -9,9 +9,25 @@ class ThumbnailUtils {
 
     // Upgrade standard YouTube video thumbnail fallbacks (hqdefault.jpg -> maxresdefault.jpg)
     if (upgraded.contains('i.ytimg.com/vi/')) {
-      upgraded = upgraded.replaceAll(RegExp(r'/(hq|mq|sd|default)\.jpg'), '/maxresdefault.jpg');
+      upgraded = upgraded.replaceAll(RegExp(r'/(?:hq|mq|sd)?default\.jpg'), '/maxresdefault.jpg');
     }
 
     return upgraded;
+  }
+
+  /// Returns a safer medium-resolution fallback (e.g. s544 or hqdefault) if the 1080p asset fails with HTTP 500 / 404.
+  static String? getFallbackResolution(String? url) {
+    if (url == null || url.isEmpty) return null;
+
+    if (url.contains('=w1080-h1080-l90-rj')) {
+      return url.replaceAll('=w1080-h1080-l90-rj', '=w544-h544-l90-rj');
+    }
+    if (url.contains('=s1080')) {
+      return url.replaceAll('=s1080', '=s544');
+    }
+    if (url.contains('maxresdefault.jpg')) {
+      return url.replaceAll('maxresdefault.jpg', 'hqdefault.jpg');
+    }
+    return null;
   }
 }

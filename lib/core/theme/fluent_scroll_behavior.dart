@@ -1,12 +1,16 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 
 /// [FluentScrollBehavior]
-/// Configures global scroll behavior to match Windows Fluent Design:
-/// - Uses [ClampingScrollPhysics] (no bounce effect).
-/// - Removes overscroll indicator glow effect.
+/// Configures scroll behavior adaptively:
+/// - Windows / Desktop: ClampingScrollPhysics with silent indicator.
+/// - Android / Mobile: BouncingScrollPhysics with StretchingOverscrollIndicator for natural touch feedback.
 class FluentScrollBehavior extends MaterialScrollBehavior {
   @override
   ScrollPhysics getScrollPhysics(BuildContext context) {
+    if (Platform.isAndroid || Platform.isIOS) {
+      return const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics());
+    }
     return const ClampingScrollPhysics();
   }
 
@@ -16,6 +20,13 @@ class FluentScrollBehavior extends MaterialScrollBehavior {
     Widget child,
     ScrollableDetails details,
   ) {
+    if (Platform.isAndroid) {
+      return StretchingOverscrollIndicator(
+        axisDirection: details.direction,
+        child: child,
+      );
+    }
     return child;
   }
 }
+

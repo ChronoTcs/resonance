@@ -21,10 +21,9 @@ import 'core/configs/provider_observer.dart';
 
 import 'core/routing/route_provider.dart';
 import 'package:audio_service/audio_service.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 import 'features/player/application/audio_handler.dart';
-import 'core/data/services/po_token_provider_service.dart';
+import 'features/stream/platform/windows/windows_po_token_service.dart';
+import 'features/stream/platform/windows/windows_jump_list_service.dart';
 import 'package:resonance/features/settings/application/startup_service.dart';
 import 'package:resonance/core/application/services/window_persistence_service.dart';
 import 'package:resonance/core/application/services/lifecycle_service.dart';
@@ -57,36 +56,6 @@ Future<void> _cleanSharedPreferences() async {
         'user_playlists',
         results['playlistsStr'] as String,
       );
-    }
-
-    if (Platform.isAndroid) {
-      // Helps resolve 'SQLITE_READONLY_DBMOVED' by locating the correct system folder.
-      final docDir = await getApplicationDocumentsDirectory();
-      final androidBase = docDir.parent.path; // /data/user/0/<pkg>/
-
-      final dbLocations = [
-        p.join(androidBase, 'databases', 'libCachedImageData.db'),
-        p.join(androidBase, 'files', 'libCachedImageData.db'),
-      ];
-
-      final fixedKey = 'image_cache_fixed_v2';
-      if (!(prefs.getBool(fixedKey) ?? false)) {
-        for (final path in dbLocations) {
-          final dbFile = File(path);
-          if (await dbFile.exists()) {
-            try {
-              await dbFile.delete();
-              // Delete SQLite journal files to clear residual locks
-              await File('$path-wal').delete().catchError((_) => File(''));
-              await File('$path-shm').delete().catchError((_) => File(''));
-              debugPrint('[Cleanup] Deleted legacy cache DB at $path');
-            } catch (e) {
-              debugPrint('[Cleanup] Non-fatal error deleting DB at $path: $e');
-            }
-          }
-        }
-        await prefs.setBool(fixedKey, true);
-      }
     }
 
     await prefs.setBool(cleanFlag, true);
@@ -152,11 +121,13 @@ Map<String, dynamic> _performCleanupIsolate(Map<String, dynamic> data) {
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
-void main() async {
-  debugPrint('[ResonanceInit] Starting main()...');
+void main([List<String> args = const []]) async {
+  debugPrint('[ResonanceInit] Starting main()... args: $args');
   WidgetsFlutterBinding.ensureInitialized();
 
-  await poTokenProviderService.start();
+  if (Platform.isWindows) {
+    await WindowsPoTokenService().start();
+  }
 
 
 
@@ -192,8 +163,15 @@ void main() async {
     DeviceOrientation.portraitDown,
   ]);
 
-  if (Platform.isWindows) {
-    await SystemTheme.accentColor.load();
+  if (Platform.isAndroid) {
+    PaintingBinding.instance.imageCache.maximumSizeBytes = 40 * 1024 * 1024; // 40MB RAM cap
+    PaintingBinding.instance.imageCache.maximumSize = 100; // max 100 decoded images
+  }
+
+  if (Platform.isWindows || Platform.isAndroid) {
+    try {
+      await SystemTheme.accentColor.load();
+    } catch (_) {}
   }
 
   Future.microtask(() {
@@ -250,13 +228,14 @@ void main() async {
         sharedPreferencesProvider.overrideWithValue(prefs),
         audioHandlerProvider.overrideWithValue(audioHandler),
       ],
-      child: const ResonanceApp(),
+      child: ResonanceApp(initialArgs: args),
     ),
   );
 }
 
 class ResonanceApp extends ConsumerStatefulWidget {
-  const ResonanceApp({super.key});
+  final List<String> initialArgs;
+  const ResonanceApp({super.key, this.initialArgs = const []});
 
   @override
   ConsumerState<ResonanceApp> createState() => _ResonanceAppState();
@@ -277,6 +256,9 @@ class _ResonanceAppState extends ConsumerState<ResonanceApp> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await runStartupChecks(ref);
+      if (Platform.isWindows && widget.initialArgs.isNotEmpty) {
+        await ref.read(windowsJumpListServiceProvider).handleCommandLine(widget.initialArgs.join(' '));
+      }
     });
   }
 

@@ -67,55 +67,11 @@ class VolumePopupDialog extends ConsumerWidget {
                       color: Colors.white.withValues(alpha: 0.1),
                     ),
                   ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                    child: Row(
-                      children: [
-                        Icon(
-                          currentVolume == 0
-                              ? UIcons.regular.volume_off
-                              : currentVolume < 50
-                                  ? UIcons.regular.volume_down
-                                  : UIcons.regular.volume,
-                          color: theme.colorScheme.onSurfaceVariant,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: SliderTheme(
-                            data: SliderTheme.of(context).copyWith(
-                              activeTrackColor: theme.primaryColor,
-                              inactiveTrackColor: Colors.grey.withValues(alpha: 0.3),
-                              thumbColor: theme.primaryColor,
-                              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                              trackHeight: 4,
-                              overlayShape: SliderComponentShape.noOverlay,
-                            ),
-                            child: Slider(
-                              value: currentVolume,
-                              min: 0.0,
-                              max: 100.0,
-                              onChanged: (val) {
-                                ref.read(audioProvider.notifier).setVolume(val);
-                              },
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        SizedBox(
-                          width: 44,
-                          child: Text(
-                            "${currentVolume.toInt()}%",
-                            softWrap: false,
-                            style: TextStyle(
-                              color: theme.colorScheme.onSurface,
-                              fontSize: 13,
-                            ),
-                            textAlign: TextAlign.right,
-                          ),
-                        ),
-                      ],
-                    ),
+                  child: _VolumePopupSliderRow(
+                    currentVolume: currentVolume,
+                    onVolumeChanged: (val) {
+                      ref.read(audioProvider.notifier).setVolume(val);
+                    },
                   ),
                 ),
               ),
@@ -126,3 +82,67 @@ class VolumePopupDialog extends ConsumerWidget {
     );
   }
 }
+
+class _VolumePopupSliderRow extends StatelessWidget {
+  final double currentVolume;
+  final ValueChanged<double> onVolumeChanged;
+
+  const _VolumePopupSliderRow({
+    required this.currentVolume,
+    required this.onVolumeChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      child: Row(
+        children: [
+          Icon(
+            currentVolume == 0
+                ? UIcons.regular.volume_off
+                : currentVolume < 50
+                    ? UIcons.regular.volume_down
+                    : UIcons.regular.volume,
+            color: theme.colorScheme.onSurfaceVariant,
+            size: 20,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                activeTrackColor: theme.primaryColor,
+                inactiveTrackColor: Colors.grey.withValues(alpha: 0.3),
+                thumbColor: theme.primaryColor,
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                trackHeight: 4,
+                overlayShape: SliderComponentShape.noOverlay,
+              ),
+              child: Slider(
+                value: currentVolume,
+                min: 0.0,
+                max: 100.0,
+                onChanged: onVolumeChanged,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          SizedBox(
+            width: 44,
+            child: Text(
+              "${currentVolume.toInt()}%",
+              softWrap: false,
+              style: TextStyle(
+                color: theme.colorScheme.onSurface,
+                fontSize: 13,
+              ),
+              textAlign: TextAlign.right,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+

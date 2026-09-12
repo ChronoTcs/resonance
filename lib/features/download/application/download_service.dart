@@ -14,7 +14,6 @@ import '../data/models/download_item.dart';
 import '../data/datasources/downloader_bridge_datasource.dart';
 import '../../../core/data/services/media_cache_service.dart';
 import '../../../core/data/services/cache_manager.dart';
-import '../../../core/data/services/po_token_provider_service.dart';
 import '../../../core/application/services/permission_service.dart';
 import '../../../../core/utils/path_utils.dart';
 import '../../library/application/library_provider.dart';
@@ -22,6 +21,9 @@ import '../../library/data/models/media_item.dart';
 import 'providers/download_settings_provider.dart';
 import '../../settings/application/notification_provider.dart';
 import '../../player/application/providers/audio_provider.dart';
+import '../../stream/application/platform_stream_provider.dart';
+import '../../stream/platform/windows/windows_po_token_service.dart';
+import '../../../core/application/services/network_connectivity_service.dart';
 
 /// Event emitted by DownloadService to update the UI State in DownloadNotifier.
 class DownloadUpdate {
@@ -148,6 +150,13 @@ class DownloadService {
 
         if (isCached || isCachingByDart) {
           _startDirectDownloadFromCache(item);
+          continue;
+        }
+
+        // Offline guard: do not attempt fresh network downloads when offline
+        final isOnline = _ref.read(networkConnectivityProvider).isOnline;
+        if (!isOnline) {
+          debugPrint('[DownloadService] Offline: Pausing download for ${item.displayTitle}, keeping in queued status');
           continue;
         }
 
@@ -391,8 +400,26 @@ class DownloadService {
 
       // Resolve clean title/artist from enriched metadata (avoids karaoke/channel name contamination)
       final rawTitle = cachedMedia?.title ?? item.displayTitle;
-      final rawArtist =
+      String rawArtist =
           cachedMedia?.artist ?? item.video?.author ?? 'Unknown Artist';
+
+      // Self-healing guard: reject poisoned placeholder artist strings
+      const invalidArtists = {'Lagu', 'Song', 'Unknown Artist', 'Unknown'};
+      if (invalidArtists.contains(rawArtist.trim())) {
+        if (item.video?.author != null && !invalidArtists.contains(item.video!.author.trim())) {
+          rawArtist = item.video!.author;
+        } else {
+          try {
+            final ytClient = yt.YoutubeExplode();
+            final fetchedVideo = await ytClient.videos.get(videoId).timeout(const Duration(seconds: 4));
+            if (!invalidArtists.contains(fetchedVideo.author.trim())) {
+              rawArtist = fetchedVideo.author;
+            }
+            ytClient.close();
+          } catch (_) {}
+        }
+      }
+
       // same sanitization as _fetchEnhancedMetadata to prevent "ZZangKARAOKE" style iTunes mismatches
       final cleanArtist = rawArtist
           .replaceAll(
@@ -475,8 +502,8 @@ class DownloadService {
       if (item.type == DownloadType.audio) {
         await _writeTags(
           targetPath,
-          cachedMedia?.title ?? item.displayTitle,
-          cachedMedia?.artist ?? 'Unknown Artist',
+          rawTitle,
+          rawArtist,
           cachedMedia?.album ?? 'Resonance Downloads',
           artBytes != null ? artBytes.toList() : [],
           songId,
@@ -495,7 +522,7 @@ class DownloadService {
           status: DownloadStatus.done,
           progress: 100.0,
           outputPath: targetPath,
-          resolvedTitle: cachedMedia?.title ?? item.displayTitle,
+          resolvedTitle: rawTitle,
           statusMessage: 'Done (Instant copy from cache)',
           songId: locId,
         ),
@@ -508,13 +535,18 @@ class DownloadService {
               id: locId,
               setVideoId: songId,
               path: targetPath,
-              title: cachedMedia?.title ?? item.displayTitle,
-              artist: cachedMedia?.artist ?? 'Unknown Artist',
+              title: rawTitle,
+              artist: rawArtist,
               album: cachedMedia?.album ?? 'Resonance Downloads',
               thumbnailUrl: targetArtPath,
               type: item.type == DownloadType.audio ? 'audio' : 'video',
             ),
           );
+
+      // Self-heal poisoned sidecar JSON in stream/metadata/ cache
+      if (cachedMedia != null && invalidArtists.contains(cachedMedia.artist?.trim()) && !invalidArtists.contains(rawArtist.trim())) {
+        cacheService.saveMetadataForced(songId, cachedMedia.copyWith(artist: rawArtist));
+      }
     } catch (e) {
       _emitUpdate(
         item.id,
@@ -625,7 +657,7 @@ class DownloadService {
           ),
         );
 
-        final poToken = poTokenProviderService.activePoToken;
+        final poToken = Platform.isWindows ? WindowsPoTokenService().activePoToken : null;
         final clients = <yt.YoutubeApiClient>[];
         if (poToken != null && poToken.isNotEmpty) {
           clients.add(
@@ -655,31 +687,16 @@ class DownloadService {
           yt.YoutubeApiClient.ios,
         ]);
 
-        final manifest = await ytClient.videos.streamsClient
-            .getManifest(
-              video.id,
-              ytClients: clients,
-            )
-            .timeout(Duration(seconds: settings.connectionTimeout));
-
-        yt.StreamInfo streamInfo;
+        String? directStreamUrl;
         if (item.type == DownloadType.audio) {
-          final audioStreams = manifest.audioOnly;
-          final mp4Streams = audioStreams.where(
-            (e) =>
-                e.container.name.toLowerCase() == 'mp4' ||
-                e.container.name.toLowerCase() == 'm4a',
-          );
-          streamInfo = mp4Streams.isNotEmpty
-              ? mp4Streams.withHighestBitrate()
-              : audioStreams.withHighestBitrate();
-        } else {
-          final muxed = manifest.muxed.toList();
-          if (muxed.isEmpty) throw Exception('No muxed streams available.');
-          muxed.sort(
-            (a, b) => a.videoQuality.index.compareTo(b.videoQuality.index),
-          );
-          streamInfo = muxed.last;
+          try {
+            final resolution = await _ref
+                .read(platformStreamResolverProvider)
+                .resolveStream(video.id.value);
+            directStreamUrl = resolution.streamUrl;
+          } catch (e) {
+            debugPrint('[DownloadService] Stream resolution error: $e');
+          }
         }
 
         String downloadDir = item.type == DownloadType.audio
@@ -690,12 +707,8 @@ class DownloadService {
         final dir = Directory(downloadDir);
         if (!await dir.exists()) await dir.create(recursive: true);
 
-        final extension = item.type == DownloadType.audio
-            ? (streamInfo.container.name == 'mp4'
-                  ? 'm4a'
-                  : streamInfo.container.name)
-            : streamInfo.container.name;
         final String locId = PathUtils.generateLocId(video.id.value);
+        final extension = item.type == DownloadType.audio ? 'm4a' : 'mp4';
         final filePath = p.join(downloadDir, '$locId.$extension');
         final file = File(filePath);
         _emitUpdate(
@@ -703,30 +716,104 @@ class DownloadService {
           (i) => i.copyWith(outputPath: filePath, songId: locId),
         );
 
-        final output = file.openWrite();
-        final stream = ytClient.videos.streamsClient.get(streamInfo);
-        int downloaded = 0;
-        final total = streamInfo.size.totalBytes;
-        double lastUpdatePercent = 0.0;
+        if (directStreamUrl != null) {
+          _emitUpdate(
+            item.id,
+            (i) => i.copyWith(
+              statusMessage: 'Downloading audio stream...',
+              logs: [...i.logs, '🚀 Downloading via Android Innertube engine...'],
+            ),
+          );
+          final request = http.Request('GET', Uri.parse(directStreamUrl));
+          request.headers['User-Agent'] =
+              'com.google.android.apps.youtube.music/6.40.52 (Linux; U; Android 14; en_US) gzip';
+          final client = http.Client();
+          try {
+            final streamedResponse = await client
+                .send(request)
+                .timeout(Duration(seconds: settings.connectionTimeout));
+            final total = streamedResponse.contentLength ?? 0;
+            final output = file.openWrite();
+            int downloaded = 0;
+            double lastUpdatePercent = 0.0;
 
-        await for (final chunk in stream.timeout(
-          Duration(seconds: settings.connectionTimeout),
-        )) {
-          output.add(chunk);
-          downloaded += chunk.length;
-          final percent = (downloaded / total) * 100;
-          if (percent - lastUpdatePercent >= 1.0 || percent >= 99.9) {
-            lastUpdatePercent = percent;
-            _emitUpdate(
-              item.id,
-              (i) => i.copyWith(
-                progress: percent,
-                statusMessage: 'Downloading: ${percent.toStringAsFixed(1)}%',
-              ),
-            );
+            await for (final chunk in streamedResponse.stream.timeout(
+              Duration(seconds: settings.connectionTimeout),
+            )) {
+              output.add(chunk);
+              downloaded += chunk.length;
+              if (total > 0) {
+                final percent = (downloaded / total) * 100;
+                if (percent - lastUpdatePercent >= 1.0 || percent >= 99.9) {
+                  lastUpdatePercent = percent;
+                  _emitUpdate(
+                    item.id,
+                    (i) => i.copyWith(
+                      progress: percent,
+                      statusMessage:
+                          'Downloading: ${percent.toStringAsFixed(1)}%',
+                    ),
+                  );
+                }
+              }
+            }
+            await output.close();
+          } finally {
+            client.close();
           }
+        } else {
+          final manifest = await ytClient.videos.streamsClient
+              .getManifest(
+                video.id,
+                ytClients: clients,
+              )
+              .timeout(Duration(seconds: settings.connectionTimeout));
+
+          yt.StreamInfo streamInfo;
+          if (item.type == DownloadType.audio) {
+            final audioStreams = manifest.audioOnly;
+            final mp4Streams = audioStreams.where(
+              (e) =>
+                  e.container.name.toLowerCase() == 'mp4' ||
+                  e.container.name.toLowerCase() == 'm4a',
+            );
+            streamInfo = mp4Streams.isNotEmpty
+                ? mp4Streams.withHighestBitrate()
+                : audioStreams.withHighestBitrate();
+          } else {
+            final muxed = manifest.muxed.toList();
+            if (muxed.isEmpty) throw Exception('No muxed streams available.');
+            muxed.sort(
+              (a, b) => a.videoQuality.index.compareTo(b.videoQuality.index),
+            );
+            streamInfo = muxed.last;
+          }
+
+          final output = file.openWrite();
+          final stream = ytClient.videos.streamsClient.get(streamInfo);
+          int downloaded = 0;
+          final total = streamInfo.size.totalBytes;
+          double lastUpdatePercent = 0.0;
+
+          await for (final chunk in stream.timeout(
+            Duration(seconds: settings.connectionTimeout),
+          )) {
+            output.add(chunk);
+            downloaded += chunk.length;
+            final percent = (downloaded / total) * 100;
+            if (percent - lastUpdatePercent >= 1.0 || percent >= 99.9) {
+              lastUpdatePercent = percent;
+              _emitUpdate(
+                item.id,
+                (i) => i.copyWith(
+                  progress: percent,
+                  statusMessage: 'Downloading: ${percent.toStringAsFixed(1)}%',
+                ),
+              );
+            }
+          }
+          await output.close();
         }
-        await output.close();
 
         if (item.type == DownloadType.audio) {
           final metadata = await _fetchEnhancedMetadata(

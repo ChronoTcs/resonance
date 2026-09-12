@@ -49,9 +49,9 @@ class YoutubeSearchRepository {
             String type = 'audio';
 
             if (subtitleRuns != null && subtitleRuns.isNotEmpty) {
-              const typeLabels = {'Song', 'Video', 'EP', 'Single', 'Album'};
+              const typeLabels = {'Song', 'Lagu', 'Video', 'EP', 'Single', 'Album', 'Artis', 'Artist', 'Canción', 'Chanson', 'Track'};
               final firstText = (subtitleRuns[0]['text'] as String? ?? '').trim();
-              if (firstText == 'Video') type = 'video';
+              if (firstText.toLowerCase() == 'video') type = 'video';
 
               for (var i = subtitleRuns.length - 1; i >= 0; i--) {
                 final text = (subtitleRuns[i]['text'] as String? ?? '').trim();
@@ -61,13 +61,26 @@ class YoutubeSearchRepository {
                 }
               }
 
-              if (typeLabels.contains(firstText)) {
-                if (subtitleRuns.length > 2) {
-                  author = (subtitleRuns[2]['text'] as String? ?? 'Unknown Author').trim();
+              // Prefer extracting artist via navigationEndpoint (authoritative)
+              for (final r in subtitleRuns) {
+                final pageType = r['navigationEndpoint']?['browseEndpoint']?['browseEndpointContextSupportedConfigs']?['browseEndpointContextMusicConfig']?['pageType'] as String?;
+                final browseId = r['navigationEndpoint']?['browseEndpoint']?['browseId'] as String?;
+                final text = (r['text'] as String? ?? '').trim();
+                if (text.isNotEmpty && (pageType == 'MUSIC_PAGE_TYPE_ARTIST' || (browseId != null && browseId.startsWith('UC')))) {
+                  author = text;
+                  break;
                 }
-              } else {
-                if (firstText.isNotEmpty && firstText != '•' && firstText != '·') {
-                  author = firstText;
+              }
+
+              if (author == 'Unknown Author') {
+                if (typeLabels.contains(firstText)) {
+                  if (subtitleRuns.length > 2) {
+                    author = (subtitleRuns[2]['text'] as String? ?? 'Unknown Author').trim();
+                  }
+                } else {
+                  if (firstText.isNotEmpty && firstText != '•' && firstText != '·') {
+                    author = firstText;
+                  }
                 }
               }
             }
@@ -111,6 +124,7 @@ class YoutubeSearchRepository {
                     ?['musicResponsiveListItemFlexColumnRenderer']?['text']) ??
                 'Unknown',
             author: metadata.author,
+            album: metadata.album,
             duration: metadata.duration,
             type: metadata.type,
             thumbnailUrl: ThumbnailUtils.upgradeResolution(
@@ -297,7 +311,7 @@ class YoutubeSearchRepository {
     final runs = renderer['flexColumns']?[1]?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'] as List?;
     if (runs == null || runs.isEmpty) return (author: "Unknown Author", album: null, duration: "0:00", type: "audio");
 
-    const typeLabels = {'Song', 'Video', 'EP', 'Single', 'Album'};
+    const typeLabels = {'Song', 'Lagu', 'Video', 'EP', 'Single', 'Album', 'Artis', 'Artist', 'Canción', 'Chanson', 'Track'};
 
     // 1. Extract Duration (usually the last run in flexColumns[1])
     String duration = "0:00";
@@ -312,8 +326,24 @@ class YoutubeSearchRepository {
     // 2. Determine track type ('video' or 'audio')
     String type = 'audio';
     final firstRunText = (runs[0]['text'] as String? ?? '').trim();
-    if (firstRunText == 'Video') {
+    if (firstRunText.toLowerCase() == 'video') {
       type = 'video';
+    }
+
+    // 3. Extract Artist and Album by checking navigationEndpoint browse types (authoritative)
+    String? endpointArtist;
+    String? endpointAlbum;
+    for (final r in runs) {
+      final pageType = r['navigationEndpoint']?['browseEndpoint']?['browseEndpointContextSupportedConfigs']?['browseEndpointContextMusicConfig']?['pageType'] as String?;
+      final browseId = r['navigationEndpoint']?['browseEndpoint']?['browseId'] as String?;
+      final text = (r['text'] as String? ?? '').trim();
+      if (text.isEmpty || text == '•' || text == '·') continue;
+
+      if (endpointArtist == null && (pageType == 'MUSIC_PAGE_TYPE_ARTIST' || (browseId != null && browseId.startsWith('UC')))) {
+        endpointArtist = text;
+      } else if (endpointAlbum == null && (pageType == 'MUSIC_PAGE_TYPE_ALBUM' || (browseId != null && browseId.startsWith('MPREb_')))) {
+        endpointAlbum = text;
+      }
     }
 
     // Filter meaningful non-separator runs
@@ -322,16 +352,16 @@ class YoutubeSearchRepository {
         .where((t) => t.isNotEmpty && t != '•' && t != '·' && !RegExp(r'^\d+:\d+(?::\d+)?$').hasMatch(t))
         .toList();
 
-    String author = 'Unknown Author';
-    String? album;
+    String author = endpointArtist ?? 'Unknown Author';
+    String? album = endpointAlbum;
 
-    if (validRuns.isNotEmpty) {
+    if (author == 'Unknown Author' && validRuns.isNotEmpty) {
       if (typeLabels.contains(validRuns.first)) {
         if (validRuns.length > 1) author = validRuns[1];
-        if (validRuns.length > 2) album = validRuns[2];
+        if (validRuns.length > 2 && album == null) album = validRuns[2];
       } else {
         author = validRuns.first;
-        if (validRuns.length > 1) album = validRuns[1];
+        if (validRuns.length > 1 && album == null) album = validRuns[1];
       }
     }
 

@@ -62,6 +62,7 @@ class AppWindowStyleListener extends WindowListener {
   @override
   void onWindowLeaveFullScreen() {
     windowManager.setTitleBarStyle(TitleBarStyle.hidden);
+    windowManager.setMinimumSize(const Size(800, 600));
     WidgetsBinding.instance.scheduleWarmUpFrame();
   }
 

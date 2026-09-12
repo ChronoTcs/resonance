@@ -159,9 +159,85 @@ class QueueService {
     _queue = [..._queue, item];
   }
 
+  /// Inserts a track to be played immediately next (after _currentIndex).
+  void insertTrackNext(MediaItem item) {
+    if (_queue.isEmpty || _currentIndex < 0) {
+      _queue = [item];
+      _currentIndex = 0;
+      return;
+    }
+    final targetIndex = (_currentIndex + 1).clamp(0, _queue.length);
+    _queue = List.from(_queue)..insert(targetIndex, item);
+    if (_isShuffleEnabled) {
+      final targetShuffleIndex = (_shuffleQueueIndex + 1).clamp(0, _shuffleQueue.length);
+      _shuffleQueue.insert(targetShuffleIndex, item.id ?? item.path);
+    }
+  }
+
   /// Appends multiple tracks without resetting the queue cursor.
   void appendTracks(List<MediaItem> items) {
     _queue = [..._queue, ...items];
+  }
+
+  /// Reorders track at [oldIndex] to [newIndex].
+  /// Designed for Flutter's modern onReorderItem callback (pre-adjusted index).
+  /// Preserves the currently playing track pointer across reorders.
+  void reorderQueue(int oldIndex, int newIndex) {
+    if (oldIndex < 0 || oldIndex >= _queue.length) return;
+    if (newIndex < 0) newIndex = 0;
+
+    final item = _queue.removeAt(oldIndex);
+    if (newIndex > _queue.length) newIndex = _queue.length;
+    _queue.insert(newIndex, item);
+
+    // Maintain currently playing track index accurately
+    if (_currentIndex == oldIndex) {
+      _currentIndex = newIndex;
+    } else if (oldIndex < _currentIndex && newIndex >= _currentIndex) {
+      _currentIndex -= 1;
+    } else if (oldIndex > _currentIndex && newIndex <= _currentIndex) {
+      _currentIndex += 1;
+    }
+
+    if (_isShuffleEnabled) {
+      _resetShuffleQueue();
+    }
+  }
+
+  /// Removes track at [index], maintaining valid cursor.
+  void removeTrackAt(int index) {
+    if (index < 0 || index >= _queue.length) return;
+    _queue.removeAt(index);
+    if (_currentIndex > index) {
+      _currentIndex -= 1;
+    } else if (_currentIndex >= _queue.length) {
+      _currentIndex = _queue.length - 1;
+    }
+    if (_isShuffleEnabled) {
+      _resetShuffleQueue();
+    }
+  }
+
+  /// Removes all occurrences of a track matching [trackId], maintaining valid cursor.
+  void removeTrackById(String trackId) {
+    if (_queue.isEmpty) return;
+    int index;
+    while ((index = _queue.indexWhere((item) => (item.id ?? item.path) == trackId)) != -1) {
+      removeTrackAt(index);
+    }
+  }
+
+  /// Clears all tracks ahead in queue (after _currentIndex).
+  void clearUpcoming() {
+    if (_currentIndex < 0 || _queue.isEmpty) {
+      _queue.clear();
+      _currentIndex = -1;
+    } else {
+      _queue = _queue.sublist(0, _currentIndex + 1);
+    }
+    if (_isShuffleEnabled) {
+      _resetShuffleQueue();
+    }
   }
 
   MediaItem? getPreviousTrack() {

@@ -1,6 +1,7 @@
 import 'package:resonance/core/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:resonance/core/configs/app_breakpoints.dart';
 import 'package:resonance/core/utils/app_icons.dart';
 import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/core/providers/navigation_provider.dart';
@@ -86,12 +87,15 @@ class _TopNavigationHeaderState extends ConsumerState<TopNavigationHeader> {
       }
     }
 
+    final bool isDesktop = AppBreakpoints.isWide(context);
+    final double searchWidth = isDesktop ? 240.0 : (MediaQuery.sizeOf(context).width * 0.42).clamp(110.0, 200.0);
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
           height: 49,
-          padding: const EdgeInsets.symmetric(horizontal: 24),
+          padding: EdgeInsets.symmetric(horizontal: isDesktop ? 24 : 16),
           color: theme.colorScheme.surface,
           child: Row(
             children: [
@@ -142,206 +146,17 @@ class _TopNavigationHeaderState extends ConsumerState<TopNavigationHeader> {
                             link: _layerLink,
                             child: OverlayPortal(
                               controller: _overlayController,
-                              overlayChildBuilder: (context) {
-                                final history = ref.watch(
-                                  searchHistoryProvider,
-                                );
-                                if (history.isEmpty) {
-                                  return const SizedBox.shrink();
-                                }
-
-                                return Align(
-                                  alignment: Alignment.topLeft,
-                                  child: CompositedTransformFollower(
-                                    link: _layerLink,
-                                    targetAnchor: Alignment.bottomLeft,
-                                    followerAnchor: Alignment.topLeft,
-                                    offset: const Offset(0, 4),
-                                    child: Material(
-                                      elevation: 8,
-                                      color: theme.colorScheme.surface,
-                                      borderRadius: BorderRadius.circular(10),
-                                      clipBehavior: Clip.antiAlias,
-                                      child: Container(
-                                        width: 240,
-                                        constraints: const BoxConstraints(
-                                          maxHeight: 220,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          borderRadius: BorderRadius.circular(
-                                            10,
-                                          ),
-                                          border: Border.all(
-                                            color: theme.dividerColor
-                                                .withValues(alpha: 0.12),
-                                          ),
-                                        ),
-                                        child: Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Flexible(
-                                              child: SingleChildScrollView(
-                                                physics:
-                                                    const BouncingScrollPhysics(),
-                                                child: Column(
-                                                  mainAxisSize:
-                                                      MainAxisSize.min,
-                                                  children: [
-                                                    for (final item in history)
-                                                      InkWell(
-                                                        onTap: () {
-                                                          _searchController
-                                                                  .text =
-                                                              item;
-                                                          _submitSearch(item);
-                                                        },
-                                                        child: Padding(
-                                                          padding:
-                                                              const EdgeInsets.symmetric(
-                                                                horizontal: 12,
-                                                                vertical: 8,
-                                                              ),
-                                                          child: Row(
-                                                            children: [
-                                                              Icon(
-                                                                UIcons
-                                                                    .regular
-                                                                    .clock,
-                                                                size: 14,
-                                                                color: theme
-                                                                    .colorScheme
-                                                                    .onSurface
-                                                                    .withValues(
-                                                                      alpha:
-                                                                          0.5,
-                                                                    ),
-                                                              ),
-                                                              const SizedBox(
-                                                                width: 10,
-                                                              ),
-                                                              Expanded(
-                                                                child: Text(
-                                                                  item,
-                                                                  maxLines: 1,
-                                                                  overflow:
-                                                                      TextOverflow
-                                                                          .ellipsis,
-                                                                  style: TextStyle(
-                                                                    fontSize:
-                                                                        13,
-                                                                    color: theme
-                                                                        .colorScheme
-                                                                        .onSurface,
-                                                                  ),
-                                                                ),
-                                                              ),
-                                                              const SizedBox(
-                                                                width: 8,
-                                                              ),
-                                                              InkWell(
-                                                                borderRadius:
-                                                                    BorderRadius.circular(
-                                                                      6,
-                                                                    ),
-                                                                onTap: () {
-                                                                  ref
-                                                                      .read(
-                                                                        searchHistoryProvider
-                                                                            .notifier,
-                                                                      )
-                                                                      .removeQuery(
-                                                                        item,
-                                                                      );
-                                                                  if (history
-                                                                          .length <=
-                                                                      1) {
-                                                                    _overlayController
-                                                                        .hide();
-                                                                  }
-                                                                },
-                                                                child: Padding(
-                                                                  padding:
-                                                                      const EdgeInsets.all(
-                                                                        4.0,
-                                                                      ),
-                                                                  child: Icon(
-                                                                    UIcons
-                                                                        .regular
-                                                                        .cross_small,
-                                                                    size: 14,
-                                                                    color: theme
-                                                                        .colorScheme
-                                                                        .onSurface
-                                                                        .withValues(
-                                                                          alpha:
-                                                                              0.5,
-                                                                        ),
-                                                                  ),
-                                                                ),
-                                                              ),
-                                                            ],
-                                                          ),
-                                                        ),
-                                                      ),
-                                                  ],
-                                                ),
-                                              ),
-                                            ),
-                                            const Divider(height: 1),
-                                            InkWell(
-                                              onTap: () {
-                                                ref
-                                                    .read(
-                                                      searchHistoryProvider
-                                                          .notifier,
-                                                    )
-                                                    .clearAll();
-                                                _overlayController.hide();
-                                              },
-                                              child: Container(
-                                                width: double.infinity,
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      vertical: 10,
-                                                    ),
-                                                color: theme.colorScheme.primary
-                                                    .withValues(alpha: 0.05),
-                                                child: Row(
-                                                  mainAxisAlignment:
-                                                      MainAxisAlignment.center,
-                                                  children: [
-                                                    Icon(
-                                                      UIcons.regular.trash,
-                                                      size: 12,
-                                                      color: theme
-                                                          .colorScheme
-                                                          .primary,
-                                                    ),
-                                                    const SizedBox(width: 6),
-                                                    Text(
-                                                      'Clear Search History',
-                                                      style: TextStyle(
-                                                        fontSize: 12,
-                                                        fontWeight:
-                                                            FontWeight.w600,
-                                                        color: theme
-                                                            .colorScheme
-                                                            .primary,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              },
+                              overlayChildBuilder: (context) => _SearchHistoryOverlay(
+                                link: _layerLink,
+                                searchWidth: searchWidth,
+                                onSelect: (item) {
+                                  _searchController.text = item;
+                                  _submitSearch(item);
+                                },
+                                onClose: () => _overlayController.hide(),
+                              ),
                               child: SizedBox(
-                                width: 240,
+                                width: searchWidth,
                                 height: 36,
                                 child: TextField(
                                   controller: _searchController,
@@ -351,7 +166,7 @@ class _TopNavigationHeaderState extends ConsumerState<TopNavigationHeader> {
                                     fontSize: 13,
                                   ),
                                   decoration: InputDecoration(
-                                    hintText: 'Search songs online...',
+                                    hintText: isDesktop ? 'Search songs online...' : 'Search...',
                                     hintStyle: theme.textTheme.bodyMedium
                                         ?.copyWith(
                                           color: theme.hintColor.withValues(
@@ -461,6 +276,7 @@ class _TopNavigationHeaderState extends ConsumerState<TopNavigationHeader> {
     final theme = Theme.of(context);
 
     return InkWell(
+      mouseCursor: SystemMouseCursors.click,
       onTap: () {
         ref.read(mainNavigationProvider.notifier).setIndex(targetIndex);
       },
@@ -483,6 +299,158 @@ class _TopNavigationHeaderState extends ConsumerState<TopNavigationHeader> {
                 color: isActive ? theme.primaryColor : Colors.transparent,
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SearchHistoryOverlay extends ConsumerWidget {
+  const _SearchHistoryOverlay({
+    required this.link,
+    required this.searchWidth,
+    required this.onSelect,
+    required this.onClose,
+  });
+
+  final LayerLink link;
+  final double searchWidth;
+  final void Function(String query) onSelect;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final history = ref.watch(searchHistoryProvider);
+    if (history.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final theme = Theme.of(context);
+
+    return Align(
+      alignment: Alignment.topLeft,
+      child: CompositedTransformFollower(
+        link: link,
+        targetAnchor: Alignment.bottomLeft,
+        followerAnchor: Alignment.topLeft,
+        offset: const Offset(0, 4),
+        child: Material(
+          elevation: 8,
+          color: theme.colorScheme.surface,
+          borderRadius: BorderRadius.circular(10),
+          clipBehavior: Clip.antiAlias,
+          child: Container(
+            width: searchWidth,
+            constraints: const BoxConstraints(maxHeight: 220),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: theme.dividerColor.withValues(alpha: 0.12),
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (final item in history)
+                          InkWell(
+                            mouseCursor: SystemMouseCursors.click,
+                            onTap: () => onSelect(item),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    UIcons.regular.clock,
+                                    size: 14,
+                                    color: theme.colorScheme.onSurface
+                                        .withValues(alpha: 0.5),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      item,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: theme.colorScheme.onSurface,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  InkWell(
+                                    mouseCursor: SystemMouseCursors.click,
+                                    borderRadius: BorderRadius.circular(6),
+                                    onTap: () {
+                                      ref
+                                          .read(searchHistoryProvider.notifier)
+                                          .removeQuery(item);
+                                      if (history.length <= 1) {
+                                        onClose();
+                                      }
+                                    },
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(4.0),
+                                      child: Icon(
+                                        UIcons.regular.cross_small,
+                                        size: 14,
+                                        color: theme.colorScheme.onSurface
+                                            .withValues(alpha: 0.5),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                const Divider(height: 1),
+                InkWell(
+                  mouseCursor: SystemMouseCursors.click,
+                  onTap: () {
+                    ref.read(searchHistoryProvider.notifier).clearAll();
+                    onClose();
+                  },
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    color: theme.colorScheme.primary.withValues(alpha: 0.05),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          UIcons.regular.trash,
+                          size: 12,
+                          color: theme.colorScheme.primary,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Clear Search History',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

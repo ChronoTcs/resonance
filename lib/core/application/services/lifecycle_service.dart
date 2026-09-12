@@ -1,7 +1,8 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance/core/data/services/data_usage_service.dart';
-import 'package:resonance/core/data/services/po_token_provider_service.dart';
+import 'package:resonance/features/stream/platform/windows/windows_po_token_service.dart';
 
 /// Manages app lifecycle events: flushes data on pause/hide/detach,
 /// and stops background services on dispose.
@@ -28,7 +29,9 @@ class AppLifecycleService {
   }
 
   void dispose() {
-    poTokenProviderService.stop();
+    if (Platform.isWindows) {
+      WindowsPoTokenService().stop();
+    }
     _listener.dispose();
   }
 }

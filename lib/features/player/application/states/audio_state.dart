@@ -17,6 +17,8 @@ class AudioState {
   final int currentIndex;
   final MediaItem? nextTrack;
   final bool isLoading;
+  final bool isPlaylistMode;
+  final String? activePlaylistId;
 
   AudioState({
     this.currentTrack,
@@ -32,6 +34,8 @@ class AudioState {
     this.currentIndex = -1,
     this.nextTrack,
     this.isLoading = false,
+    this.isPlaylistMode = false,
+    this.activePlaylistId,
   });
 
   AudioState copyWith({
@@ -48,9 +52,14 @@ class AudioState {
     int? currentIndex,
     MediaItem? nextTrack,
     bool? isLoading,
+    bool? isPlaylistMode,
+    String? activePlaylistId,
+    bool clearCurrentTrack = false,
+    bool clearNextTrack = false,
+    bool clearActivePlaylistId = false,
   }) {
     return AudioState(
-      currentTrack: currentTrack ?? this.currentTrack,
+      currentTrack: clearCurrentTrack ? null : (currentTrack ?? this.currentTrack),
       isPlaying: isPlaying ?? this.isPlaying,
       position: position ?? this.position,
       duration: duration ?? this.duration,
@@ -61,8 +70,12 @@ class AudioState {
       pitch: pitch ?? this.pitch,
       queue: queue ?? this.queue,
       currentIndex: currentIndex ?? this.currentIndex,
-      nextTrack: nextTrack ?? this.nextTrack,
+      nextTrack: clearNextTrack ? null : (nextTrack ?? this.nextTrack),
       isLoading: isLoading ?? this.isLoading,
+      isPlaylistMode: isPlaylistMode ?? this.isPlaylistMode,
+      activePlaylistId: clearActivePlaylistId
+          ? null
+          : (activePlaylistId ?? this.activePlaylistId),
     );
   }
 }

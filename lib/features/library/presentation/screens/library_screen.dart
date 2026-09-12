@@ -1,15 +1,23 @@
 import 'package:resonance/core/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:resonance/core/configs/app_breakpoints.dart';
 import 'package:silky_scroll/silky_scroll.dart';
 import '../../application/library_provider.dart';
 import '../../data/models/media_item.dart';
 import '../../../player/application/services/queue_orchestrator.dart';
+import 'package:resonance/features/player/utils/media_action_utils.dart';
 import 'package:resonance/features/library/presentation/widgets/media_actions_bottom_sheet.dart';
 import 'package:resonance/core/utils/uicons.dart';
 
+import 'package:resonance/features/download/presentation/screens/download_screen.dart';
 import 'package:resonance/features/dashboard/presentation/widgets/top_navigation_header.dart';
 import 'package:resonance/features/playlist/presentation/screens/playlist_screen.dart';
+import '../widgets/morphing_library_bar.dart';
+import '../widgets/add_audio_sheet.dart';
+import '../widgets/blocked_tracks_sheet.dart';
+import '../../application/blocked_tracks_provider.dart';
+import 'package:resonance/features/settings/application/notification_provider.dart';
 
 class LibraryScreen extends ConsumerStatefulWidget {
   const LibraryScreen({super.key});
@@ -20,237 +28,356 @@ class LibraryScreen extends ConsumerStatefulWidget {
 
 class _LibraryScreenState extends ConsumerState<LibraryScreen>
     with TickerProviderStateMixin {
-  late TabController _tabController;
   final TextEditingController _searchController = TextEditingController();
   bool _isSearching = false;
   String _searchQuery = '';
 
   @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 2, vsync: this);
-  }
-
-  @override
   void dispose() {
-    _tabController.dispose();
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _showAddOptions(BuildContext context) {
+    AddAudioSheet.show(context);
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final libraryState = ref.watch(libraryProvider);
-
     final bool hasPaths = libraryState.musicFolderPath != null;
-    
-    // Define the main content based on state
-    Widget content;
+    final blockedCount = ref.watch(blockedTracksProvider).length;
 
-    if (!hasPaths) {
-      content = const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 32),
-        child: Center(
-          child: Text(
-            'Library paths not configured.\nPlease go to Settings to add folders.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey, fontSize: 16),
-          ),
-        ),
-      );
-    } else if (libraryState.isLoading && libraryState.allMedia.isEmpty) {
-      content = const Center(child: CircularProgressIndicator());
-    } else if (libraryState.allMedia.isEmpty && !libraryState.isLoading) {
-      content = const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 32),
-        child: Center(
-          child: Text(
-            'No media files found in the configured folders.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey, fontSize: 16),
-          ),
-        ),
-      );
-    } else {
+    Widget buildMusicTab() {
       final audioList = libraryState.allMedia
-          .where((m) => m.type == 'audio' && 
-              (m.title.toLowerCase().contains(_searchQuery.toLowerCase()) || 
-               (m.artist?.toLowerCase().contains(_searchQuery.toLowerCase()) ?? false)))
+          .where((m) =>
+              m.type == 'audio' &&
+              (m.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+                  (m.artist?.toLowerCase().contains(_searchQuery.toLowerCase()) ??
+                      false)))
           .toList();
 
-      content = TabBarView(
-        controller: _tabController,
-        children: [
-          _buildMediaList(audioList, ref),
-          const PlaylistScreen(isLocalOnly: true),
+      return SilkyCustomScrollView(
+        slivers: [
+          const SliverToBoxAdapter(child: SizedBox(height: 12)),
+          if (!hasPaths)
+            _buildEmptyState(
+              context,
+              'Library paths not configured',
+              'Go to Settings to add music folders.',
+              icon: UIcons.regular.folder,
+            )
+          else if (libraryState.isLoading && libraryState.allMedia.isEmpty)
+            const SliverFillRemaining(
+              hasScrollBody: false,
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (audioList.isEmpty)
+            _buildEmptyState(
+              context,
+              _searchQuery.isNotEmpty ? 'No matching tracks' : 'No local tracks',
+              _searchQuery.isNotEmpty
+                  ? 'Try searching with another keyword.'
+                  : 'Import audio files from your device or download songs.',
+              buttonLabel: _searchQuery.isEmpty ? 'Add Audio Files' : null,
+              onButtonPressed:
+                  _searchQuery.isEmpty ? () => _showAddOptions(context) : null,
+              icon: UIcons.regular.music,
+            )
+          else
+            SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final item = audioList[index];
+                  return _LibraryTrackTile(
+                    item: item,
+                    index: index,
+                    onTap: () {
+                      ref
+                          .read(queueOrchestratorProvider)
+                          .playSequentialContext(item, audioList);
+                    },
+                    onMoreOptions: () {
+                      MediaActionsBottomSheet.show(
+                        context: context,
+                        item: item,
+                        onDelete: () => _confirmDelete(context, ref, item),
+                      );
+                    },
+                  );
+                },
+                childCount: audioList.length,
+              ),
+            ),
+          const SliverToBoxAdapter(child: SizedBox(height: 100)),
         ],
       );
     }
 
-    return Scaffold(
-      resizeToAvoidBottomInset: false,
-      body: Column(
-        children: [
-          TopNavigationHeader(
-            left: _isSearching
-                ? TextField(
-                    controller: _searchController,
-                    autofocus: true,
-                    decoration: const InputDecoration(
-                      hintText: 'Search in library...',
-                      border: InputBorder.none,
+    final bool isDesktop = AppBreakpoints.isWide(context);
+    final mobileNavMode = ref.watch(libraryNavModeProvider);
+
+    final Widget content = isDesktop
+        ? buildMusicTab()
+        : AnimatedSwitcher(
+            duration: const Duration(milliseconds: 220),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            child: KeyedSubtree(
+              key: ValueKey(mobileNavMode),
+              child: mobileNavMode == LibraryNavMode.music
+                  ? buildMusicTab()
+                  : mobileNavMode == LibraryNavMode.playlists
+                      ? const PlaylistScreen(showHeader: false)
+                      : const DownloadScreen(showHeader: false),
+            ),
+          );
+
+    return PopScope(
+      canPop: !_isSearching,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _isSearching) {
+          setState(() {
+            _isSearching = false;
+            _searchQuery = '';
+            _searchController.clear();
+          });
+        }
+      },
+      child: Scaffold(
+        resizeToAvoidBottomInset: !isDesktop,
+        body: Column(
+          children: [
+            const OfflineBanner(),
+            TopNavigationHeader(
+              left: _isSearching
+                  ? TextField(
+                      controller: _searchController,
+                      autofocus: true,
+                      decoration: const InputDecoration(
+                        hintText: 'Search in library...',
+                        border: InputBorder.none,
+                      ),
+                      onChanged: (value) {
+                        setState(() {
+                          _searchQuery = value;
+                        });
+                      },
+                    )
+                  : Text(
+                      isDesktop ? 'Local Library' : 'Library',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                    onChanged: (value) {
+              right: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Badge(
+                    isLabelVisible: blockedCount > 0,
+                    label: Text(
+                      '$blockedCount',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    backgroundColor: theme.colorScheme.error,
+                    textColor: theme.colorScheme.onError,
+                    child: ReusableHoverIconButton(
+                      icon: UIcons.regular.ban,
+                      tooltip: blockedCount > 0
+                          ? 'Blocked music ($blockedCount)'
+                          : 'Blocked music',
+                      iconSize: 18,
+                      onTap: () => BlockedTracksSheet.show(context),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ReusableHoverIconButton(
+                    icon: UIcons.regular.add,
+                    tooltip: 'Add audio',
+                    iconSize: 18,
+                    onTap: () => _showAddOptions(context),
+                  ),
+                  const SizedBox(width: 8),
+                  ReusableHoverIconButton(
+                    icon: _isSearching
+                        ? UIcons.regular.cross_small
+                        : UIcons.regular.search,
+                    tooltip: _isSearching ? 'Close search' : 'Search library',
+                    iconSize: 18,
+                    onTap: () {
                       setState(() {
-                        _searchQuery = value;
+                        if (_isSearching) {
+                          _isSearching = false;
+                          _searchQuery = '';
+                          _searchController.clear();
+                        } else {
+                          _isSearching = true;
+                        }
                       });
                     },
-                  )
-                : Row(
-                    children: [
-                      SizedBox(
-                        width: 140,
-                        child: Text(
-                          'Local Library',
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 24),
-                      Expanded(
-                        child: SizedBox(
-                          height: 50,
-                          child: TabBar(
-                            controller: _tabController,
-                            dividerColor: Colors.transparent,
-                            indicatorSize: TabBarIndicatorSize.label,
-                            overlayColor: WidgetStateProperty.resolveWith<Color?>((states) {
-                              if (states.contains(WidgetState.hovered)) {
-                                return theme.primaryColor.withValues(alpha: 0.08);
-                              }
-                              return null;
-                            }),
-                            tabs: [
-                              Tab(
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(UIcons.regular.music, size: 14),
-                                    const SizedBox(width: 6),
-                                    const Text('Music'),
-                                  ],
-                                ),
-                              ),
-                              Tab(
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(UIcons.regular.list_music, size: 14),
-                                    const SizedBox(width: 6),
-                                    const Text('Playlists'),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
                   ),
-            right: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ReusableHoverIconButton(
-                  icon: UIcons.regular.add,
-                  tooltip: 'Add audio files',
-                  iconSize: 18,
-                  onTap: () {
-                    ref.read(libraryProvider.notifier).importAudioFiles(context);
-                  },
-                ),
-                const SizedBox(width: 8),
-                ReusableHoverIconButton(
-                  icon: _isSearching ? UIcons.regular.cross_small : UIcons.regular.search,
-                  tooltip: _isSearching ? 'Close search' : 'Search library',
-                  iconSize: 18,
-                  onTap: () {
-                    setState(() {
-                      if (_isSearching) {
-                        _isSearching = false;
-                        _searchQuery = '';
-                        _searchController.clear();
-                      } else {
-                        _isSearching = true;
+                  const SizedBox(width: 8),
+                  ReusableHoverIconButton(
+                    icon: libraryState.isLoading ? null : UIcons.regular.refresh,
+                    tooltip: 'Scan folders',
+                    iconSize: 18,
+                    onTap: () {
+                      final isMusicTab = isDesktop ||
+                          mobileNavMode == LibraryNavMode.music;
+                      if (isMusicTab) {
+                        ref.read(libraryProvider.notifier).scanLibrary();
                       }
-                    });
-                  },
-                ),
-                const SizedBox(width: 8),
-                ReusableHoverIconButton(
-                  icon: libraryState.isLoading ? null : UIcons.regular.refresh,
-                  tooltip: 'Scan folders',
-                  iconSize: 18,
-                  onTap: () {
-                    if (_tabController.index == 0) {
-                      ref.read(libraryProvider.notifier).scanLibrary();
-                    }
-                  },
-                  child: libraryState.isLoading
-                      ? SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              theme.primaryColor,
+                    },
+                    child: libraryState.isLoading
+                        ? SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                theme.primaryColor,
+                              ),
                             ),
-                          ),
-                        )
-                      : null,
-                ),
-              ],
+                          )
+                        : null,
+                  ),
+                ],
+              ),
             ),
-          ),
-          Expanded(
-            child: content,
-          ),
-        ],
+            if (!isDesktop && !_isSearching)
+              MorphingLibraryBar(
+                currentMode: mobileNavMode,
+                onModeChanged: (mode) {
+                  ref.read(libraryNavModeProvider.notifier).setMode(mode);
+                },
+              ),
+            Expanded(
+              child: content,
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildMediaList(List<MediaItem> mediaList, WidgetRef ref) {
-    if (mediaList.isEmpty) {
-      return const Center(
-        child: Text(
-          'No items found in this category.',
-          style: TextStyle(color: Colors.grey),
-        ),
-      );
-    }
-
-    return SilkyListView.builder(
-      itemCount: mediaList.length,
-      padding: const EdgeInsets.only(bottom: 80),
-      itemBuilder: (context, index) {
-        final item = mediaList[index];
-
-        return TweenAnimationBuilder<double>(
-          duration: Duration(milliseconds: 300 + (index % 10 * 100)),
-          tween: Tween(begin: 0.0, end: 1.0),
-          curve: Curves.easeOutCubic,
-          builder: (context, value, child) {
-            return Transform.translate(
-              offset: Offset(0, 20 * (1 - value)),
-              child: Opacity(
-                opacity: value,
-                child: child,
+  Widget _buildEmptyState(
+    BuildContext context,
+    String title,
+    String subtitle, {
+    String? buttonLabel,
+    VoidCallback? onButtonPressed,
+    IconData? icon,
+  }) {
+    final theme = Theme.of(context);
+    return SliverFillRemaining(
+      hasScrollBody: false,
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon ?? UIcons.regular.music,
+              size: 64,
+              color: theme.hintColor.withValues(alpha: 0.5),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              style: theme.textTheme.titleMedium
+                  ?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Text(
+                subtitle,
+                textAlign: TextAlign.center,
+                style:
+                    theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
               ),
-            );
-          },
-          child: ListTile(
+            ),
+            if (buttonLabel != null && onButtonPressed != null) ...[
+              const SizedBox(height: 24),
+              ResonanceButton(
+                onPressed: onButtonPressed,
+                icon: UIcons.regular.add,
+                label: buttonLabel,
+                style: ResonanceButtonStyle.primary,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _confirmDelete(BuildContext context, WidgetRef ref, MediaItem item) {
+    showDialog(
+      context: context,
+      builder: (dlg) => ResonanceConfirmDialog(
+        title: 'Delete Track',
+        content: 'Permanently delete "${item.title}" from your device? This cannot be undone.',
+        confirmLabel: 'Delete',
+        isDanger: true,
+        onConfirm: () {
+          ref.read(libraryProvider.notifier).deleteTrack(item);
+          ref.read(notificationProvider.notifier).showNotification(
+            'Track Deleted',
+            '"${item.title}" deleted from library.',
+            target: 'target:library',
+            silentOsNotification: true,
+          );
+        },
+      ),
+    );
+  }
+}
+
+
+
+class _LibraryTrackTile extends ConsumerWidget {
+  final MediaItem item;
+  final int index;
+  final VoidCallback onTap;
+  final VoidCallback onMoreOptions;
+
+  const _LibraryTrackTile({
+    required this.item,
+    required this.index,
+    required this.onTap,
+    required this.onMoreOptions,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return TweenAnimationBuilder<double>(
+      duration: Duration(milliseconds: 300 + (index % 10 * 100)),
+      tween: Tween(begin: 0.0, end: 1.0),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) {
+        return Transform.translate(
+          offset: Offset(0, 20 * (1 - value)),
+          child: Opacity(
+            opacity: value,
+            child: child,
+          ),
+        );
+      },
+      child: GestureDetector(
+        onSecondaryTapDown: (details) {
+          MediaActionUtils.showTrackContextMenu(
+            context: context,
+            ref: ref,
+            position: details.globalPosition,
+            item: item,
+          );
+        },
+        child: ListTile(
+          mouseCursor: SystemMouseCursors.click,
           leading: MediaArtworkWidget(
             item: item,
             width: 48,
@@ -266,49 +393,14 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
           ),
           trailing: OverflowMenuButton(
             tooltip: 'More options',
-            onTap: () {
-              showModalBottomSheet(
-                context: context,
-                builder: (_) => MediaActionsBottomSheet(
-                  item: item,
-                  onDelete: () => _confirmDelete(context, ref, item),
-                ),
-              );
-            },
+            onTap: onMoreOptions,
           ),
-          onTap: () {
-            ref.read(queueOrchestratorProvider).playSequentialContext(item, mediaList);
-          },
-          onLongPress: () {
-            showModalBottomSheet(
-              context: context,
-              builder: (_) => MediaActionsBottomSheet(
-                item: item,
-                onDelete: () => _confirmDelete(context, ref, item),
-              ),
-            );
-          },
-          ),
-        );
-      },
-    );
-  }
-
-  void _confirmDelete(BuildContext context, WidgetRef ref, MediaItem item) {
-    showDialog(
-      context: context,
-      builder: (dlg) => ResonanceConfirmDialog(
-        title: 'Delete Track',
-        content: 'Permanently delete "${item.title}" from your device? This cannot be undone.',
-        confirmLabel: 'Delete',
-        isDanger: true,
-        onConfirm: () {
-          ref.read(libraryProvider.notifier).deleteTrack(item);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('"${item.title}" deleted.')),
-          );
-        },
+          onTap: onTap,
+          onLongPress: onMoreOptions,
+        ),
       ),
     );
   }
 }
+
+

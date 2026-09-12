@@ -1,5 +1,9 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:resonance/core/application/services/permission_service.dart';
+import 'package:resonance/core/configs/app_breakpoints.dart';
+import 'package:resonance/features/settings/application/notification_provider.dart';
 import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/core/widgets/widgets.dart';
 import 'package:resonance/features/settings/application/app_behavior_provider.dart';
@@ -31,63 +35,45 @@ class _ReleaseManagerScreenState extends ConsumerState<ReleaseManagerScreen> {
     final updateNotifier = ref.read(updateProvider.notifier);
     final appBehavior = ref.watch(appBehaviorProvider);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // ── 1. Page Header with Back Button ─────────────────────────────────
-        Row(
-          children: [
-            ReusableHoverIconButton(
-              icon: UIcons.regular.angle_small_left,
-              tooltip: 'Back to Settings',
-              onTap: () {
-                if (widget.onBack != null) {
-                  widget.onBack!();
-                } else if (Navigator.canPop(context)) {
-                  Navigator.pop(context);
-                }
-              },
-              iconSize: 20,
-            ),
-            const SizedBox(width: 12),
-            Text(
-              'Releases & Updates',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: theme.colorScheme.onSurface,
-              ),
-            ),
-            const Spacer(),
-            if (updateState.currentVersion.isNotEmpty)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: theme.primaryColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: theme.primaryColor.withValues(alpha: 0.3)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(UIcons.regular.info, size: 13, color: theme.primaryColor),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Installed: v${updateState.currentVersion}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: theme.primaryColor,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: 20),
+    final isCompact = AppBreakpoints.isCompact(context);
 
-        // ── 2. Main Content View ─────────────────────────────────────────────
+    final headerBadge = updateState.currentVersion.isNotEmpty
+        ? Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: theme.primaryColor.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: theme.primaryColor.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(UIcons.regular.info, size: 12, color: theme.primaryColor),
+                const SizedBox(width: 4),
+                Text(
+                  'v${updateState.currentVersion}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: theme.primaryColor,
+                  ),
+                ),
+              ],
+            ),
+          )
+        : null;
+
+    return StickySubViewLayout(
+      title: 'Releases & Updates',
+      onBack: () {
+        if (widget.onBack != null) {
+          widget.onBack!();
+        } else if (Navigator.canPop(context)) {
+          Navigator.pop(context);
+        }
+      },
+      trailing: isCompact ? null : headerBadge,
+      children: [
         if (updateState.isChecking)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 48),
@@ -131,7 +117,12 @@ class _ReleaseManagerScreenState extends ConsumerState<ReleaseManagerScreen> {
           )
         else ...[
           // ── Section 0: Update Preferences ──────────────────────────────────
-          _buildSectionHeader(context, 'Update Preferences', UIcons.regular.settings),
+          _buildSectionHeader(
+            context,
+            'Update Preferences',
+            UIcons.regular.settings,
+            trailing: isCompact ? headerBadge : null,
+          ),
           const SizedBox(height: 10),
           Material(
             color: theme.colorScheme.surface,
@@ -150,12 +141,31 @@ class _ReleaseManagerScreenState extends ConsumerState<ReleaseManagerScreen> {
                     style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                   ),
                   subtitle: Text(
-                    'Automatically download and stage updates in the background when available',
+                    Platform.isAndroid
+                        ? 'Automatically download APK updates in the background when available'
+                        : 'Automatically download and stage updates in the background when available',
                     style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
                   ),
                   trailing: ResonanceSwitch(
                     value: appBehavior.autoUpdate,
-                    onChanged: (val) => ref.read(appBehaviorProvider.notifier).setAutoUpdate(val),
+                    onChanged: (val) async {
+                      if (val && Platform.isAndroid) {
+                        final granted = await PermissionService.checkAndRequestInstallPermission(context);
+                        if (!granted) {
+                          if (context.mounted) {
+                            ref.read(notificationProvider.notifier).showNotification(
+                              'Automatic Updates',
+                              'Install Unknown Apps permission is required to enable automatic updates.',
+                              isError: true,
+                              target: 'target:settings',
+                              silentOsNotification: true,
+                            );
+                          }
+                          return;
+                        }
+                      }
+                      ref.read(appBehaviorProvider.notifier).setAutoUpdate(val);
+                    },
                   ),
                 ),
               ],
@@ -203,12 +213,12 @@ class _ReleaseManagerScreenState extends ConsumerState<ReleaseManagerScreen> {
             ),
           ],
         ],
-        const SizedBox(height: 32),
+        SizedBox(height: AppBreakpoints.isCompact(context) ? 120 : 32),
       ],
     );
   }
 
-  Widget _buildSectionHeader(BuildContext context, String title, IconData icon) {
+  Widget _buildSectionHeader(BuildContext context, String title, IconData icon, {Widget? trailing}) {
     final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.only(left: 4),
@@ -216,14 +226,17 @@ class _ReleaseManagerScreenState extends ConsumerState<ReleaseManagerScreen> {
         children: [
           Icon(icon, size: 16, color: theme.primaryColor),
           const SizedBox(width: 8),
-          Text(
-            title.toUpperCase(),
-            style: theme.textTheme.labelLarge?.copyWith(
-              color: theme.primaryColor,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1.1,
+          Expanded(
+            child: Text(
+              title.toUpperCase(),
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: theme.primaryColor,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.1,
+              ),
             ),
           ),
+          ?trailing,
         ],
       ),
     );
@@ -236,6 +249,7 @@ class _ReleaseManagerScreenState extends ConsumerState<ReleaseManagerScreen> {
     required UpdateNotifier updateNotifier,
   }) {
     final theme = Theme.of(context);
+    final isCompact = AppBreakpoints.isCompact(context);
 
     return Material(
       color: theme.colorScheme.surface,
@@ -254,41 +268,89 @@ class _ReleaseManagerScreenState extends ConsumerState<ReleaseManagerScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Text(
-                  release.name,
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  '(${release.tagName})',
-                  style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant),
-                ),
-                const Spacer(),
-                if (release.isCurrentVersion) ...[
-                  _buildBadge(
-                    context,
-                    label: 'CURRENT INSTALLED',
-                    color: theme.primaryColor,
+            if (isCompact) ...[
+              Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      release.name,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                  const SizedBox(width: 6),
-                ],
-                if (release.isBeta) ...[
-                  _buildBadge(
-                    context,
-                    label: 'BETA',
-                    color: Colors.orangeAccent,
-                  ),
-                ] else ...[
-                  _buildBadge(
-                    context,
-                    label: 'STABLE',
-                    color: Colors.greenAccent,
+                  const SizedBox(width: 8),
+                  Text(
+                    '(${release.tagName})',
+                    style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant),
                   ),
                 ],
-              ],
-            ),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: [
+                  if (release.isCurrentVersion)
+                    _buildBadge(
+                      context,
+                      label: 'CURRENT INSTALLED',
+                      color: theme.primaryColor,
+                    ),
+                  if (release.isBeta)
+                    _buildBadge(
+                      context,
+                      label: 'BETA',
+                      color: Colors.orangeAccent,
+                    )
+                  else
+                    _buildBadge(
+                      context,
+                      label: 'STABLE',
+                      color: Colors.greenAccent,
+                    ),
+                ],
+              ),
+            ] else ...[
+              Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      release.name,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '(${release.tagName})',
+                    style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                  const Spacer(),
+                  if (release.isCurrentVersion) ...[
+                    _buildBadge(
+                      context,
+                      label: 'CURRENT INSTALLED',
+                      color: theme.primaryColor,
+                    ),
+                    const SizedBox(width: 6),
+                  ],
+                  if (release.isBeta) ...[
+                    _buildBadge(
+                      context,
+                      label: 'BETA',
+                      color: Colors.orangeAccent,
+                    ),
+                  ] else ...[
+                    _buildBadge(
+                      context,
+                      label: 'STABLE',
+                      color: Colors.greenAccent,
+                    ),
+                  ],
+                ],
+              ),
+            ],
             const SizedBox(height: 12),
 
             FormattedMarkdownText(
@@ -321,26 +383,32 @@ class _ReleaseManagerScreenState extends ConsumerState<ReleaseManagerScreen> {
         ),
         title: Row(
           children: [
-            Text(
-              release.tagName,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            Flexible(
+              child: Text(
+                release.tagName,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
             const SizedBox(width: 8),
-            if (release.isCurrentVersion) ...[
-              _buildBadge(
-                context,
-                label: 'CURRENT',
-                color: theme.primaryColor,
-              ),
-              const SizedBox(width: 6),
-            ],
-            if (release.isBeta) ...[
-              _buildBadge(
-                context,
-                label: 'BETA',
-                color: Colors.orangeAccent,
-              ),
-            ],
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: [
+                if (release.isCurrentVersion)
+                  _buildBadge(
+                    context,
+                    label: 'CURRENT',
+                    color: theme.primaryColor,
+                  ),
+                if (release.isBeta)
+                  _buildBadge(
+                    context,
+                    label: 'BETA',
+                    color: Colors.orangeAccent,
+                  ),
+              ],
+            ),
           ],
         ),
         subtitle: Text(
@@ -385,6 +453,34 @@ class _ReleaseManagerScreenState extends ConsumerState<ReleaseManagerScreen> {
             Text(
               'You are running this version',
               style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: theme.primaryColor),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Check platform / ABI installer compatibility
+    final compatibleAsset = release.getCompatibleInstallerAsset();
+    if (compatibleAsset == null) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: theme.dividerColor.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: theme.dividerColor.withValues(alpha: 0.1)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(UIcons.regular.cross_circle, size: 14, color: theme.colorScheme.onSurfaceVariant),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                Platform.isAndroid
+                    ? 'No compatible Android APK found for this release'
+                    : 'No compatible installer found for this release',
+                style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+              ),
             ),
           ],
         ),
@@ -440,37 +536,69 @@ class _ReleaseManagerScreenState extends ConsumerState<ReleaseManagerScreen> {
       );
     }
 
-    // Show Restart & Apply if update is staged, or Install if full installer downloaded
+    final isCompact = AppBreakpoints.isCompact(context);
+
+    // Show Restart & Apply if update is staged (Windows only), or Install if full installer downloaded
     if (isSelected && (updateState.isUpdateReadyToRestart || updateState.downloadProgress >= 1.0)) {
-      final isStaged = updateState.isUpdateReadyToRestart;
-      return Row(
-        mainAxisSize: MainAxisSize.min,
+      final isStaged = !Platform.isAndroid && updateState.isUpdateReadyToRestart;
+      return Wrap(
+        spacing: 8,
+        runSpacing: 8,
         children: [
-          ResonanceButton(
-            icon: isStaged ? UIcons.regular.refresh : UIcons.regular.download,
-            label: isStaged
-                ? 'Restart & Apply Update (${release.tagName})'
-                : 'Install Version ${release.tagName}',
-            style: ResonanceButtonStyle.primary,
-            onPressed: () => isStaged
-                ? updateNotifier.applyAndRestart()
-                : updateNotifier.installRelease(context, release),
+          SizedBox(
+            width: isCompact ? double.infinity : null,
+            child: ResonanceButton(
+              icon: isStaged ? UIcons.regular.refresh : UIcons.regular.download,
+              label: isStaged
+                  ? 'Restart & Apply Update (${release.tagName})'
+                  : 'Install Version ${release.tagName}',
+              style: ResonanceButtonStyle.primary,
+              onPressed: () => isStaged
+                  ? updateNotifier.applyAndRestart()
+                  : updateNotifier.installRelease(context, release),
+            ),
           ),
-          const SizedBox(width: 8),
-          ResonanceButton(
-            icon: UIcons.regular.trash,
-            label: isStaged ? 'Discard' : 'Delete',
-            style: ResonanceButtonStyle.danger,
-            onPressed: () => _confirmDeleteInstaller(context, release, updateNotifier),
+          SizedBox(
+            width: isCompact ? double.infinity : null,
+            child: ResonanceButton(
+              icon: UIcons.regular.trash,
+              label: isStaged ? 'Discard' : 'Delete',
+              style: ResonanceButtonStyle.danger,
+              onPressed: () => _confirmDeleteInstaller(context, release, updateNotifier),
+            ),
           ),
         ],
       );
     }
 
+    final assetDesc = release.getCompatibleInstallerDescription();
+    final isAnotherDownloading = updateState.isDownloading && !isSelected;
+
     // Download button — shown for upgrade (newer) or downgrade (older)
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (assetDesc != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(UIcons.regular.check_circle, size: 13, color: theme.primaryColor),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    'Package: $assetDesc',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: theme.primaryColor,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         if (release.isOlderThanCurrent)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
@@ -479,20 +607,46 @@ class _ReleaseManagerScreenState extends ConsumerState<ReleaseManagerScreen> {
               children: [
                 Icon(Icons.info_outline, size: 14, color: theme.colorScheme.onSurfaceVariant),
                 const SizedBox(width: 6),
-                Text(
-                  'Older than installed version — downgrade at your own risk',
-                  style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                Flexible(
+                  child: Text(
+                    'Older than installed version — downgrade at your own risk',
+                    style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                  ),
                 ),
               ],
             ),
           ),
-        ResonanceButton(
-          icon: UIcons.regular.download,
-          label: 'Download & Install ${release.tagName}',
-          style: release.isNewerThanCurrent
-              ? ResonanceButtonStyle.primary
-              : ResonanceButtonStyle.secondary,
-          onPressed: () => updateNotifier.downloadRelease(release),
+        SizedBox(
+          width: isCompact ? double.infinity : null,
+          child: ResonanceButton(
+            icon: UIcons.regular.download,
+            label: isAnotherDownloading
+                ? 'Download in progress...'
+                : 'Download & Install ${release.tagName}',
+            style: release.isNewerThanCurrent
+                ? ResonanceButtonStyle.primary
+                : ResonanceButtonStyle.secondary,
+            onPressed: isAnotherDownloading
+                ? null
+                : () async {
+                    if (Platform.isAndroid) {
+                      final granted = await PermissionService.checkAndRequestInstallPermission(context);
+                      if (!granted) {
+                        if (context.mounted) {
+                          ref.read(notificationProvider.notifier).showNotification(
+                            'Update Installation',
+                            'Install Unknown Apps permission is required to install updates.',
+                            isError: true,
+                            target: 'target:settings',
+                            silentOsNotification: true,
+                          );
+                        }
+                        return;
+                      }
+                    }
+                    updateNotifier.downloadRelease(release);
+                  },
+          ),
         ),
       ],
     );
@@ -706,76 +860,79 @@ class _FormattedMarkdownTextState extends State<FormattedMarkdownText> {
     final double currentMaxHeight = _isExpanded ? widget.expandedHeight : widget.collapsedHeight;
 
     return MouseRegion(
-      cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
-      child: GestureDetector(
-        onTap: () => setState(() => _isExpanded = !_isExpanded),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeInOut,
-          width: double.infinity,
-          constraints: BoxConstraints(maxHeight: currentMaxHeight),
-          decoration: BoxDecoration(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeInOut,
+        width: double.infinity,
+        constraints: BoxConstraints(maxHeight: currentMaxHeight),
+        decoration: BoxDecoration(
+          color: _isHovered
+              ? colorScheme.surfaceContainerHighest.withValues(alpha: 0.5)
+              : colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
             color: _isHovered
-                ? colorScheme.surfaceContainerHighest.withValues(alpha: 0.5)
-                : colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: _isHovered
-                  ? colorScheme.primary.withValues(alpha: 0.4)
-                  : colorScheme.outline.withValues(alpha: 0.1),
-            ),
+                ? colorScheme.primary.withValues(alpha: 0.4)
+                : colorScheme.outline.withValues(alpha: 0.1),
           ),
-          child: Column(
-            children: [
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Scrollbar(
+        ),
+        child: Column(
+          children: [
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Scrollbar(
+                  controller: _scrollController,
+                  child: SingleChildScrollView(
                     controller: _scrollController,
-                    child: SingleChildScrollView(
-                      controller: _scrollController,
-                      physics: _isExpanded ? const BouncingScrollPhysics() : const ClampingScrollPhysics(),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: widgets,
-                      ),
+                    physics: _isExpanded ? const BouncingScrollPhysics() : const ClampingScrollPhysics(),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: widgets,
                     ),
                   ),
                 ),
               ),
-              // Expand / Collapse Bar
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                decoration: BoxDecoration(
-                  color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
-                  borderRadius: const BorderRadius.vertical(bottom: Radius.circular(7)),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      _isExpanded ? 'Show Less' : 'Show More',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
+            ),
+            // Expand / Collapse Bar
+            MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => setState(() => _isExpanded = !_isExpanded),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  decoration: BoxDecoration(
+                    color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
+                    borderRadius: const BorderRadius.vertical(bottom: Radius.circular(7)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        _isExpanded ? 'Show Less' : 'Show More',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: _isHovered ? colorScheme.primary : colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(
+                        _isExpanded ? UIcons.regular.angle_small_up : UIcons.regular.angle_small_down,
+                        size: 14,
                         color: _isHovered ? colorScheme.primary : colorScheme.onSurfaceVariant,
                       ),
-                    ),
-                    const SizedBox(width: 4),
-                    Icon(
-                      _isExpanded ? UIcons.regular.angle_small_up : UIcons.regular.angle_small_down,
-                      size: 14,
-                      color: _isHovered ? colorScheme.primary : colorScheme.onSurfaceVariant,
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

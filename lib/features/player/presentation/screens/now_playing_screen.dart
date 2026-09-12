@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:resonance/core/configs/app_breakpoints.dart';
 import 'package:silky_scroll/silky_scroll.dart';
 import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/features/player/application/providers/audio_provider.dart';
@@ -10,7 +11,7 @@ import 'package:resonance/core/providers/overlay_provider.dart';
 
 import 'package:resonance/features/library/presentation/widgets/media_actions_bottom_sheet.dart';
 import '../widgets/player_cards.dart';
-import '../widgets/equalizer_sheet.dart';
+import '../widgets/mini_player/shared/audio_settings_sheet.dart';
 
 //  // Unused
 
@@ -18,356 +19,325 @@ class NowPlayingScreen extends ConsumerWidget {
   const NowPlayingScreen({super.key});
 
   void _showMediaActions(BuildContext context, dynamic track) {
-    showModalBottomSheet(
+    MediaActionsBottomSheet.show(
       context: context,
-      builder: (ctx) => MediaActionsBottomSheet(item: track),
+      item: track,
     );
   }
 
   void _showAudioSettings(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 24.0, horizontal: 16.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Audio Settings',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-              ),
-              const SizedBox(height: 20),
-              // Speed Control
-              _buildSettingLabel(context, 'Playback Speed'),
-              Consumer(
-                builder: (context, ref, _) {
-                  final state = ref.watch(audioProvider);
-                  return _buildSliderRow(
-                    context, 
-                    '0.5x', 
-                    '2.0x', 
-                    state.speed, 
-                    0.5, 
-                    2.0, 
-                    15, 
-                    (v) => ref.read(audioProvider.notifier).setSpeed(v)
-                  );
-                },
-              ),
-              const SizedBox(height: 10),
-              // Pitch Control
-              _buildSettingLabel(context, 'Pitch'),
-              Consumer(
-                builder: (context, ref, _) {
-                  final state = ref.watch(audioProvider);
-                  return _buildSliderRow(
-                    context, 
-                    '-12', 
-                    '+12', 
-                    state.pitch, 
-                    -12.0, 
-                    12.0, 
-                    24, 
-                    (v) => ref.read(audioProvider.notifier).setPitch(v)
-                  );
-                },
-              ),
-              const SizedBox(height: 10),
-              ListTile(
-                leading: Icon(UIcons.regular.settings_sliders, color: Theme.of(context).colorScheme.onSurface),
-                title: const Text('Equalizer Settings'),
-                trailing: Icon(UIcons.regular.angle_small_right, size: 20),
-                onTap: () {
-                  Navigator.pop(context);
-                  showModalBottomSheet(
-                    context: context,
-                    backgroundColor: Colors.transparent,
-                    isScrollControlled: true,
-                    builder: (context) => const EqualizerSheet(),
-                  );
-                },
-              ),
-            ],
-          ),
-        );
-      },
-    );
+    AudioSettingsSheet.show(context);
   }
 
-  Widget _buildSettingLabel(BuildContext context, String label) {
-    return Text(
-      label,
-      style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.7)),
-    );
-  }
-
-  Widget _buildSliderRow(BuildContext context, String minLabel, String maxLabel, double value, double min, double max, int divisions, Function(double) onChanged) {
-    return Row(
-      children: [
-        Text(minLabel, style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5))),
-        Expanded(
-          child: Slider(
-            value: value,
-            min: min,
-            max: max,
-            divisions: divisions,
-            activeColor: Theme.of(context).primaryColor,
-            onChanged: onChanged,
-          ),
-        ),
-        Text(maxLabel, style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5))),
-      ],
-    );
-  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // OPTIMIZATION: Only watch properties that affect the general layout.
     // Watching the full audioProvider causes rebuilds every second (position change).
-    final currentTrack = ref.watch(audioProvider.select((s) => s.currentTrack));
-    final track = currentTrack;
-
+    final track = ref.watch(audioProvider.select((s) => s.currentTrack));
     final isAndroid = Platform.isAndroid;
     final blurSigma = isAndroid ? 40.0 : 80.0;
 
-    return Stack(
-      clipBehavior: Clip.antiAlias,
-      children: [
-        // Dynamic Background (Consistent with FullScreenPlayer)
-        // OPTIMIZATION: RepaintBoundary prevents blur from re-calculating during lyrics scroll
-        Positioned.fill(
-          child: RepaintBoundary(
-            child: Stack(
+    return PopScope(
+      canPop: !isAndroid,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        ref.read(nowPlayingOverlayProvider.notifier).setVisible(false);
+      },
+      child: Stack(
+        clipBehavior: Clip.antiAlias,
+        children: [
+          _NowPlayingBackground(track: track, blurSigma: blurSigma),
+          SafeArea(
+            child: Column(
               children: [
-                Positioned.fill(
-                  child: track != null 
-                    ? MediaArtworkWidget(
-                        item: track,
-                        fit: BoxFit.cover,
-                        color: Theme.of(context).brightness == Brightness.light
-                            ? Colors.white.withValues(alpha: 0.6)
-                            : Colors.black.withValues(alpha: 0.6),
-                        colorBlendMode: Theme.of(context).brightness == Brightness.light
-                            ? BlendMode.lighten
-                            : BlendMode.darken,
-                      )
-                    : Container(color: Theme.of(context).colorScheme.surface),
+                _NowPlayingTopBar(
+                  track: track,
+                  onClose: () => ref
+                      .read(nowPlayingOverlayProvider.notifier)
+                      .setVisible(false),
+                  onQueue: () => ref
+                      .read(queueOverlayProvider.notifier)
+                      .toggle(),
+                  onMediaActions: () => _showMediaActions(context, track),
+                  onAudioSettings: () => _showAudioSettings(context),
                 ),
-                Positioned.fill(
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
-                    child: Container(
-                      color: (Theme.of(context).brightness == Brightness.light
-                              ? Colors.white
-                              : Colors.black)
-                          .withValues(alpha: 0.4),
+                Expanded(
+                  child: TweenAnimationBuilder<double>(
+                    duration: const Duration(milliseconds: 600),
+                    curve: Curves.easeOutCubic,
+                    tween: Tween(begin: 0.0, end: 1.0),
+                    builder: (context, value, child) {
+                      return Opacity(
+                        opacity: value,
+                        child: Transform.translate(
+                          offset: Offset(0, 30 * (1 - value)),
+                          child: child,
+                        ),
+                      );
+                    },
+                    child: SilkySingleChildScrollView(
+                      padding: const EdgeInsets.only(
+                        left: 24,
+                        right: 24,
+                        top: 12,
+                        bottom: 48,
+                      ),
+                      child: track == null
+                          ? const Center(child: Text('No media playing'))
+                          : Center(
+                              child: LayoutBuilder(
+                                  builder: (context, constraints) {
+                                    final totalWidth = constraints.maxWidth;
+                                    final isCompactLayout =
+                                        AppBreakpoints.isCompactWidth(totalWidth);
+
+                                    return isCompactLayout
+                                        ? _MobileLayout(track: track)
+                                        : _DesktopLayout(
+                                            track: track,
+                                            totalWidth: totalWidth,
+                                          );
+                                  },
+                              ),
+                            ),
                     ),
                   ),
                 ),
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Extracted Modular Sub-Widgets ─────────────────────────────────────────────
+
+class _NowPlayingBackground extends StatelessWidget {
+  final dynamic track;
+  final double blurSigma;
+
+  const _NowPlayingBackground({
+    required this.track,
+    required this.blurSigma,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isLight = Theme.of(context).brightness == Brightness.light;
+
+    return Positioned.fill(
+      child: RepaintBoundary(
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: track != null
+                  ? MediaArtworkWidget(
+                      item: track,
+                      fit: BoxFit.cover,
+                      color: isLight
+                          ? Colors.white.withValues(alpha: 0.6)
+                          : Colors.black.withValues(alpha: 0.6),
+                      colorBlendMode:
+                          isLight ? BlendMode.lighten : BlendMode.darken,
+                    )
+                  : Container(color: Theme.of(context).colorScheme.surface),
+            ),
+            Positioned.fill(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
+                child: Container(
+                  color: (isLight ? Colors.white : Colors.black)
+                      .withValues(alpha: 0.4),
+                ),
+              ),
+            ),
+          ],
         ),
+      ),
+    );
+  }
+}
 
-        // Main Content
-        SafeArea(
-          child: Column(
-            children: [
-              // Custom Top Bar
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Row(
-                  children: [
-                    CollapseButton(
-                      tooltip: 'Close',
-                      iconSize: 20,
-                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-                      onTap: () => ref.read(nowPlayingOverlayProvider.notifier).setVisible(false),
-                    ),
-                    const Spacer(),
-                    Text(
-                      'NOW PLAYING',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 2,
-                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-                      ),
-                    ),
-                    const Spacer(),
-                    ReusableHoverIconButton(
-                      icon: UIcons.regular.add,
-                      tooltip: 'Media Actions',
-                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-                      onTap: () => _showMediaActions(context, track),
-                    ),
-                    OverflowMenuButton(
-                      tooltip: 'Audio Settings',
-                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-                      onTap: () => _showAudioSettings(context),
-                    ),
-                  ],
-                ),
-              ),
+class _NowPlayingTopBar extends StatelessWidget {
+  final dynamic track;
+  final VoidCallback onClose;
+  final VoidCallback onQueue;
+  final VoidCallback onMediaActions;
+  final VoidCallback onAudioSettings;
 
-              // Scrollable area for cards
-              Expanded(
-                child: TweenAnimationBuilder<double>(
-                  duration: const Duration(milliseconds: 600),
-                  curve: Curves.easeOutCubic,
-                  tween: Tween(begin: 0.0, end: 1.0),
-                  builder: (context, value, child) {
-                    return Opacity(
-                      opacity: value,
-                      child: Transform.translate(
-                        offset: Offset(0, 30 * (1 - value)),
-                        child: child,
-                      ),
-                    );
-                  },
-                  child: SilkySingleChildScrollView(
-                    padding: const EdgeInsets.only(
-                      left: 24,
-                      right: 24,
-                      top: 12,
-                      bottom: 48,
-                    ),
-                    child: track == null
-                        ? const Center(child: Text('No media playing'))
-                        : Center(
-                            child: LayoutBuilder(
-                              builder: (context, constraints) {
-                                final totalWidth = constraints.maxWidth;
-                                final isMobile = totalWidth < 600;
+  const _NowPlayingTopBar({
+    required this.track,
+    required this.onClose,
+    required this.onQueue,
+    required this.onMediaActions,
+    required this.onAudioSettings,
+  });
 
-                                if (isMobile) {
-                                  // Mobile Layout: Vertical Stack
-                                  return Column(
-                                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                                    children: [
-                                      // 1. Square Artwork
-                                      AspectRatio(
-                                        aspectRatio: 1,
-                                        child: Container(
-                                          decoration: BoxDecoration(
-                                            borderRadius: BorderRadius.circular(20),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: Colors.black.withValues(alpha: 0.5),
-                                                blurRadius: 40,
-                                                offset: const Offset(0, 20),
-                                              ),
-                                            ],
-                                          ),
-                                          child: ClipRRect(
-                                            borderRadius: BorderRadius.circular(20),
-                                            child: Hero(
-                                              tag: 'player_artwork_${track.id ?? track.hashCode}',
-                                              child: MediaArtworkWidget(item: track),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      if (Platform.isAndroid) ...[
-                                        const SizedBox(height: 16),
-                                        const NavigationControlCard(),
-                                        const SizedBox(height: 16),
-                                      ] else ...[
-                                        const SizedBox(height: 24),
-                                      ],
-                                      // 2. Metadata
-                                      MetadataCard(track: track),
-                                      const SizedBox(height: 24),
-                                      // 3. Lyrics: FIXED HEIGHT REQUIRED in ScrollView
-                                      const MiniLyricsCard(height: 350),
-                                      const SizedBox(height: 24),
-                                      // 4. Queue: FIXED HEIGHT REQUIRED in ScrollView
-                                      const NextInQueueCard(height: 120),
-                                    ],
-                                  );
-                                }
+  @override
+  Widget build(BuildContext context) {
+    final iconColor =
+        Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7);
 
-                                // Desktop Layout: Horizontal Row (Original)
-                                const spacing = 32.0;
-                                final leftWidth = (totalWidth - spacing) * 0.4;
-                                final gridHeight = leftWidth + 24 + 240; 
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        children: [
+          CollapseButton(
+            tooltip: 'Close',
+            iconSize: 20,
+            color: iconColor,
+            onTap: onClose,
+          ),
+          const Spacer(),
+          Text(
+            'NOW PLAYING',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 2,
+              color: iconColor,
+            ),
+          ),
+          const Spacer(),
+          ReusableHoverIconButton(
+            icon: UIcons.regular.list_music,
+            iconSize: 20,
+            tooltip: 'Queue',
+            color: iconColor,
+            onTap: onQueue,
+          ),
+          ReusableHoverIconButton(
+            icon: UIcons.regular.add,
+            iconSize: 20,
+            tooltip: 'Media Actions',
+            color: iconColor,
+            onTap: onMediaActions,
+          ),
+          OverflowMenuButton(
+            tooltip: 'Audio Settings',
+            iconSize: 20,
+            color: iconColor,
+            onTap: onAudioSettings,
+          ),
+        ],
+      ),
+    );
+  }
+}
 
-                                return SizedBox(
-                                  height: gridHeight,
-                                  child: Row(
-                                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                                    children: [
-                                      // Left Column: Artwork + Metadata (40%)
-                                      Expanded(
-                                        flex: 4,
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                                          children: [
-                                            // Top: Square Artwork
-                                            AspectRatio(
-                                              aspectRatio: 1,
-                                              child: Container(
-                                                decoration: BoxDecoration(
-                                                  borderRadius: BorderRadius.circular(20),
-                                                  boxShadow: [
-                                                    BoxShadow(
-                                                      color: Colors.black.withValues(alpha: 0.5),
-                                                      blurRadius: 40,
-                                                      offset: const Offset(0, 20),
-                                                    ),
-                                                  ],
-                                                ),
-                                                child: ClipRRect(
-                                                  borderRadius: BorderRadius.circular(20),
-                                                  child: Hero(
-                                                    tag: 'player_artwork_${track.id ?? track.hashCode}',
-                                                    child: MediaArtworkWidget(item: track),
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                            const SizedBox(height: 24),
-                                            // Bottom: Metadata
-                                            SizedBox(
-                                              height: 240,
-                                              child: MetadataCard(track: track),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      const SizedBox(width: spacing),
-                                      // Right Column: Lyrics + Queue (60%)
-                                      const Expanded(
-                                        flex: 6,
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                                          children: [
-                                            Expanded(
-                                              child: MiniLyricsCard(),
-                                            ),
-                                            SizedBox(height: 24),
-                                            NextInQueueCard(),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                  ),
-                ),
-              ),
-            ],
+class _ArtworkCard extends StatelessWidget {
+  final dynamic track;
+
+  const _ArtworkCard({required this.track});
+
+  @override
+  Widget build(BuildContext context) {
+    return AspectRatio(
+      aspectRatio: 1,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.5),
+              blurRadius: 40,
+              offset: const Offset(0, 20),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: Hero(
+            tag: 'player_artwork_${track?.id ?? track.hashCode}',
+            child: MediaArtworkWidget(item: track),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _MobileLayout extends StatelessWidget {
+  final dynamic track;
+
+  const _MobileLayout({required this.track});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _ArtworkCard(track: track),
+        if (Platform.isAndroid) ...[
+          const SizedBox(height: 16),
+          const NavigationControlCard(),
+          const SizedBox(height: 16),
+        ] else ...[
+          const SizedBox(height: 24),
+        ],
+        MetadataCard(track: track),
+        const SizedBox(height: 24),
+        const MiniLyricsCard(height: 350),
+        const SizedBox(height: 24),
+        const NextInQueueCard(),
       ],
+    );
+  }
+}
+
+class _DesktopLayout extends StatelessWidget {
+  final dynamic track;
+  final double totalWidth;
+
+  const _DesktopLayout({
+    required this.track,
+    required this.totalWidth,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const spacing = 32.0;
+    final leftWidth = (totalWidth - spacing) * 0.4;
+    final gridHeight = leftWidth + 24 + 240;
+
+    return SizedBox(
+      height: gridHeight,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Left Column: Artwork + Metadata (40%)
+          Expanded(
+            flex: 4,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _ArtworkCard(track: track),
+                const SizedBox(height: 24),
+                SizedBox(
+                  height: 240,
+                  child: MetadataCard(track: track),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: spacing),
+          // Right Column: Lyrics + Queue (60%)
+          const Expanded(
+            flex: 6,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(child: MiniLyricsCard()),
+                SizedBox(height: 24),
+                NextInQueueCard(),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

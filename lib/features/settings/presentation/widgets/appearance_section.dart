@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/features/settings/application/app_behavior_provider.dart';
+import 'package:system_theme/system_theme.dart';
 
 import '../../../../core/theme/theme_provider.dart';
 
@@ -29,6 +30,7 @@ class AppearanceSection extends ConsumerWidget {
     final activeOpacity = ref.watch(lyricsActiveOpacityProvider);
     final inactiveOpacity = ref.watch(lyricsInactiveOpacityProvider);
     final appBehavior = ref.watch(appBehaviorProvider);
+    final systemAccentLabel = Platform.isAndroid ? 'System Accent' : 'Windows Accent';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -43,9 +45,9 @@ class AppearanceSection extends ConsumerWidget {
         ResonanceSelector<AppThemeMode>(
           icon: UIcons.regular.palette,
           title: 'App Theme',
-          subtitle: 'Select visual mode',
+          subtitle: 'Choose your visual preference',
           value: themeMode,
-          onChanged: (v) => ref.read(themeProvider.notifier).setTheme(v),
+          onChanged: (mode) => ref.read(themeProvider.notifier).setTheme(mode),
           items: const [
             ResonanceSelectorItem(value: AppThemeMode.system, label: 'System Default'),
             ResonanceSelectorItem(value: AppThemeMode.light,  label: 'Gilded Ivory (Light)'),
@@ -64,8 +66,34 @@ class AppearanceSection extends ConsumerWidget {
           value: accentMode,
           onChanged: (v) => ref.read(accentColorProvider.notifier).setAccentColor(v),
           items: [
-            const ResonanceSelectorItem(value: null,      label: 'Default Accent'),
-            const ResonanceSelectorItem(value: 'windows', label: 'Windows Accent'),
+            ResonanceSelectorItem(
+              value: null,
+              label: 'Default Accent',
+              leading: Container(
+                width: 32,
+                height: 12,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(3),
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFE9AD71), Color(0xFFAE8C50)],
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                  ),
+                ),
+              ),
+            ),
+            ResonanceSelectorItem(
+              value: 'windows',
+              label: systemAccentLabel,
+              leading: Container(
+                width: 32,
+                height: 12,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(3),
+                  color: SystemTheme.accentColor.accent,
+                ),
+              ),
+            ),
             ..._paletteGradients.entries.indexed.map((e) {
               final idx = e.$1 + 1;
               final key = e.$2.key;
@@ -132,25 +160,25 @@ class AppearanceSection extends ConsumerWidget {
           ),
         ),
 
-        const SizedBox(height: 24),
-        const Text(
-          'App Behavior',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey),
-        ),
-        const SizedBox(height: 12),
-
-        // Grouped Card Container for App Behavior settings
-        Material(
-          color: theme.colorScheme.surface,
-          clipBehavior: Clip.antiAlias,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: BorderSide(color: theme.dividerColor.withValues(alpha: 0.08)),
+        if (Platform.isWindows) ...[
+          const SizedBox(height: 24),
+          const Text(
+            'App Behavior',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey),
           ),
-          child: Column(
-            children: [
-              // Launch at Startup switch
-              if (Platform.isWindows) ...[
+          const SizedBox(height: 12),
+
+          // Grouped Card Container for App Behavior settings (Desktop only)
+          Material(
+            color: theme.colorScheme.surface,
+            clipBehavior: Clip.antiAlias,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: theme.dividerColor.withValues(alpha: 0.08)),
+            ),
+            child: Column(
+              children: [
+                // Launch at Startup switch
                 ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   leading: Icon(UIcons.regular.laptop, size: 18, color: theme.primaryColor),
@@ -165,25 +193,32 @@ class AppearanceSection extends ConsumerWidget {
                   ),
                 ),
                 const Divider(height: 1),
-              ],
 
-              // Close button behavior switch
-              ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                leading: Icon(UIcons.regular.compress_alt, size: 18, color: theme.primaryColor),
-                title: const Text('Minimize to System Tray on Close', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                subtitle: Text(
-                  'Closing the window keeps Resonance running in the background tray',
-                  style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                // Close / Background behavior switch
+                ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  leading: Icon(
+                    UIcons.regular.compress_alt,
+                    size: 18,
+                    color: theme.primaryColor,
+                  ),
+                  title: const Text(
+                    'Minimize to System Tray on Close',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: Text(
+                    'Closing the window keeps Resonance running in the background tray',
+                    style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                  trailing: ResonanceSwitch(
+                    value: appBehavior.closeToTray,
+                    onChanged: (val) => ref.read(appBehaviorProvider.notifier).setCloseToTray(val),
+                  ),
                 ),
-                trailing: ResonanceSwitch(
-                  value: appBehavior.closeToTray,
-                  onChanged: (val) => ref.read(appBehaviorProvider.notifier).setCloseToTray(val),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
+        ],
       ],
     );
   }

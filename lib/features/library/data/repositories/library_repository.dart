@@ -246,11 +246,14 @@ class LibraryRepository {
       final sanitized = sanitizeAudioFilename(p.basenameWithoutExtension(finalPath));
       String title = (tags.title != null && tags.title!.isNotEmpty) ? tags.title! : sanitized.title;
       String? artist = (tags.artist != null && tags.artist!.isNotEmpty) ? tags.artist : sanitized.artist;
+      if (artist == 'Lagu' || artist == 'Song') {
+        artist = null;
+      }
       String? album = tags.album;
       String? date = tags.date;
 
       // 4. Online Auto-Enrichment if missing cover or artist/album
-      if (localThumbnailUrl == null || artist == null || album == null) {
+      if (localThumbnailUrl == null || artist == null || album == null || artist == 'Unknown Artist') {
         try {
           final online = await rpcService.resolveFullTrackInfo(title, artist);
           if (online.artistName != null && (artist == null || artist == 'Unknown Artist')) {

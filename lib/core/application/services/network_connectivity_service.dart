@@ -1,14 +1,16 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance/core/application/providers/app_config_provider.dart';
-import 'package:resonance/core/data/services/po_token_provider_service.dart';
+import 'package:resonance/features/stream/platform/windows/windows_po_token_service.dart';
 import 'package:resonance/features/explore/data/repositories/youtube_stream_repository.dart';
 import 'package:resonance/features/download/application/download_service.dart';
 import 'package:resonance/features/download/application/providers/download_provider.dart';
 import 'package:resonance/features/download/data/models/download_item.dart';
 import 'package:resonance/features/settings/application/startup_service.dart';
+import 'package:resonance/features/explore/presentation/providers/explore_provider.dart';
+import 'package:resonance/features/playlist/application/services/playlist_stream_cache_handler.dart';
 
 /// Global connectivity state for Resonance.
 class NetworkConnectivityState {
@@ -42,24 +44,39 @@ class NetworkConnectivityNotifier extends Notifier<NetworkConnectivityState> {
   static const bool _forceOfflineForTesting = false;
 
   Timer? _heartbeatTimer;
+  AppLifecycleListener? _lifecycleListener;
   bool _previousOnline = !_forceOfflineForTesting;
 
   @override
   NetworkConnectivityState build() {
     _startMonitoring();
+    try {
+      _lifecycleListener = AppLifecycleListener(
+        onResume: () => _startMonitoring(),
+        onPause: () => _stopHeartbeat(),
+        onHide: () => _stopHeartbeat(),
+      );
+    } catch (_) {}
+
     ref.onDispose(() {
-      _heartbeatTimer?.cancel();
+      _stopHeartbeat();
+      _lifecycleListener?.dispose();
     });
     return NetworkConnectivityState(isOnline: !_forceOfflineForTesting);
+  }
+
+  void _stopHeartbeat() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
   }
 
   void _startMonitoring() {
     // Initial immediate probe
     Future.microtask(() => checkConnectivity());
 
-    // Periodic heartbeat (every 15s)
-    _heartbeatTimer?.cancel();
-    _heartbeatTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+    // Periodic heartbeat (every 60s when active in foreground)
+    _stopHeartbeat();
+    _heartbeatTimer = Timer.periodic(const Duration(seconds: 60), (_) {
       checkConnectivity();
     });
   }
@@ -128,7 +145,7 @@ class NetworkConnectivityNotifier extends Notifier<NetworkConnectivityState> {
 
       // 3. Refresh PoToken & YouTube auth session
       if (Platform.isWindows) {
-        unawaited(poTokenProviderService.generateFreshToken());
+        unawaited(WindowsPoTokenService().generateFreshToken());
       } else if (Platform.isAndroid) {
         ref.read(youtubeStreamRepositoryProvider).warmUpSession();
       }
@@ -138,6 +155,17 @@ class NetworkConnectivityNotifier extends Notifier<NetworkConnectivityState> {
       if (downloadQueue.any((i) => i.status == DownloadStatus.queued)) {
         ref.read(downloadServiceProvider).scheduleNext(downloadQueue);
       }
+
+      // 5. Invalidate Home & Explore feed providers to refresh content
+      ref.invalidate(homeFeedProvider);
+      ref.invalidate(quickPicksProvider);
+      ref.invalidate(dailyDiscoverProvider);
+      ref.invalidate(similarArtistsProvider);
+      ref.invalidate(speedDialProvider);
+      ref.invalidate(searchResultsProvider);
+
+      // 6. Process pending playlist stream cache queue
+      unawaited(ref.read(playlistStreamCacheHandlerProvider).processPendingQueue());
     } catch (e) {
       debugPrint('[NetworkConnectivity] Reconnection handler exception: $e');
     }

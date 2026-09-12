@@ -1,3 +1,6 @@
+import 'dart:ffi';
+import 'dart:io';
+
 class AppRelease {
   final String tagName;
   final String name;
@@ -30,6 +33,92 @@ class AppRelease {
         lowerTag.contains('alpha') ||
         lowerName.contains('beta') ||
         lowerName.contains('pre-release');
+  }
+
+  /// Returns the optimal installer asset for the current OS and CPU architecture.
+  /// On Android: Matches exact device ABI (arm64, v7a, x86_64) -> universal -> any .apk.
+  /// On Windows: Matches .exe installer.
+  Map<String, dynamic>? getCompatibleInstallerAsset() {
+    if (Platform.isAndroid) {
+      String targetAbi = 'arm64';
+      try {
+        switch (Abi.current()) {
+          case Abi.androidArm64:
+            targetAbi = 'arm64';
+            break;
+          case Abi.androidArm:
+            targetAbi = 'v7a';
+            break;
+          case Abi.androidX64:
+            targetAbi = 'x86_64';
+            break;
+          case Abi.androidIA32:
+            targetAbi = 'x86';
+            break;
+          default:
+            targetAbi = 'arm64';
+        }
+      } catch (_) {
+        targetAbi = 'arm64';
+      }
+
+      Map<String, dynamic>? targetMatch;
+      Map<String, dynamic>? universalMatch;
+      Map<String, dynamic>? anyApkMatch;
+
+      for (var asset in assets) {
+        if (asset is! Map<String, dynamic>) continue;
+        final name = asset['name'].toString().toLowerCase();
+        if (name.endsWith('.apk')) {
+          if (name.contains(targetAbi)) {
+            targetMatch = asset;
+            break;
+          } else if (name.contains('universal')) {
+            universalMatch ??= asset;
+          } else {
+            anyApkMatch ??= asset;
+          }
+        }
+      }
+      return targetMatch ?? universalMatch ?? anyApkMatch;
+    } else if (Platform.isWindows) {
+      for (var asset in assets) {
+        if (asset is! Map<String, dynamic>) continue;
+        final name = asset['name'].toString().toLowerCase();
+        if (name.endsWith('.exe')) {
+          return asset;
+        }
+      }
+    }
+    return null;
+  }
+
+  /// Human-friendly description of the detected installer asset (e.g. "APK: arm64-v8a (45 MB)")
+  String? getCompatibleInstallerDescription() {
+    final asset = getCompatibleInstallerAsset();
+    if (asset == null) return null;
+
+    final name = asset['name'].toString();
+    final sizeBytes = asset['size'] as num? ?? 0;
+    final sizeMb = sizeBytes > 0 ? '${(sizeBytes / (1024 * 1024)).toStringAsFixed(1)} MB' : '';
+
+    if (Platform.isAndroid) {
+      String variant = 'Universal';
+      final lower = name.toLowerCase();
+      if (lower.contains('arm64')) {
+        variant = 'arm64-v8a';
+      } else if (lower.contains('v7a') || lower.contains('arm-')) {
+        variant = 'armeabi-v7a';
+      } else if (lower.contains('x86_64')) {
+        variant = 'x86_64';
+      } else if (lower.contains('universal')) {
+        variant = 'Universal';
+      }
+      return sizeMb.isNotEmpty ? 'APK: $variant ($sizeMb)' : 'APK: $variant';
+    } else if (Platform.isWindows) {
+      return sizeMb.isNotEmpty ? 'Installer ($sizeMb)' : 'Installer';
+    }
+    return null;
   }
 
   /// Finds matching delta patch asset specifically created from the currently installed version
@@ -142,6 +231,32 @@ class AppRelease {
           // Legacy: handle old + style just in case
           final buildStr = toPart.split('+').last;
           final b = int.tryParse(buildStr) ?? 0;
+          if (b > highestBuild) {
+            highestBuild = b;
+            final base = rawTag.split('+')[0];
+            effectiveVersion = '$base+$highestBuild';
+          }
+        }
+      } else if (assetName.endsWith('.apk')) {
+        // Extract build number from Android APK (e.g. Resonance-v0.1.8-beta.12-Android.apk or Resonance-v0.1.8.12-Android.apk)
+        final normalized = assetName.replaceAll('%2b', '.').replaceAll('+', '.');
+        final apkBuildMatch = RegExp(r'(?:beta|rc|alpha|v\d+(?:\.\d+)*)\.(\d+)(?:[-_.]android)?\.apk').firstMatch(normalized)
+            ?? RegExp(r'\.(\d+)[-_.]android\.apk').firstMatch(normalized);
+        if (apkBuildMatch != null) {
+          final b = int.tryParse(apkBuildMatch.group(1)!) ?? 0;
+          if (b > highestBuild) {
+            highestBuild = b;
+            final base = rawTag.split('+')[0];
+            effectiveVersion = '$base+$highestBuild';
+          }
+        }
+      } else if (assetName.endsWith('.exe')) {
+        // Extract build number from standalone Windows installer (e.g. Resonance-Setup-v0.1.8-beta.12.exe)
+        final normalized = assetName.replaceAll('%2b', '.').replaceAll('+', '.');
+        final exeBuildMatch = RegExp(r'(?:beta|rc|alpha|v\d+(?:\.\d+)*)\.(\d+)(?:[-_.]installer|[-_.]setup)?\.exe').firstMatch(normalized)
+            ?? RegExp(r'\.(\d+)\.exe').firstMatch(normalized);
+        if (exeBuildMatch != null) {
+          final b = int.tryParse(exeBuildMatch.group(1)!) ?? 0;
           if (b > highestBuild) {
             highestBuild = b;
             final base = rawTag.split('+')[0];

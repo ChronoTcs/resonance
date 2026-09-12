@@ -57,7 +57,13 @@ Future<void> runStartupChecks(dynamic ref, {bool? isOnline}) async {
         debugPrint('[StartupService] Auto-update is ON. Initiating silent background staging for v${updateState.latestVersion}...');
         unawaited(updateNotifier.downloadRelease(updateState.latestRelease!).then((_) {
           final newState = ref.read(updateProvider);
-          if (newState.isUpdateReadyToRestart) {
+          if (Platform.isAndroid && newState.downloadProgress >= 1.0) {
+            ref.read(notificationProvider.notifier).showNotification(
+              'Update Ready to Install',
+              'Resonance v${updateState.latestVersion} has been downloaded. Tap to install.',
+              target: 'target:settings',
+            );
+          } else if (!Platform.isAndroid && newState.isUpdateReadyToRestart) {
             ref.read(notificationProvider.notifier).showNotification(
               'Update Ready to Install',
               'Resonance v${updateState.latestVersion} has been downloaded. Restart app to apply.',

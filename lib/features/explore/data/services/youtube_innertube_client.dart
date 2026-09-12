@@ -168,7 +168,6 @@ class YoutubeInnerTubeClient {
 
     final locale = PlatformDispatcher.instance.locale;
     final country = locale.countryCode?.isNotEmpty == true ? locale.countryCode! : "US";
-    final lang = locale.languageCode.isNotEmpty == true ? locale.languageCode : "en";
 
     // Always attach visitorData if cached to persist the device guest session preferences
     final visitorToken = _authService.visitorData;
@@ -178,7 +177,7 @@ class YoutubeInnerTubeClient {
         "clientName": clientName,
         "clientVersion": clientVersion,
         if (visitorToken != null && visitorToken.isNotEmpty) "visitorData": visitorToken,
-        "hl": lang,
+        "hl": "en",
         "gl": country,
         "utcOffsetMinutes": 0,
         "osName": osName,

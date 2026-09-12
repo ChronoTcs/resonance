@@ -21,12 +21,15 @@ import '../../../../core/data/services/stream_cache_tracker_service.dart';
 
 import '../services/playback_engine_service.dart';
 import '../../../settings/application/notification_provider.dart';
+import '../../../../core/data/services/media_cache_service.dart';
 
 // ── Extracted Services ────────────────────────────────────────────────────────
 import '../states/audio_state.dart';
 import '../../data/services/audio_persistence_service.dart';
 import '../../data/services/audio_metadata_service.dart';
 import '../services/stream_resolution_service.dart';
+import '../services/gapless_prefetch_service.dart';
+import '../../../library/application/blocked_tracks_provider.dart';
 
 export '../states/audio_state.dart';
 
@@ -130,6 +133,7 @@ class AudioNotifier extends Notifier<AudioState> {
       position: Duration(milliseconds: positionMs),
     );
     _metadata.onTrackChanged(track, isPlaying: false);
+    _updateNextTrack();
   }
 
   // ── Initialization ─────────────────────────────────────────────────────────
@@ -162,6 +166,9 @@ class AudioNotifier extends Notifier<AudioState> {
 
       _player.stream.position.listen((position) {
         state = state.copyWith(position: position);
+        if (position.inSeconds > 0) {
+          _engine.resetErrorGuard();
+        }
 
         _persistence.savePosition(position.inMilliseconds);
         if (ref.read(mediaFocusProvider) == MediaFocus.audio) {
@@ -203,21 +210,32 @@ class AudioNotifier extends Notifier<AudioState> {
         final shouldStop = _engine.handlePlaybackError(error);
         if (shouldStop) {
           state = state.copyWith(isPlaying: false, isLoading: false);
+          ref.read(notificationProvider.notifier).showNotification(
+            'Playback Stopped',
+            'Continuous playback errors encountered. Stopped to prevent loop.',
+            isError: true,
+          );
           return;
         }
 
-        // Transparent 403 self-heal: re-resolve same track before skipping
+        // Transparent self-heal: re-resolve same track before skipping
         final errStr = error.toString().toLowerCase();
-        final is403 = errStr.contains('403') || errStr.contains('forbidden') || errStr.contains('expired');
-        if (is403 && currentId != null && (state.currentTrack?.isStreaming ?? false)) {
-          debugPrint('[AudioPlayer] 403 detected — attempting self-heal re-resolve for $currentId');
+        final isStreamErr = errStr.contains('403') ||
+            errStr.contains('forbidden') ||
+            errStr.contains('expired') ||
+            errStr.contains('failed to open');
+        if (isStreamErr && currentId != null && (state.currentTrack?.isStreaming ?? false)) {
+          debugPrint('[AudioPlayer] Stream failure detected — attempting self-heal re-resolve for $currentId');
           Future.microtask(() async {
             try {
               final url = await ref.read(playbackArchitectureServiceProvider)
                   .getStreamUrl(currentId, forceRefresh: true);
               if (url != null) {
                 debugPrint('[AudioPlayer] Self-heal success — resuming $currentId');
-                await _player.open(Media(url));
+                await _player.open(
+                  _resolver.buildMedia(url, player: _player),
+                  play: true,
+                );
                 return;
               }
             } catch (_) {}
@@ -288,78 +306,93 @@ class AudioNotifier extends Notifier<AudioState> {
       onPrevious: previous,
       onStop: stop,
     );
-    final idx = state.queue.indexOf(track);
+    final idx = state.queue.indexWhere(
+      (t) => (t.id ?? t.path) == (track.id ?? track.path),
+    );
     await playTrack(track, index: idx);
   }
 
   // Public entry-point for YouTube / streaming tracks
   Future<void> playYouTubeTrack(MediaItem item, {int index = -1}) async {
-    // If playing a new standalone track (index == -1), reset queue immediately to avoid metadata desync
-    final existingIndex = state.queue.indexWhere(
-      (t) => (t.id ?? t.path) == (item.id ?? item.path),
-    );
-    if (index == -1 && existingIndex == -1) {
-      _queue.setQueue([item], initialIndex: 0);
-      state = state.copyWith(
-        isLoading: true,
-        currentTrack: item,
-        queue: [item],
-        currentIndex: 0,
-      );
-      index = 0;
-    } else {
-      state = state.copyWith(isLoading: true, currentTrack: item);
-    }
-
-    try {
-      final resolvedPath = await _resolver.resolve(item);
-      await playTrack(item.copyWith(path: resolvedPath), index: index);
-    } on OfflinePlaybackException {
-      debugPrint('[AudioNotifier] Offline — skipping to next local track');
-      state = state.copyWith(isPlaying: false, isLoading: false);
-      ref.read(notificationProvider.notifier).showNotification(
-        'You\'re Offline',
-        'Skipping to next local track. Download tracks to play offline.',
-      );
-      // Advance queue without re-triggering stream resolution
-      if (state.queue.length > 1) Future.microtask(() => next());
-    } catch (e) {
-      debugPrint('[AudioNotifier] Stream resolution failed: $e');
-      state = state.copyWith(isPlaying: false);
-    } finally {
-      state = state.copyWith(isLoading: false);
-    }
+    await playTrack(item, index: index);
   }
 
   Future<void> playTrack(MediaItem item, {int index = -1}) async {
-    final targetId = item.id ?? item.path;
+    // Guard: normalize streaming item so path is always the video ID, never an ephemeral stream URL
+    final cleanItem = (item.isStreaming &&
+            item.path.startsWith('http') &&
+            item.id != null &&
+            item.id!.isNotEmpty)
+        ? item.copyWith(path: item.id!)
+        : item;
+
+    final targetId = cleanItem.id ?? cleanItem.path;
     if (state.queue.isEmpty ||
         (index == -1 &&
             !state.queue.any((t) => (t.id ?? t.path) == targetId))) {
-      _queue.setQueue([item], initialIndex: 0);
-      state = state.copyWith(queue: [item], currentIndex: 0);
+      _queue.setQueue([cleanItem], initialIndex: 0);
+      state = state.copyWith(
+        queue: [cleanItem],
+        currentIndex: 0,
+        isPlaylistMode: false,
+        clearActivePlaylistId: true,
+      );
       index = 0;
     } else if (index == -1) {
       index = state.queue.indexWhere((t) => (t.id ?? t.path) == targetId);
     }
 
-    MediaItem trackToPlay = item;
-    if (item.isStreaming &&
-        !item.path.startsWith('http') &&
-        !item.path.contains('/') &&
-        !item.path.contains('\\')) {
-      state = state.copyWith(isLoading: true, currentTrack: item);
+    MediaItem trackToPlay = cleanItem;
+    final isPhysicalLocal = (!cleanItem.isStreaming &&
+            (cleanItem.path.contains('/') || cleanItem.path.contains('\\'))) ||
+        cleanItem.path.endsWith('.m4a') ||
+        cleanItem.path.endsWith('.mp3');
+
+    if (cleanItem.isStreaming || !isPhysicalLocal) {
+      state = state.copyWith(isLoading: true, currentTrack: cleanItem);
       try {
-        final resolvedPath = await _resolver.resolve(item);
-        trackToPlay = item.copyWith(path: resolvedPath);
+        final resolvedPath = await _resolver.resolve(cleanItem);
+        trackToPlay = cleanItem.copyWith(path: resolvedPath);
       } on OfflinePlaybackException {
-        debugPrint('[AudioNotifier] Offline — skipping to next local track (playTrack)');
+        debugPrint('[AudioNotifier] Offline — checking upcoming queue for playable tracks');
         state = state.copyWith(isPlaying: false, isLoading: false);
-        ref.read(notificationProvider.notifier).showNotification(
-          'You\'re Offline',
-          'Skipping to next local track. Download tracks to play offline.',
-        );
-        if (state.queue.length > 1) Future.microtask(() => next());
+
+        final cacheService = ref.read(mediaCacheServiceProvider);
+        int nextPlayableIndex = -1;
+
+        for (int i = index + 1; i < state.queue.length; i++) {
+          final t = state.queue[i];
+          final isLocal = !t.isStreaming ||
+              (t.path.isNotEmpty &&
+                  !t.path.startsWith('http') &&
+                  (t.path.contains('/') || t.path.contains('\\')));
+          if (isLocal) {
+            nextPlayableIndex = i;
+            break;
+          }
+          final cachedPath = await cacheService.getCachedAudioPath(t.id ?? t.path);
+          if (cachedPath != null) {
+            nextPlayableIndex = i;
+            break;
+          }
+        }
+
+        if (nextPlayableIndex != -1) {
+          ref.read(notificationProvider.notifier).showNotification(
+            'You\'re Offline',
+            'Skipping to next available offline track.',
+            target: 'target:download',
+            silentOsNotification: true,
+          );
+          await playTrack(state.queue[nextPlayableIndex], index: nextPlayableIndex);
+        } else {
+          ref.read(notificationProvider.notifier).showNotification(
+            'You\'re Offline',
+            'No offline playable tracks remaining in queue.',
+            target: 'target:download',
+            silentOsNotification: true,
+          );
+        }
         return;
       } catch (e) {
         debugPrint('[AudioNotifier] Stream resolution failed in playTrack: $e');
@@ -368,14 +401,10 @@ class AudioNotifier extends Notifier<AudioState> {
       }
     }
 
-    // pass original item (not resolved-URL trackToPlay) so state.currentTrack
-    // keeps the video-ID path. Prevents orchestrator from seeing a fake "track change"
-    // when the URL is resolved, which would re-trigger a duplicate radio fetch.
-    _onTrackChanged(item, index);
+    _onTrackChanged(cleanItem, index);
     state = state.copyWith(isLoading: true);
     try {
       await _player.open(_resolver.buildMedia(trackToPlay.path, player: _player), play: true);
-      _engine.resetErrorGuard();
     } catch (e) {
       debugPrint('[AudioNotifier] CRITICAL: Error opening track: $e');
     } finally {
@@ -387,13 +416,25 @@ class AudioNotifier extends Notifier<AudioState> {
   Future<void> playPlaylist(
     List<MediaItem> items, {
     int initialIndex = 0,
+    String? playlistId,
   }) async {
     if (items.isEmpty) return;
-    _queue.setQueue(items, initialIndex: initialIndex);
-    state = state.copyWith(queue: items, currentIndex: initialIndex);
-    await _playCurrentFromQueue(items[initialIndex]);
-    final ids = items
-        .skip(initialIndex + 1)
+    final blocked = ref.read(blockedTracksProvider.notifier);
+    final validItems = items.where((t) => !blocked.isBlocked(t.id, path: t.path)).toList();
+    if (validItems.isEmpty) return;
+
+    final safeIndex = initialIndex.clamp(0, validItems.length - 1);
+    _queue.setQueue(validItems, initialIndex: safeIndex);
+    state = state.copyWith(
+      queue: validItems,
+      currentIndex: safeIndex,
+      isPlaylistMode: true,
+      activePlaylistId: playlistId,
+      clearActivePlaylistId: playlistId == null,
+    );
+    await _playCurrentFromQueue(validItems[safeIndex]);
+    final ids = validItems
+        .skip(safeIndex + 1)
         .where((e) => e.isStreaming)
         .take(3)
         .map((e) => e.id ?? e.path)
@@ -404,29 +445,95 @@ class AudioNotifier extends Notifier<AudioState> {
   }
 
   void addTrackToQueue(MediaItem item) {
+    addToQueue(item);
+  }
+
+  /// Plays [item] next after the currently playing song.
+  void playNext(MediaItem item) {
+    if (ref.read(blockedTracksProvider.notifier).isBlocked(item.id, path: item.path)) {
+      ref.read(notificationProvider.notifier).showNotification(
+        'Track Blocked',
+        '"${item.title}" is in your blocked list.',
+        target: 'target:blocked_tracks',
+        silentOsNotification: true,
+      );
+      return;
+    }
+
+    if (state.queue.isEmpty || state.currentTrack == null) {
+      if (item.isStreaming) {
+        playYouTubeTrack(item);
+      } else {
+        playTrack(item);
+      }
+      return;
+    }
+
+    _queue.insertTrackNext(item);
+    state = state.copyWith(queue: List.from(_queue.queue));
+    _updateNextTrack();
+
+    ref.read(notificationProvider.notifier).showNotification(
+      'Playing Next',
+      'Added "${item.title}" to play next.',
+      target: 'target:queue',
+      silentOsNotification: true,
+    );
+  }
+
+  /// Appends [item] to queue with notification.
+  void addToQueue(MediaItem item) {
+    if (ref.read(blockedTracksProvider.notifier).isBlocked(item.id, path: item.path)) {
+      ref.read(notificationProvider.notifier).showNotification(
+        'Track Blocked',
+        '"${item.title}" is in your blocked list.',
+        target: 'target:blocked_tracks',
+        silentOsNotification: true,
+      );
+      return;
+    }
+
     final itemId = item.id ?? item.path;
     final exists = state.queue.any((t) => (t.id ?? t.path) == itemId);
-    if (exists) return; // Queue deduplication guard
+    if (exists) {
+      ref.read(notificationProvider.notifier).showNotification(
+        'Already in Queue',
+        '"${item.title}" is already in the queue.',
+        target: 'target:queue',
+        silentOsNotification: true,
+      );
+      return;
+    }
 
     if (state.queue.isEmpty) {
-      playPlaylist([item]);
+      if (item.isStreaming) {
+        playYouTubeTrack(item);
+      } else {
+        playTrack(item);
+      }
     } else {
-      // appendTrack preserves cursor — avoids setQueue cursor reset
       _queue.appendTrack(item);
-      state = state.copyWith(queue: [...state.queue, item]);
+      state = state.copyWith(queue: List.from(_queue.queue));
       _updateNextTrack();
+      ref.read(notificationProvider.notifier).showNotification(
+        'Added to Queue',
+        'Added "${item.title}" to queue.',
+        target: 'target:queue',
+        silentOsNotification: true,
+      );
     }
   }
 
   /// Batch-appends tracks to queue. Fires _updateNextTrack once — not once per track.
   void addTracksToQueue(List<MediaItem> items) {
     if (items.isEmpty) return;
+    final blocked = ref.read(blockedTracksProvider.notifier);
     // Deduplicate incoming tracks against current queue and within the batch
     final existingIds = state.queue.map((t) => t.id ?? t.path).toSet();
     final deduped = <MediaItem>[];
     for (final item in items) {
       final id = item.id ?? item.path;
-      if (!existingIds.contains(id)) {
+      if (!existingIds.contains(id) && !blocked.isBlocked(item.id, path: item.path)) {
         deduped.add(item);
         existingIds.add(id);
       }
@@ -450,6 +557,56 @@ class AudioNotifier extends Notifier<AudioState> {
     if (ids.isNotEmpty) {
       ref.read(playbackArchitectureServiceProvider).predictiveFetch(ids);
     }
+  }
+
+  void reorderQueue(int oldIndex, int newIndex) {
+    _queue.reorderQueue(oldIndex, newIndex);
+    state = state.copyWith(
+      queue: List.from(_queue.queue),
+      currentIndex: _queue.currentIndex,
+    );
+    _updateNextTrack();
+    ref.read(gaplessPrefetchServiceProvider).resetLock();
+    ref.read(gaplessPrefetchServiceProvider).proactiveFetch();
+  }
+
+  void removeTrackFromQueue(int index) {
+    _queue.removeTrackAt(index);
+    state = state.copyWith(
+      queue: List.from(_queue.queue),
+      currentIndex: _queue.currentIndex,
+    );
+    _updateNextTrack();
+    ref.read(gaplessPrefetchServiceProvider).resetLock();
+    ref.read(gaplessPrefetchServiceProvider).proactiveFetch();
+  }
+
+  void removeTrackFromQueueById(String id) {
+    _queue.removeTrackById(id);
+    state = state.copyWith(
+      queue: List.from(_queue.queue),
+      currentIndex: _queue.currentIndex,
+    );
+    _updateNextTrack();
+    ref.read(gaplessPrefetchServiceProvider).resetLock();
+    ref.read(gaplessPrefetchServiceProvider).proactiveFetch();
+  }
+
+  void clearUpcomingQueue() {
+    _queue.clearUpcoming();
+    state = state.copyWith(
+      queue: List.from(_queue.queue),
+      currentIndex: _queue.currentIndex,
+    );
+    _updateNextTrack();
+    ref.read(gaplessPrefetchServiceProvider).resetLock();
+  }
+
+  Future<void> jumpToQueueIndex(int index) async {
+    if (index < 0 || index >= state.queue.length) return;
+    _queue.updateIndex(index);
+    state = state.copyWith(currentIndex: index);
+    await _playCurrentFromQueue(state.queue[index]);
   }
 
   void adjustLyricsOffset(Duration delta) {
@@ -477,10 +634,12 @@ class AudioNotifier extends Notifier<AudioState> {
     _queue.setQueue([], initialIndex: -1);
     state = state.copyWith(
       currentTrack: null,
+      clearCurrentTrack: true,
       isPlaying: false,
       queue: [],
       currentIndex: -1,
       nextTrack: null,
+      clearNextTrack: true,
       position: Duration.zero,
       duration: Duration.zero,
     );
@@ -522,6 +681,8 @@ class AudioNotifier extends Notifier<AudioState> {
           .showNotification(
             'Queue Completed',
             'Finished playing all tracks in the queue.',
+            target: 'target:queue',
+            silentOsNotification: true,
           );
     } else {
       _isNavigating = false;
@@ -607,8 +768,10 @@ class AudioNotifier extends Notifier<AudioState> {
   }
 
   void _updateNextTrack() {
+    final next = _queue.peekNextTrack(state.loopMode, state.isShuffleEnabled);
     state = state.copyWith(
-      nextTrack: _queue.peekNextTrack(state.loopMode, state.isShuffleEnabled),
+      nextTrack: next,
+      clearNextTrack: next == null,
     );
   }
 

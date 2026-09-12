@@ -15,14 +15,13 @@ import '../../utils/thumbnail_utils.dart';
 import '../../application/services/network_connectivity_service.dart';
 import 'package:flutter/painting.dart';
 
-int _scanDirectoryBytesIsolate(String path) {
+Future<int> _scanDirectoryBytesAsync(Directory dir) async {
   int total = 0;
-  final dir = Directory(path);
-  if (!dir.existsSync()) return 0;
+  if (!await dir.exists()) return 0;
   try {
-    for (final entity in dir.listSync(recursive: true, followLinks: false)) {
+    await for (final entity in dir.list(recursive: true, followLinks: false)) {
       if (entity is File) {
-        total += entity.lengthSync();
+        total += await entity.length();
       }
     }
   } catch (_) {}
@@ -124,6 +123,7 @@ class MediaCacheService {
     String songId,
     String streamUrl, {
     String? userAgent,
+    Map<String, String>? headers,
   }) async {
     final dir = await _cacheManager.getStreamAudioDir();
     final safeId = getSafeFilename(songId);
@@ -164,6 +164,7 @@ class MediaCacheService {
           streamUrl,
           file.path,
           userAgent: userAgent,
+          headers: headers,
         ).catchError((e) {
           debugPrint(
             '[MediaCache] Caught unhandled background failure for $songId: $e',
@@ -190,6 +191,7 @@ class MediaCacheService {
     String url,
     String savePath, {
     String? userAgent,
+    Map<String, String>? headers,
   }) async {
     final file = File(savePath);
     IOSink? sink;
@@ -197,38 +199,48 @@ class MediaCacheService {
     try {
       final request = http.Request('GET', Uri.parse(url));
 
-      final activeUA =
-          userAgent ??
-          (url.contains('c=ANDROID_VR')
-              ? 'com.google.android.apps.youtube.vr.oculus/1.56.21 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1)'
-              : url.contains('c=IOS')
-              ? 'com.google.ios.youtube/19.29.1 (iPhone14,3; U; CPU iOS 15_6_1 like Mac OS X)'
-              : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36");
+      if (headers != null && headers.isNotEmpty) {
+        request.headers.addAll(headers);
+      } else {
+        final activeUA =
+            userAgent ??
+            (url.contains('c=ANDROID_VR')
+                ? 'com.google.android.apps.youtube.vr.oculus/1.56.21 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1)'
+                : url.contains('c=ANDROID')
+                ? 'com.google.android.youtube/19.29.37 (Linux; U; Android 14; GB) gzip'
+                : url.contains('c=IOS')
+                ? 'com.google.ios.youtube/19.29.1 (iPhone14,3; U; CPU iOS 15_6_1 like Mac OS X)'
+                : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36");
 
-      final isMobileClient = activeUA.toLowerCase().contains('android') ||
-          activeUA.toLowerCase().contains('ios') ||
-          url.contains('c=ANDROID_VR') ||
-          url.contains('c=IOS');
+        final isMobileClient = activeUA.toLowerCase().contains('android') ||
+            activeUA.toLowerCase().contains('ios') ||
+            url.contains('c=ANDROID_VR') ||
+            url.contains('c=ANDROID') ||
+            url.contains('c=IOS');
 
-      final Map<String, String> resolvedHeaders = {
-        'User-Agent': activeUA,
-        'Accept': '*/*',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Connection': 'keep-alive',
-        'Range': 'bytes=0-',
-      };
+        final Map<String, String> resolvedHeaders = {
+          'User-Agent': activeUA,
+          'Accept': '*/*',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Connection': 'keep-alive',
+          if (!url.contains('c=ANDROID')) 'Range': 'bytes=0-',
+        };
 
-      if (!isMobileClient) {
-        resolvedHeaders.addAll({
-          'Origin': 'https://www.youtube.com',
-          'Referer': 'https://www.youtube.com/',
-          'Sec-Fetch-Dest': 'audio',
-          'Sec-Fetch-Mode': 'cors',
-          'Sec-Fetch-Site': 'cross-site',
-        });
+        if (!isMobileClient) {
+          final origin = url.contains('music.youtube.com')
+              ? 'https://music.youtube.com'
+              : 'https://www.youtube.com';
+          resolvedHeaders.addAll({
+            'Origin': origin,
+            'Referer': '$origin/',
+            'Sec-Fetch-Dest': 'audio',
+            'Sec-Fetch-Mode': 'cors',
+            'Sec-Fetch-Site': 'cross-site',
+          });
+        }
+
+        request.headers.addAll(resolvedHeaders);
       }
-
-      request.headers.addAll(resolvedHeaders);
 
       final response = await _client
           .send(request)
@@ -353,7 +365,13 @@ class MediaCacheService {
       }
 
       _activeArtworkDownloads.add(songId);
-      final response = await _client.get(Uri.parse(upgradedUrl));
+      var response = await _client.get(Uri.parse(upgradedUrl));
+      if (response.statusCode != 200) {
+        final fallbackUrl = ThumbnailUtils.getFallbackResolution(upgradedUrl);
+        if (fallbackUrl != null && fallbackUrl != upgradedUrl) {
+          response = await _client.get(Uri.parse(fallbackUrl));
+        }
+      }
       if (response.statusCode == 200) {
         await file.writeAsBytes(response.bodyBytes);
         notifyDelta('stream_images', response.bodyBytes.length);
@@ -428,7 +446,10 @@ class MediaCacheService {
         if (DateTime.now().difference(stat.modified).inHours < 1) return;
       }
 
-      final map = item.toJson(includeArt: false);
+      final cleanItem = (item.isStreaming && item.path.startsWith('http'))
+          ? item.copyWith(path: songId)
+          : item;
+      final map = cleanItem.toJson(includeArt: false);
       // Use locked write
       await _cacheManager.synchronizedWrite(file, jsonEncode(map));
       _scheduleCleanup();
@@ -446,21 +467,39 @@ class MediaCacheService {
       final safeId = getSafeFilename(songId);
       final file = File(p.join(dir.path, '$safeId.json'));
 
+      final cleanItem = (item.isStreaming && item.path.startsWith('http'))
+          ? item.copyWith(path: songId)
+          : item;
+
       // Read existing sidecar to check if enriched fields are actually new.
       if (await file.exists()) {
         try {
           final existing = MediaItem.fromJson(jsonDecode(await file.readAsString()));
+          final isBadArtist = existing.artist == null ||
+              existing.artist!.isEmpty ||
+              existing.artist == 'Lagu' ||
+              existing.artist == 'Song' ||
+              existing.artist == 'Unknown Artist' ||
+              existing.artist == 'Unknown';
+          final hasGoodIncomingArtist = item.artist != null &&
+              item.artist!.isNotEmpty &&
+              item.artist != 'Lagu' &&
+              item.artist != 'Song' &&
+              item.artist != 'Unknown Artist' &&
+              item.artist != 'Unknown';
+          final artistEnriched = isBadArtist && hasGoodIncomingArtist;
+
           final albumEnriched = (existing.album == null || existing.album!.isEmpty || existing.album == 'Unknown Album') &&
               item.album != null && item.album!.isNotEmpty && item.album != 'Unknown Album';
           final artEnriched = (existing.thumbnailUrl == null || existing.thumbnailUrl!.isEmpty) &&
               item.thumbnailUrl != null && item.thumbnailUrl!.isNotEmpty;
-          if (!albumEnriched && !artEnriched) return; // nothing new to write
+          if (!albumEnriched && !artEnriched && !artistEnriched) return; // nothing new to write
         } catch (_) {
           // corrupt sidecar — fall through and overwrite
         }
       }
 
-      await _cacheManager.synchronizedWrite(file, jsonEncode(item.toJson(includeArt: false)));
+      await _cacheManager.synchronizedWrite(file, jsonEncode(cleanItem.toJson(includeArt: false)));
       debugPrint('[MediaCache] Forced sidecar update for $songId (album/art enriched)');
     } catch (e) {
       debugPrint('[MediaCache] Metadata forced-save error: $e');
@@ -560,8 +599,8 @@ class MediaCacheService {
         return _cachedSizes[category]!;
       }
 
-      // Re-scan dirty folder in background isolate (zero UI hitch)
-      final total = await compute(_scanDirectoryBytesIsolate, dir.path);
+      // Re-scan dirty folder asynchronously (non-blocking, zero isolate overhead)
+      final total = await _scanDirectoryBytesAsync(dir);
       _cachedSizes[category] = total;
       _dirModTimes[category] = stat.modified;
       _saveSizesSnapshot();
@@ -726,6 +765,16 @@ class MediaCacheService {
   }
 
   Future<void> enforceCacheLimit(int limitMb) async {
-    await _cacheManager.enforceStreamAudioLimit(limitMb);
+    // Load playlist-pinned track IDs so they are never evicted by the dynamic eraser.
+    Set<String> pinnedIds = const {};
+    try {
+      final prefs = _ref.read(sharedPreferencesProvider);
+      final raw = prefs.getString('pinned_stream_ids');
+      if (raw != null) {
+        // These are already safe filenames (written by PlaylistNotifier._saveState).
+        pinnedIds = Set<String>.from(jsonDecode(raw) as List);
+      }
+    } catch (_) {}
+    await _cacheManager.enforceStreamAudioLimit(limitMb, pinnedIds: pinnedIds);
   }
 }

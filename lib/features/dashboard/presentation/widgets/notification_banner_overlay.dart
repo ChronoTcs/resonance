@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:resonance/core/utils/uicons.dart';
+import 'package:resonance/core/widgets/widgets.dart';
 import 'package:resonance/features/settings/application/notification_provider.dart';
 
 /// Top-Right Floating Banner Overlay for immediate visual notification feedback.
@@ -60,15 +62,24 @@ class _NotificationBannerOverlayState extends ConsumerState<NotificationBannerOv
         color: theme.colorScheme.surfaceContainerHigh.withValues(alpha: 0.95),
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
-          onTap: () {
-            ref.read(notificationProvider.notifier).markAllAsRead();
-            ref.read(notificationProvider.notifier).handleNotificationClick(targetScreen: banner.targetScreen);
-            setState(() {
-              _activeBanner = null;
-            });
-          },
+          mouseCursor: banner.targetScreen != null
+              ? SystemMouseCursors.click
+              : SystemMouseCursors.basic,
+          onTap: banner.targetScreen != null
+              ? () {
+                  ref.read(notificationProvider.notifier).markAllAsRead();
+                  ref
+                      .read(notificationProvider.notifier)
+                      .handleNotificationClick(targetScreen: banner.targetScreen);
+                  setState(() {
+                    _activeBanner = null;
+                  });
+                }
+              : null,
           child: Container(
-            width: 320,
+            constraints: BoxConstraints(
+              maxWidth: (MediaQuery.sizeOf(context).width - 32.0).clamp(240.0, 320.0),
+            ),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
@@ -87,13 +98,27 @@ class _NotificationBannerOverlayState extends ConsumerState<NotificationBannerOv
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        banner.title,
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              banner.title,
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (banner.targetScreen != null) ...[
+                            const SizedBox(width: 4),
+                            Icon(
+                              UIcons.regular.angle_small_right,
+                              size: 14,
+                              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                            ),
+                          ],
+                        ],
                       ),
                       const SizedBox(height: 2),
                       Text(
@@ -107,11 +132,32 @@ class _NotificationBannerOverlayState extends ConsumerState<NotificationBannerOv
                     ],
                   ),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.close, size: 16),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                  onPressed: () {
+                if (banner.actionLabel != null && banner.onAction != null) ...[
+                  const SizedBox(width: 8),
+                  TextButton(
+                    onPressed: () {
+                      final action = banner.onAction;
+                      setState(() {
+                        _activeBanner = null;
+                      });
+                      action?.call();
+                    },
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      foregroundColor: theme.colorScheme.primary,
+                      textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                    ),
+                    child: Text(banner.actionLabel!),
+                  ),
+                ],
+                ReusableHoverIconButton(
+                  icon: UIcons.regular.cross_small,
+                  tooltip: 'Dismiss',
+                  iconSize: 13.0,
+                  padding: 4.0,
+                  onTap: () {
                     setState(() {
                       _activeBanner = null;
                     });

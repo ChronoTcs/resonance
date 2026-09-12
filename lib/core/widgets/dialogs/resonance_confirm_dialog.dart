@@ -24,58 +24,75 @@ class ResonanceConfirmDialog extends StatelessWidget {
     final theme = Theme.of(context);
     return Dialog(
       backgroundColor: Colors.transparent,
-      child: Container(
-        width: 360,
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surface.withValues(alpha: 0.95),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: theme.primaryColor.withValues(alpha: 0.2),
-            width: 1,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 360),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface.withValues(alpha: 0.96),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: theme.primaryColor.withValues(alpha: 0.2),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.35),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
           ),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: theme.colorScheme.onSurface,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              content,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                ResonanceButton(
-                  onPressed: () => Navigator.pop(context),
-                  label: cancelLabel,
-                  style: ResonanceButtonStyle.secondary,
+                Text(
+                  title,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.onSurface,
+                  ),
                 ),
-                const SizedBox(width: 12),
-                ResonanceButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    onConfirm();
-                  },
-                  label: confirmLabel,
-                  style: isDanger ? ResonanceButtonStyle.danger : ResonanceButtonStyle.primary,
+                const SizedBox(height: 12),
+                Text(
+                  content,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: 12,
+                  runSpacing: 8,
+                  children: [
+                    ResonanceButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      label: cancelLabel,
+                      style: ResonanceButtonStyle.secondary,
+                    ),
+                    ResonanceButton(
+                      onPressed: () {
+                        onConfirm();
+                        if (context.mounted) {
+                          Navigator.pop(context, true);
+                        }
+                      },
+                      label: confirmLabel,
+                      style: isDanger ? ResonanceButtonStyle.danger : ResonanceButtonStyle.primary,
+                    ),
+                  ],
                 ),
               ],
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 }
+
