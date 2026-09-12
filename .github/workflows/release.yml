@@ -216,14 +216,14 @@ jobs:
                   }
                   if ($detectedBuilds.Count -gt 0) {
                     $highestPriorBuild = ($detectedBuilds | Measure-Object -Maximum).Maximum
-                    Write-Host "Discovered prior build in current tag $tag: Build $highestPriorBuild"
+                    Write-Host "Discovered prior build in current tag [$tag] - Build $highestPriorBuild"
                     New-Item -ItemType Directory -Path "prev_build_tag" -Force
                     gh release download $tag --pattern "*Portable.zip" --dir "prev_build_tag" 2>$null
                     $inTagZip = Get-ChildItem "prev_build_tag\*.zip" | Select-Object -First 1
                     if ($inTagZip) {
                       Expand-Archive -Path $inTagZip.FullName -DestinationPath "prev_build_tag\extracted" -Force
                       $patchTargets += @{
-                        Name = "Resonance-v$baseVersion.$highestPriorBuild-to-v$safeCurr-delta.patch"
+                        Name = "Resonance-v$($baseVersion).$($highestPriorBuild)-to-v$($safeCurr)-delta.patch"
                         SourceDir = "prev_build_tag\extracted"
                         Label = "$baseVersion.$highestPriorBuild (in-tag build $highestPriorBuild)"
                       }
@@ -249,7 +249,7 @@ jobs:
                     Expand-Archive -Path $pZip.FullName -DestinationPath "$dirName\extracted" -Force
                     $safePrevTag = $pt.TrimStart('v') -replace '\+', '.'
                     $patchTargets += @{
-                      Name = "Resonance-v$safePrevTag-to-v$safeCurr-delta.patch"
+                      Name = "Resonance-v$($safePrevTag)-to-v$($safeCurr)-delta.patch"
                       SourceDir = "$dirName\extracted"
                       Label = "$pt"
                     }
