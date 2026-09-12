@@ -52,12 +52,13 @@ jobs:
           HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
-          echo "$KEYSTORE_BASE64" | base64 --decode > android/app/release.jks
+          echo "$KEYSTORE_BASE64" | base64 --decode > android/upload-keystore.jks
+          cp android/upload-keystore.jks android/app/upload-keystore.jks
           cat <<EOF > android/key.properties
           storePassword=${{ secrets.KEYSTORE_PASSWORD }}
           keyPassword=${{ secrets.KEY_PASSWORD }}
           keyAlias=${{ secrets.KEY_ALIAS }}
-          storeFile=release.jks
+          storeFile=upload-keystore.jks
           EOF
 
       - name: Install Flutter Dependencies
@@ -191,37 +192,85 @@ jobs:
           Compress-Archive -Path "$buildDir\*" -DestinationPath $portableZip -Force
           Write-Host "Created portable archive: $portableZip"
 
-          # 2. Binary Delta Patching against previous release
+          # 2. Binary Delta Patching against previous build (in-tag) and previous release tags
           try {
-            $releases = gh release list --limit 10 --json tagName,isDraft -q '.[] | select(.isDraft == false) | .tagName'
-            $prevTag = $releases | Where-Object { $_ -ne $tag } | Select-Object -First 1
+            $hdiffz = "windows\tools\hdiffz.exe"
+            if (-not (Test-Path $hdiffz)) {
+              Write-Warning "windows/tools/hdiffz.exe not found. Skipping delta patch."
+            } else {
+              $safeCurr = "$baseVersion.$buildNum"
+              $patchTargets = @()
 
-            if ($prevTag) {
-              Write-Host "Discovered previous release: $prevTag. Downloading portable archive for delta patch..."
-              New-Item -ItemType Directory -Path "prev_release" -Force
-              gh release download $prevTag --pattern "*Portable.zip" --dir "prev_release"
-
-              $prevZip = Get-ChildItem "prev_release\*.zip" | Select-Object -First 1
-              if ($prevZip) {
-                Expand-Archive -Path $prevZip.FullName -DestinationPath "prev_release\extracted" -Force
-
-                $safePrev = $prevTag.TrimStart('v') -replace '\+', '.'
-                $safeCurr = "$baseVersion.$buildNum"
-                $patchName = "Resonance-v$safePrev-to-v$safeCurr-delta.patch"
-                $patchPath = "Output\$patchName"
-
-                if (Test-Path "windows\tools\hdiffz.exe") {
-                  & "windows\tools\hdiffz.exe" -f -s-64 -c-zstd "prev_release\extracted" "$buildDir" "$patchPath"
-                  if (Test-Path $patchPath) {
-                    $patchSizeMb = [math]::Round((Get-Item $patchPath).Length / 1MB, 2)
-                    Write-Host "Successfully generated delta patch: $patchName ($patchSizeMb MB)" -ForegroundColor Green
+              # Check A: In-Tag Previous Build (Hotfix under same tag e.g. Build 12 -> Build 13)
+              try {
+                $currentReleaseAssets = gh release view $tag --json assets -q '.assets[].name' 2>$null
+                if ($currentReleaseAssets) {
+                  $prevBuildMatches = $currentReleaseAssets | Select-String -Pattern "v?\d+\.\d+\.\d+(?:-[a-zA-Z0-9]+)?[\.+](\d+)"
+                  $detectedBuilds = @()
+                  foreach ($m in $prevBuildMatches) {
+                    $bVal = [int]$m.Matches[0].Groups[1].Value
+                    if ($bVal -ge 1000) { $bVal = $bVal % 1000 }
+                    if ($bVal -lt [int]$buildNum -and $bVal -gt 0) {
+                      $detectedBuilds += $bVal
+                    }
                   }
-                } else {
-                  Write-Warning "windows/tools/hdiffz.exe not found. Skipping delta patch."
+                  if ($detectedBuilds.Count -gt 0) {
+                    $highestPriorBuild = ($detectedBuilds | Measure-Object -Maximum).Maximum
+                    Write-Host "Discovered prior build in current tag $tag: Build $highestPriorBuild"
+                    New-Item -ItemType Directory -Path "prev_build_tag" -Force
+                    gh release download $tag --pattern "*Portable.zip" --dir "prev_build_tag" 2>$null
+                    $inTagZip = Get-ChildItem "prev_build_tag\*.zip" | Select-Object -First 1
+                    if ($inTagZip) {
+                      Expand-Archive -Path $inTagZip.FullName -DestinationPath "prev_build_tag\extracted" -Force
+                      $patchTargets += @{
+                        Name = "Resonance-v$baseVersion.$highestPriorBuild-to-v$safeCurr-delta.patch"
+                        SourceDir = "prev_build_tag\extracted"
+                        Label = "$baseVersion.$highestPriorBuild (in-tag build $highestPriorBuild)"
+                      }
+                    }
+                  }
+                }
+              } catch {
+                Write-Warning "Could not inspect or download prior build from current tag: $_"
+              }
+
+              # Check B: Previous Release Tags (e.g. v0.1.7-beta, v0.1.6-beta)
+              try {
+                $releases = gh release list --limit 10 --json tagName,isDraft -q '.[] | select(.isDraft == false) | .tagName'
+                $prevTags = $releases | Where-Object { $_ -ne $tag } | Select-Object -First 2
+                $tagIdx = 0
+                foreach ($pt in $prevTags) {
+                  $tagIdx++
+                  $dirName = "prev_tag_$tagIdx"
+                  New-Item -ItemType Directory -Path $dirName -Force
+                  gh release download $pt --pattern "*Portable.zip" --dir $dirName 2>$null
+                  $pZip = Get-ChildItem "$dirName\*.zip" | Select-Object -First 1
+                  if ($pZip) {
+                    Expand-Archive -Path $pZip.FullName -DestinationPath "$dirName\extracted" -Force
+                    $safePrevTag = $pt.TrimStart('v') -replace '\+', '.'
+                    $patchTargets += @{
+                      Name = "Resonance-v$safePrevTag-to-v$safeCurr-delta.patch"
+                      SourceDir = "$dirName\extracted"
+                      Label = "$pt"
+                    }
+                  }
+                }
+              } catch {
+                Write-Warning "Could not fetch previous release tags: $_"
+              }
+
+              # Generate delta patches for all discovered targets
+              foreach ($target in $patchTargets) {
+                $pName = $target.Name
+                $pSource = $target.SourceDir
+                $pOut = "Output\$pName"
+                Write-Host "Generating delta patch from $($target.Label) -> $pName..."
+                & $hdiffz -f -s-64 -c-zstd "$pSource" "$buildDir" "$pOut"
+                if (Test-Path $pOut) {
+                  $pSizeMb = [math]::Round((Get-Item $pOut).Length / 1MB, 2)
+                  Write-Host "Successfully generated delta patch: $pName ($pSizeMb MB)" -ForegroundColor Green
                 }
               }
-            } else {
-              Write-Host "No prior release found. Skipping delta patch."
             }
           } catch {
             Write-Warning "Delta patch step encountered error or skipped: $_"
