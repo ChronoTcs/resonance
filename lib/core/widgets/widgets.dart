@@ -25,3 +25,4 @@ export 'wrappers/keyboard_listener_wrapper.dart';
 export 'common/shimmer_skeleton.dart';
 export 'common/loading_skeletons.dart';
 export 'common/offline_banner.dart';
+export 'text/resonance_marquee_text.dart';

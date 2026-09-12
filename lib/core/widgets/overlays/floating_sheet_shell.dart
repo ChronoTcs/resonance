@@ -65,22 +65,28 @@ class FloatingSheetShell extends StatelessWidget {
       headerWidget = Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (icon != null) ...[
-                Icon(icon, color: primary, size: 20),
-                const SizedBox(width: 10),
-              ],
-              Text(
-                title!,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18,
+          Expanded(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (icon != null) ...[
+                  Icon(icon, color: primary, size: 20),
+                  const SizedBox(width: 10),
+                ],
+                Flexible(
+                  child: Text(
+                    title!,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                    ),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
+          const SizedBox(width: 8),
           ReusableHoverIconButton(
             icon: UIcons.regular.cross_small,
             tooltip: 'Close',

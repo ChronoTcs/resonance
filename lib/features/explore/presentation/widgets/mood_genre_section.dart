@@ -170,7 +170,7 @@ class _MoodGenreSectionState extends State<MoodGenreSection> {
 
   Widget _buildMoodGenrePill(MoodGenreItem cat, ThemeData theme) {
     return Material(
-      color: const Color(0xFF212121),
+      color: theme.colorScheme.surfaceContainerHighest,
       borderRadius: BorderRadius.circular(8),
       child: InkWell(
         mouseCursor: SystemMouseCursors.click,
@@ -192,8 +192,8 @@ class _MoodGenreSectionState extends State<MoodGenreSection> {
                   cat.title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: theme.colorScheme.onSurface,
                     fontWeight: FontWeight.w600,
                     fontSize: 13,
                     letterSpacing: -0.1,

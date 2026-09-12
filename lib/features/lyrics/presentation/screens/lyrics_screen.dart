@@ -118,18 +118,8 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
       ),
     );
 
-    if (widget.isEmbedded) {
-      return PopScope(
-        canPop: false,
-        onPopInvokedWithResult: (didPop, _) {
-          if (!didPop) {
-            ref.read(lyricsOverlayProvider.notifier).toggle();
-          }
-        },
-        child: screenWidget,
-      );
-    }
-
+    // Back navigation for the embedded overlay is handled by the Dashboard's
+    // _handleBackPress (lyrics checked before now playing), so no PopScope here.
     return screenWidget;
   }
 }

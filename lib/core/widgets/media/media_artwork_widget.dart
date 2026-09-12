@@ -40,6 +40,16 @@ class _MediaArtworkWidgetState extends ConsumerState<MediaArtworkWidget> {
   @override
   void initState() {
     super.initState();
+    // Sync init: show thumbnailUrl immediately so cards never blink blank on first mount.
+    if (widget.item.albumArt == null &&
+        widget.item.thumbnailUrl != null &&
+        widget.item.thumbnailUrl!.isNotEmpty) {
+      _resolvedThumbnailUrl = widget.item.thumbnailUrl!.startsWith('http')
+          ? (widget.width > 200
+              ? ThumbnailUtils.upgradeResolution(widget.item.thumbnailUrl)
+              : ThumbnailUtils.toCardResolution(widget.item.thumbnailUrl))
+          : widget.item.thumbnailUrl;
+    }
     _resolveThumbnail();
   }
 
@@ -77,7 +87,9 @@ class _MediaArtworkWidgetState extends ConsumerState<MediaArtworkWidget> {
     // 2. Fallback to upgraded HTTP thumbnail URL if item.thumbnailUrl is set
     if (widget.item.thumbnailUrl != null && widget.item.thumbnailUrl!.isNotEmpty) {
       final upgraded = widget.item.thumbnailUrl!.startsWith('http')
-          ? ThumbnailUtils.upgradeResolution(widget.item.thumbnailUrl)
+          ? (widget.width > 200
+              ? ThumbnailUtils.upgradeResolution(widget.item.thumbnailUrl)
+              : ThumbnailUtils.toCardResolution(widget.item.thumbnailUrl))
           : widget.item.thumbnailUrl;
       if (mounted) {
         setState(() {
@@ -125,6 +137,8 @@ class _MediaArtworkWidgetState extends ConsumerState<MediaArtworkWidget> {
           imageUrl: _resolvedThumbnailUrl!,
           width: widget.width,
           height: widget.height,
+          memCacheWidth: 400,
+          memCacheHeight: 400,
           fit: widget.fit,
           color: widget.color,
           colorBlendMode: widget.colorBlendMode,
@@ -136,6 +150,8 @@ class _MediaArtworkWidgetState extends ConsumerState<MediaArtworkWidget> {
                 imageUrl: fallbackUrl,
                 width: widget.width,
                 height: widget.height,
+                memCacheWidth: 400,
+                memCacheHeight: 400,
                 fit: widget.fit,
                 color: widget.color,
                 colorBlendMode: widget.colorBlendMode,
@@ -166,6 +182,8 @@ class _MediaArtworkWidgetState extends ConsumerState<MediaArtworkWidget> {
             key: ValueKey(cacheKey),
             width: widget.width,
             height: widget.height,
+            cacheWidth: 600,
+            cacheHeight: 600,
             fit: widget.fit,
             color: widget.color,
             colorBlendMode: widget.colorBlendMode,

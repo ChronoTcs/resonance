@@ -36,12 +36,11 @@ class WordSyncedLyricRow extends ConsumerWidget {
       height: 1.4,
     );
 
-    // Compute offset adjusted position for syllable timing check if offset is adaptive
-    final adjustedPosition = ref.watch(adjustedLyricsPositionProvider);
     final syllables = line.syllables;
 
-    // Fallback: If no syllable-level timings exist for this line, render simple Text line
-    if (syllables == null || syllables.isEmpty) {
+    // Inactive rows or lines without syllable timings render simple static text
+    // without subscribing to per-tick position stream updates
+    if (!isActive || syllables == null || syllables.isEmpty) {
       return Text(
         line.text,
         textAlign: TextAlign.center,
@@ -52,6 +51,9 @@ class WordSyncedLyricRow extends ConsumerWidget {
         ),
       );
     }
+
+    // Only active word-synced rows subscribe to per-tick position updates
+    final adjustedPosition = ref.watch(adjustedLyricsPositionProvider);
 
     // Syllable/word-by-word animation processing
     final List<InlineSpan> spans = [];

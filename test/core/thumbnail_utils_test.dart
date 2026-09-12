@@ -38,5 +38,22 @@ void main() {
       expect(ThumbnailUtils.getFallbackResolution(''), isNull);
       expect(ThumbnailUtils.getFallbackResolution(null), isNull);
     });
+
+    test('toCardResolution provides clean 400x400 parameter for cards and tiles', () {
+      const url1 = 'https://lh3.googleusercontent.com/abc=w120-h120-l90-rj';
+      expect(ThumbnailUtils.toCardResolution(url1),
+          equals('https://lh3.googleusercontent.com/abc=w400-h400-l90-rj'));
+
+      const url2 = 'https://yt3.googleusercontent.com/xyz=s120';
+      expect(ThumbnailUtils.toCardResolution(url2),
+          equals('https://yt3.googleusercontent.com/xyz=s400'));
+
+      const ytVideoUrl = 'https://i.ytimg.com/vi/12345/maxresdefault.jpg';
+      expect(ThumbnailUtils.toCardResolution(ytVideoUrl),
+          equals('https://i.ytimg.com/vi/12345/hqdefault.jpg'));
+
+      expect(ThumbnailUtils.toCardResolution(''), equals(''));
+      expect(ThumbnailUtils.toCardResolution(null), equals(''));
+    });
   });
 }

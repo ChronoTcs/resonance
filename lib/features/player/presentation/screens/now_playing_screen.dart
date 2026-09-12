@@ -13,102 +13,107 @@ import 'package:resonance/features/library/presentation/widgets/media_actions_bo
 import '../widgets/player_cards.dart';
 import '../widgets/mini_player/shared/audio_settings_sheet.dart';
 
-//  // Unused
-
 class NowPlayingScreen extends ConsumerWidget {
   const NowPlayingScreen({super.key});
 
   void _showMediaActions(BuildContext context, dynamic track) {
-    MediaActionsBottomSheet.show(
-      context: context,
-      item: track,
-    );
+    MediaActionsBottomSheet.show(context: context, item: track);
   }
 
   void _showAudioSettings(BuildContext context) {
     AudioSettingsSheet.show(context);
   }
 
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // OPTIMIZATION: Only watch properties that affect the general layout.
-    // Watching the full audioProvider causes rebuilds every second (position change).
     final track = ref.watch(audioProvider.select((s) => s.currentTrack));
     final isAndroid = Platform.isAndroid;
-    final blurSigma = isAndroid ? 40.0 : 80.0;
 
-    return PopScope(
-      canPop: !isAndroid,
-      onPopInvokedWithResult: (didPop, _) {
-        if (didPop) return;
-        ref.read(nowPlayingOverlayProvider.notifier).setVisible(false);
-      },
-      child: Stack(
-        clipBehavior: Clip.antiAlias,
-        children: [
-          _NowPlayingBackground(track: track, blurSigma: blurSigma),
-          SafeArea(
-            child: Column(
-              children: [
-                _NowPlayingTopBar(
-                  track: track,
-                  onClose: () => ref
-                      .read(nowPlayingOverlayProvider.notifier)
-                      .setVisible(false),
-                  onQueue: () => ref
-                      .read(queueOverlayProvider.notifier)
-                      .toggle(),
-                  onMediaActions: () => _showMediaActions(context, track),
-                  onAudioSettings: () => _showAudioSettings(context),
-                ),
-                Expanded(
-                  child: TweenAnimationBuilder<double>(
-                    duration: const Duration(milliseconds: 600),
-                    curve: Curves.easeOutCubic,
-                    tween: Tween(begin: 0.0, end: 1.0),
-                    builder: (context, value, child) {
-                      return Opacity(
-                        opacity: value,
-                        child: Transform.translate(
-                          offset: Offset(0, 30 * (1 - value)),
-                          child: child,
-                        ),
-                      );
-                    },
-                    child: SilkySingleChildScrollView(
-                      padding: const EdgeInsets.only(
-                        left: 24,
-                        right: 24,
-                        top: 12,
-                        bottom: 48,
-                      ),
-                      child: track == null
-                          ? const Center(child: Text('No media playing'))
-                          : Center(
-                              child: LayoutBuilder(
-                                  builder: (context, constraints) {
-                                    final totalWidth = constraints.maxWidth;
-                                    final isCompactLayout =
-                                        AppBreakpoints.isCompactWidth(totalWidth);
-
-                                    return isCompactLayout
-                                        ? _MobileLayout(track: track)
-                                        : _DesktopLayout(
-                                            track: track,
-                                            totalWidth: totalWidth,
-                                          );
-                                  },
-                              ),
-                            ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+    return Stack(
+      clipBehavior: Clip.antiAlias,
+      children: [
+        _NowPlayingBackground(
+          track: track,
+          blurSigma: isAndroid ? 20.0 : 80.0,
+        ),
+        SafeArea(
+          child: Column(
+            children: [
+              _NowPlayingTopBar(
+                track: track,
+                onClose: () =>
+                    ref.read(nowPlayingOverlayProvider.notifier).setVisible(false),
+                onQueue: () =>
+                    ref.read(queueOverlayProvider.notifier).toggle(),
+                onMediaActions: () => _showMediaActions(context, track),
+                onAudioSettings: () => _showAudioSettings(context),
+              ),
+              Expanded(
+                child: _NowPlayingBody(track: track, isAndroid: isAndroid),
+              ),
+            ],
           ),
-        ],
+        ),
+      ],
+    );
+  }
+}
+
+// ── Entry animation + scroll wrapper ─────────────────────────────────────────
+
+class _NowPlayingBody extends StatelessWidget {
+  final dynamic track;
+  final bool isAndroid;
+
+  const _NowPlayingBody({required this.track, required this.isAndroid});
+
+  static const _scrollPadding = EdgeInsets.only(
+    left: 24,
+    right: 24,
+    top: 12,
+    bottom: 48,
+  );
+
+  Widget _buildScrollable(Widget child) {
+    if (isAndroid) {
+      return SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        padding: _scrollPadding,
+        child: child,
+      );
+    }
+    return SilkySingleChildScrollView(padding: _scrollPadding, child: child);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (track == null) {
+      return const Center(child: Text('No media playing'));
+    }
+
+    final layoutContent = Center(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final totalWidth = constraints.maxWidth;
+          return AppBreakpoints.isCompactWidth(totalWidth)
+              ? _MobileLayout(track: track)
+              : _DesktopLayout(track: track, totalWidth: totalWidth);
+        },
       ),
+    );
+
+    return TweenAnimationBuilder<double>(
+      duration: const Duration(milliseconds: 600),
+      curve: Curves.easeOutCubic,
+      tween: Tween(begin: 0.0, end: 1.0),
+      builder: (context, value, child) => Opacity(
+        opacity: value,
+        child: Transform.translate(
+          offset: Offset(0, 30 * (1 - value)),
+          child: child,
+        ),
+      ),
+      child: _buildScrollable(layoutContent),
     );
   }
 }
@@ -260,30 +265,182 @@ class _ArtworkCard extends StatelessWidget {
   }
 }
 
-class _MobileLayout extends StatelessWidget {
+enum _NowPlayingTab { queueInfo, lyrics }
+
+class _MobileLayout extends StatefulWidget {
   final dynamic track;
 
   const _MobileLayout({required this.track});
 
   @override
+  State<_MobileLayout> createState() => _MobileLayoutState();
+}
+
+class _MobileLayoutState extends State<_MobileLayout> {
+  _NowPlayingTab _selectedTab = _NowPlayingTab.queueInfo;
+
+  @override
   Widget build(BuildContext context) {
+    final isAndroid = Theme.of(context).platform == TargetPlatform.android;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _ArtworkCard(track: track),
-        if (Platform.isAndroid) ...[
+        _ArtworkCard(track: widget.track),
+        if (isAndroid) ...[
           const SizedBox(height: 16),
-          const NavigationControlCard(),
+          const NavigationControlCard(showSeekSlider: true),
           const SizedBox(height: 16),
+          _SubNavBar(
+            selected: _selectedTab,
+            onChanged: (tab) => setState(() => _selectedTab = tab),
+          ),
+          const SizedBox(height: 16),
+          _AndroidSubView(tab: _selectedTab, track: widget.track),
         ] else ...[
           const SizedBox(height: 24),
+          MetadataCard(track: widget.track),
+          const SizedBox(height: 24),
+          const MiniLyricsCard(height: 350),
+          const SizedBox(height: 24),
+          const NextInQueueCard(),
         ],
-        MetadataCard(track: track),
-        const SizedBox(height: 24),
-        const MiniLyricsCard(height: 350),
-        const SizedBox(height: 24),
-        const NextInQueueCard(),
       ],
+    );
+  }
+}
+
+/// Animated sub-view that switches between Queue+Info and Lyrics tabs.
+class _AndroidSubView extends StatelessWidget {
+  final _NowPlayingTab tab;
+  final dynamic track;
+
+  const _AndroidSubView({required this.tab, required this.track});
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 280),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      transitionBuilder: (child, animation) => FadeTransition(
+        opacity: animation,
+        child: SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0, 0.04),
+            end: Offset.zero,
+          ).animate(animation),
+          child: child,
+        ),
+      ),
+      child: tab == _NowPlayingTab.queueInfo
+          ? Column(
+              key: const ValueKey(_NowPlayingTab.queueInfo),
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                MetadataCard(track: track),
+                const SizedBox(height: 16),
+                const NextInQueueCard(),
+              ],
+            )
+          : const MiniLyricsCard(
+              key: ValueKey(_NowPlayingTab.lyrics),
+              height: 350,
+            ),
+    );
+  }
+}
+
+class _SubNavBar extends StatelessWidget {
+  final _NowPlayingTab selected;
+  final ValueChanged<_NowPlayingTab> onChanged;
+
+  const _SubNavBar({required this.selected, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isLight = theme.brightness == Brightness.light;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: isLight
+            ? Colors.white.withValues(alpha: 0.5)
+            : Colors.white.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isLight
+              ? Colors.black.withValues(alpha: 0.08)
+              : Colors.white.withValues(alpha: 0.1),
+        ),
+      ),
+      padding: const EdgeInsets.all(4),
+      child: Row(
+        children: [
+          _SubNavItem(
+            label: 'Queue & Info',
+            selected: selected == _NowPlayingTab.queueInfo,
+            primaryColor: theme.primaryColor,
+            onTap: () => onChanged(_NowPlayingTab.queueInfo),
+          ),
+          _SubNavItem(
+            label: 'Lyrics',
+            selected: selected == _NowPlayingTab.lyrics,
+            primaryColor: theme.primaryColor,
+            onTap: () => onChanged(_NowPlayingTab.lyrics),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SubNavItem extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final Color primaryColor;
+  final VoidCallback onTap;
+
+  const _SubNavItem({
+    required this.label,
+    required this.selected,
+    required this.primaryColor,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isLight = theme.brightness == Brightness.light;
+
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic,
+          decoration: BoxDecoration(
+            color: selected
+                ? (isLight
+                    ? Colors.white.withValues(alpha: 0.9)
+                    : Colors.white.withValues(alpha: 0.15))
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              color: selected
+                  ? primaryColor
+                  : theme.colorScheme.onSurface.withValues(alpha: 0.5),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

@@ -1,5 +1,6 @@
 class ThumbnailUtils {
   /// Upgrades low-resolution YouTube & YouTube Music thumbnail URLs to 1080p HD square artwork.
+  /// Use for Now Playing screen and Full Screen Player only.
   static String upgradeResolution(String? url) {
     if (url == null || url.isEmpty) return '';
 
@@ -13,6 +14,23 @@ class ThumbnailUtils {
     }
 
     return upgraded;
+  }
+
+  /// Returns 400x400 thumbnail URL optimized for feed cards, list tiles, and carousels.
+  /// 400px is sufficient for any card size (even 3x Retina 140dp = 420px).
+  /// Saves ~90% bandwidth and ~86% RAM vs 1080p.
+  static String toCardResolution(String? url) {
+    if (url == null || url.isEmpty) return '';
+
+    String sized = url.replaceAll(RegExp(r'=w\d+-h\d+(?:-[a-z0-9-]+)?'), '=w400-h400-l90-rj')
+                      .replaceAll(RegExp(r'=s\d+(?:-[a-z0-9-]+)?'), '=s400');
+
+    // For YT video thumbnails use hqdefault (640x480) as a good-enough card resolution
+    if (sized.contains('i.ytimg.com/vi/')) {
+      sized = sized.replaceAll(RegExp(r'/(?:maxres|mq|sd)?default\.jpg'), '/hqdefault.jpg');
+    }
+
+    return sized;
   }
 
   /// Returns a safer medium-resolution fallback (e.g. s544 or hqdefault) if the 1080p asset fails with HTTP 500 / 404.

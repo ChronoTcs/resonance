@@ -48,7 +48,7 @@ class FloatingBottomBar extends ConsumerWidget {
                     children: [
                       SizedBox(
                         height: 18,
-                        child: _MarqueeText(
+                        child: ResonanceMarqueeText(
                           text: track.title,
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
@@ -72,7 +72,7 @@ class FloatingBottomBar extends ConsumerWidget {
                 
                 const SizedBox(width: 8),
                 
-                // Kontrol Navigasi (Standardized)
+                // Navigation Controls (Standardized)
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -109,72 +109,6 @@ class FloatingBottomBar extends ConsumerWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _MarqueeText extends StatefulWidget {
-  final String text;
-  final TextStyle style;
-
-  const _MarqueeText({required this.text, required this.style});
-
-  @override
-  State<_MarqueeText> createState() => _MarqueeTextState();
-}
-
-class _MarqueeTextState extends State<_MarqueeText> with SingleTickerProviderStateMixin {
-  late ScrollController _scrollController;
-  late AnimationController _animationController;
-
-  @override
-  void initState() {
-    super.initState();
-    _scrollController = ScrollController();
-    _animationController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 10),
-    );
-
-    _startScrolling();
-  }
-
-  void _startScrolling() async {
-    await Future.delayed(const Duration(seconds: 2));
-    if (!mounted) return;
-
-    final maxScroll = _scrollController.position.maxScrollExtent;
-    if (maxScroll <= 0) return;
-
-    _animationController.duration = Duration(milliseconds: (maxScroll * 40).toInt());
-
-    while (mounted) {
-      await _scrollController.animateTo(
-        maxScroll,
-        duration: _animationController.duration!,
-        curve: Curves.linear,
-      );
-      await Future.delayed(const Duration(seconds: 2));
-      if (!mounted) break;
-      _scrollController.jumpTo(0);
-      await Future.delayed(const Duration(seconds: 1));
-    }
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    _animationController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      controller: _scrollController,
-      scrollDirection: Axis.horizontal,
-      physics: const NeverScrollableScrollPhysics(),
-      child: Text(widget.text, style: widget.style),
     );
   }
 }

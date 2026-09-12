@@ -179,7 +179,7 @@ jobs:
           # Parse pubspec.yaml version
           $pubspec = Get-Content "pubspec.yaml" -Raw
           $versionMatch = [regex]::Match($pubspec, "version:\s*([^\s]+)")
-          $rawVersion = if ($versionMatch.Success) { $versionMatch.Groups[1].Value.Trim() } else { "0.1.8-beta+12" }
+          $rawVersion = if ($versionMatch.Success) { $versionMatch.Groups[1].Value.Trim() } else { "0.1.8-beta+13" }
           $baseVersion = $rawVersion.Split('+')[0]
           $buildNum = if ($rawVersion.Contains('+')) { $rawVersion.Split('+')[1] } else { "1" }
 

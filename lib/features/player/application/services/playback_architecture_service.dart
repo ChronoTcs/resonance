@@ -2,9 +2,9 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path/path.dart' as p;
 import '../../../explore/data/repositories/youtube_stream_repository.dart';
 import '../../../library/application/library_provider.dart';
+import '../../../../core/constants/audio_constants.dart';
 import '../../../../core/data/services/media_cache_service.dart';
 
 class CachedStreamInfo {
@@ -121,11 +121,9 @@ class PlaybackArchitectureService {
         final dir = Directory(libraryState.musicFolderPath!);
         if (await dir.exists()) {
           final files = dir.listSync();
-          const validAudioExtensions = {'.mp3', '.m4a', '.flac', '.wav', '.ogg', '.opus', '.aac'};
           for (var f in files) {
             if (f is File && f.path.contains(videoId)) {
-              final ext = p.extension(f.path).toLowerCase();
-              if (validAudioExtensions.contains(ext) && f.existsSync()) {
+              if (AppAudioFormats.isSupported(f.path) && f.existsSync()) {
                 debugPrint(
                   '[RateLimitDefender] Physical audio file found for $videoId at ${f.path}',
                 );

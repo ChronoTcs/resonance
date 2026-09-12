@@ -35,9 +35,9 @@ class TranslationSection extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Lyrics Translation',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey),
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface),
         ),
         const SizedBox(height: 16),
 

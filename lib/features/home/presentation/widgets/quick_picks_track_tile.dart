@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:resonance/core/utils/app_icons.dart';
+import 'package:resonance/core/utils/thumbnail_utils.dart';
 import 'package:resonance/core/widgets/widgets.dart';
 import 'package:resonance/features/library/data/models/media_item.dart';
 import 'package:resonance/features/player/application/providers/audio_provider.dart';
@@ -59,9 +60,11 @@ class QuickPicksTrackTile extends ConsumerWidget {
       );
     } else if (item.thumbnailUrl != null && item.thumbnailUrl!.startsWith('http')) {
       img = CachedNetworkImage(
-        imageUrl: item.thumbnailUrl!,
+        imageUrl: ThumbnailUtils.toCardResolution(item.thumbnailUrl!),
         width: 52,
         height: 52,
+        memCacheWidth: 400,
+        memCacheHeight: 400,
         fit: BoxFit.cover,
         placeholder: (_, _) => _buildPlaceholder(theme),
         errorWidget: (_, _, _) => _buildPlaceholder(theme),
@@ -144,15 +147,15 @@ class QuickPicksTrackTile extends ConsumerWidget {
                           padding: const EdgeInsets.symmetric(horizontal: 3.5, vertical: 0.5),
                           margin: const EdgeInsets.only(right: 5),
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.15),
+                            color: theme.colorScheme.onSurface.withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(2),
                           ),
-                          child: const Text(
+                          child: Text(
                             'E',
                             style: TextStyle(
                               fontSize: 9.5,
                               fontWeight: FontWeight.bold,
-                              color: Colors.white70,
+                              color: theme.colorScheme.onSurfaceVariant,
                             ),
                           ),
                         ),

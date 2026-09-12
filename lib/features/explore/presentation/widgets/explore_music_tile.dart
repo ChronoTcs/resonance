@@ -49,6 +49,8 @@ class ExploreMusicTile extends ConsumerWidget {
       type: item.type,
     );
 
+    final theme = Theme.of(context);
+
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onSecondaryTapDown: (details) => MediaActionUtils.showTrackContextMenu(
@@ -63,24 +65,28 @@ class ExploreMusicTile extends ConsumerWidget {
         leading: ClipRRect(
           borderRadius: BorderRadius.circular(8),
           child: CachedNetworkImage(
-            imageUrl: item.thumbnailUrl,
+            imageUrl: ThumbnailUtils.toCardResolution(item.thumbnailUrl),
             width: 60,
             height: 60,
+            memCacheWidth: 400,
+            memCacheHeight: 400,
             fit: BoxFit.cover,
             placeholder: (context, url) => Container(
-              color: Colors.blueAccent.withValues(alpha: 0.1),
+              color: theme.colorScheme.surfaceContainerHighest,
               child: Icon(AppIcons.music),
             ),
             errorWidget: (context, url, error) {
               final fallbackUrl = ThumbnailUtils.getFallbackResolution(url);
               if (fallbackUrl != null && fallbackUrl != url) {
                 return CachedNetworkImage(
-                  imageUrl: fallbackUrl,
+                  imageUrl: ThumbnailUtils.toCardResolution(fallbackUrl),
                   width: 60,
                   height: 60,
+                  memCacheWidth: 400,
+                  memCacheHeight: 400,
                   fit: BoxFit.cover,
                   placeholder: (context, _) => Container(
-                    color: Colors.blueAccent.withValues(alpha: 0.1),
+                    color: theme.colorScheme.surfaceContainerHighest,
                     child: Icon(AppIcons.music),
                   ),
                   errorWidget: (context, _, _) => Icon(UIcons.regular.exclamation),

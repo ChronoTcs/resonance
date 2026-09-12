@@ -127,28 +127,33 @@ class _DockedControlsBar extends StatelessWidget {
                       ),
                     ),
 
-                    // 2. Core Controls (Shuffle, Prev, Play/Pause, Next, Repeat)
-                    if (isDesktop)
+                    // 2. Core Controls & Actions
+                    if (isDesktop) ...[
                       Expanded(
                         flex: 1,
                         child: AudioCoreControls(isDesktop: isDesktop),
-                      )
-                    else
-                      AudioCoreControls(isDesktop: isDesktop),
-
-                    // 3. Extra Actions (Volume, Fullscreen, Playlist Add, Settings)
-                    if (isDesktop)
+                      ),
                       Expanded(
                         flex: 1,
                         child: AudioExtraActions(
                           track: track,
                           isDesktop: isDesktop,
                         ),
-                      )
-                    else
-                      AudioExtraActions(
-                        track: track,
-                        isDesktop: isDesktop,
+                      ),
+                    ] else
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8.0, right: 12.0),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            AudioCoreControls(isDesktop: false),
+                            const SizedBox(width: 4),
+                            AudioExtraActions(
+                              track: track,
+                              isDesktop: false,
+                            ),
+                          ],
+                        ),
                       ),
                   ],
                 );

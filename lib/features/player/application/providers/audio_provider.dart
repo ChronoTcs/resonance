@@ -181,9 +181,18 @@ class AudioNotifier extends Notifier<AudioState> {
         }
       }),
 
-      _player.stream.duration.listen(
-        (d) => state = state.copyWith(duration: d),
-      ),
+      _player.stream.duration.listen((d) {
+        if (d > Duration.zero &&
+            state.currentTrack != null &&
+            (state.currentTrack!.duration == null ||
+                state.currentTrack!.duration == Duration.zero)) {
+          final updatedTrack = state.currentTrack!.copyWith(duration: d);
+          state = state.copyWith(duration: d, currentTrack: updatedTrack);
+          _metadata.onTrackChanged(updatedTrack, isPlaying: state.isPlaying);
+        } else {
+          state = state.copyWith(duration: d);
+        }
+      }),
       _player.stream.volume.listen((v) => state = state.copyWith(volume: v)),
 
       _player.stream.completed.listen((completed) {

@@ -22,6 +22,9 @@ class SearchSuggestionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return InkWell(
       mouseCursor: SystemMouseCursors.click,
       onTap: () => onSubmit(query),
@@ -29,19 +32,19 @@ class SearchSuggestionTile extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         child: Row(
           children: [
-            const Icon(
+            Icon(
               Icons.search,
               size: 22,
-              color: Colors.white70,
+              color: colorScheme.onSurfaceVariant,
             ),
             const SizedBox(width: 16),
             Expanded(
               child: Text(
                 query,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 15.5,
                   fontWeight: FontWeight.normal,
-                  color: Colors.white,
+                  color: colorScheme.onSurface,
                   letterSpacing: -0.1,
                 ),
               ),
@@ -51,7 +54,7 @@ class SearchSuggestionTile extends StatelessWidget {
               tooltip: 'Insert into search',
               iconSize: 18,
               padding: 6.0,
-              iconColor: Colors.white70,
+              iconColor: colorScheme.onSurfaceVariant,
               borderRadius: BorderRadius.circular(6),
               onTap: () => onInsert(query),
             ),

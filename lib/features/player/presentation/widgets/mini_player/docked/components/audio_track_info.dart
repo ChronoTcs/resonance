@@ -50,15 +50,15 @@ class AudioTrackInfo extends ConsumerWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Title row — badge only for streaming tracks
+              // Title row — badge directly adjacent to title, auto-scrolling long titles
               Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Expanded(
-                    child: Text(
-                      track.title,
+                  Flexible(
+                    fit: FlexFit.loose,
+                    child: ResonanceMarqueeText(
+                      text: track.title,
                       style: const TextStyle(fontWeight: FontWeight.bold),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   if (track.isStreaming) ...[

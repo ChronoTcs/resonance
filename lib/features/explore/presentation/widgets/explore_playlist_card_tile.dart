@@ -56,9 +56,11 @@ class ExplorePlaylistCardTile extends ConsumerWidget {
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
                   child: CachedNetworkImage(
-                    imageUrl: playlist.thumbnailUrl,
+                    imageUrl: ThumbnailUtils.toCardResolution(playlist.thumbnailUrl),
                     width: 80,
                     height: 80,
+                    memCacheWidth: 400,
+                    memCacheHeight: 400,
                     fit: BoxFit.cover,
                     placeholder: (c, u) => Container(
                       color: theme.colorScheme.surfaceContainerHighest,
@@ -68,9 +70,11 @@ class ExplorePlaylistCardTile extends ConsumerWidget {
                       final fallbackUrl = ThumbnailUtils.getFallbackResolution(u);
                       if (fallbackUrl != null && fallbackUrl != u) {
                         return CachedNetworkImage(
-                          imageUrl: fallbackUrl,
+                          imageUrl: ThumbnailUtils.toCardResolution(fallbackUrl),
                           width: 80,
                           height: 80,
+                          memCacheWidth: 400,
+                          memCacheHeight: 400,
                           fit: BoxFit.cover,
                           placeholder: (c2, u2) => Container(
                             color: theme.colorScheme.surfaceContainerHighest,

@@ -5,17 +5,56 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// All available equalizer presets.
 /// Band order corresponds to frequencies: [62.5, 125, 250, 500, 1k, 2k, 4k, 8k, 16k] Hz
 const Map<String, List<double>> kEqualizerPresets = {
-  'Flat':       [0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0],
-  'Bass Boost': [6.0,  4.0,  2.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0],
-  'Treble Boost':[0.0, 0.0,  0.0,  0.0,  0.0,  2.0,  4.0,  6.0,  6.0],
-  'Vocal':      [-2.0, -1.0,  0.0,  2.0,  4.0,  4.0,  2.0,  0.0, -2.0],
-  'Rock':       [ 4.0,  3.0,  0.0, -1.0, -1.0,  0.0,  3.0,  4.0,  4.0],
-  'Pop':        [-1.0,  0.0,  2.0,  3.0,  2.0,  0.0, -1.0, -1.0, -1.0],
-  'Jazz':       [ 3.0,  2.0,  1.0,  2.0, -1.0, -1.0,  0.0,  1.0,  2.0],
-  'Classical':  [ 4.0,  3.0,  2.0,  0.0,  0.0,  0.0,  2.0,  3.0,  4.0],
-  'Electronic': [ 3.0,  4.0,  0.0, -2.0,  0.0,  3.0,  4.0,  4.0,  3.0],
-  'Custom':     [0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0],
+  'Flat':           [ 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0],
+  'Bass Boost':     [ 6.0,  4.5,  3.0,  1.0,  0.0,  0.0,  0.0,  0.0,  0.0],
+  'Deep Bass':      [ 8.0,  6.0,  3.5,  1.0,  0.0,  0.0,  0.0,  0.0,  0.0],
+  'Sub Bass':       [ 9.0,  5.0,  1.0, -1.0,  0.0,  0.0,  0.0,  0.0,  0.0],
+  'Bass Reducer':   [-6.0, -4.0, -2.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0],
+  'Treble Boost':   [ 0.0,  0.0,  0.0,  0.0,  0.0,  2.0,  4.0,  6.0,  7.0],
+  'Treble Reducer': [ 0.0,  0.0,  0.0,  0.0,  0.0, -2.0, -4.0, -6.0, -7.0],
+  'Vocal Booster':  [-2.0, -1.0,  0.0,  2.5,  4.5,  4.0,  2.0,  0.0, -2.0],
+  'Vocal':          [-2.0, -1.0,  0.0,  2.5,  4.5,  4.0,  2.0,  0.0, -2.0], // Backwards-compatible alias
+  'Spoken Word':    [-4.0, -2.0,  0.0,  2.0,  4.0,  3.0,  1.0, -1.0, -3.0],
+  'Rock':           [ 4.5,  3.0,  0.0, -1.0, -1.0,  1.0,  3.0,  4.5,  4.5],
+  'Pop':            [-1.0,  1.0,  3.0,  3.5,  2.0,  0.0,  1.0,  2.5,  2.0],
+  'Hip Hop':        [ 6.0,  5.0,  2.0,  0.0, -1.0,  1.0,  2.0,  3.0,  3.5],
+  'R&B':            [ 5.0,  4.0,  1.0, -1.0,  1.0,  2.0,  3.0,  4.0,  3.5],
+  'Dance':          [ 5.5,  4.5,  2.0,  0.0,  1.0,  2.5,  4.0,  3.5,  2.5],
+  'Electronic':     [ 4.5,  4.0,  1.0, -1.5,  0.0,  2.5,  4.0,  4.5,  3.5],
+  'Metal':          [ 5.0,  3.5,  0.0, -2.0, -2.0,  1.0,  4.0,  5.5,  5.0],
+  'Jazz':           [ 3.0,  2.0,  1.0,  1.5, -1.0, -1.0,  0.5,  1.5,  2.5],
+  'Classical':      [ 4.0,  3.0,  2.0,  0.0,  0.0,  0.0,  2.0,  3.5,  4.0],
+  'Acoustic':       [ 3.5,  2.5,  1.0,  1.0,  1.5,  2.0,  3.0,  3.5,  3.0],
+  'Piano':          [ 2.5,  2.0,  0.0,  1.5,  2.5,  2.0,  2.5,  3.0,  2.5],
+  'Lounge':         [-2.0, -1.0,  1.0,  2.0,  3.0,  1.0,  0.0,  2.0,  1.0],
+  'Latin':          [ 3.0,  2.0,  0.0,  0.0,  2.0,  2.0,  3.0,  4.0,  3.5],
+  'Custom':         [ 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0],
 };
+
+/// Preset categories for organized grouping in the picker modal
+const Map<String, List<String>> kEqualizerPresetCategories = {
+  'General': ['Flat', 'Custom'],
+  'Bass': ['Bass Boost', 'Deep Bass', 'Sub Bass', 'Bass Reducer'],
+  'Voice & Speech': ['Vocal Booster', 'Spoken Word', 'Treble Boost', 'Treble Reducer'],
+  'Music Genres': ['Hip Hop', 'R&B', 'Rock', 'Pop', 'Dance', 'Electronic', 'Metal'],
+  'Acoustic & Instruments': ['Acoustic', 'Classical', 'Jazz', 'Piano', 'Lounge', 'Latin'],
+};
+
+/// Popular presets shown in the quick horizontal chip carousel
+const List<String> kPopularEqualizerPresets = [
+  'Flat',
+  'Bass Boost',
+  'Deep Bass',
+  'Vocal Booster',
+  'Rock',
+  'Pop',
+  'Hip Hop',
+  'R&B',
+  'Electronic',
+  'Acoustic',
+  'Classical',
+  'Jazz',
+];
 
 /// Frequencies for the 9-band equalizer (used in FFmpeg filter string)
 const List<double> kEqualizerFrequencies = [

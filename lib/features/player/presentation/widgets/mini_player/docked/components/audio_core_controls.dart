@@ -86,6 +86,7 @@ class AudioCoreControls extends ConsumerWidget {
             size: PlayPauseSize.small,
             onTap: () => audioNotifier.togglePlayPause(),
           ),
+          const SizedBox(width: 4),
           ReusableHoverIconButton(
             tooltip: 'Next',
             icon: UIcons.regular.step_forward,

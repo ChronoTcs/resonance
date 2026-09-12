@@ -16,6 +16,7 @@ class LibraryPathsSection extends ConsumerWidget {
     final libraryState = ref.watch(libraryProvider);
     final libraryLogic = ref.read(libraryProvider.notifier);
     final isWindows = Platform.isWindows;
+    final theme = Theme.of(context);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -26,9 +27,9 @@ class LibraryPathsSection extends ConsumerWidget {
           spacing: 12,
           runSpacing: 8,
           children: [
-            const Text(
+            Text(
               'Library Paths',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface),
             ),
             if (isWindows)
               ResonanceButton(

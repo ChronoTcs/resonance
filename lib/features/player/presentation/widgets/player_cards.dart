@@ -1,5 +1,4 @@
 import 'package:resonance/core/widgets/widgets.dart';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:silky_scroll/silky_scroll.dart';
@@ -9,6 +8,7 @@ import 'package:resonance/features/lyrics/application/lyrics_translation_provide
 import 'package:resonance/core/providers/overlay_provider.dart';
 import 'package:resonance/features/lyrics/presentation/widgets/lyrics_retry_button.dart';
 import 'package:resonance/features/lyrics/presentation/widgets/lyrics_offset_control.dart';
+import 'package:resonance/core/utils/formatters.dart';
 
 import 'package:resonance/features/player/data/models/player_enums.dart';
 
@@ -330,7 +330,10 @@ class NextInQueueCard extends ConsumerWidget {
 }
 
 class NavigationControlCard extends ConsumerStatefulWidget {
-  const NavigationControlCard({super.key});
+  /// When true, shows seek slider + timestamps instead of volume slider.
+  /// Intended for the Android Now Playing full-screen view.
+  final bool showSeekSlider;
+  const NavigationControlCard({super.key, this.showSeekSlider = false});
   @override
   ConsumerState<NavigationControlCard> createState() =>
       _NavigationControlCardState();
@@ -340,7 +343,18 @@ class _NavigationControlCardState extends ConsumerState<NavigationControlCard> {
   double _prevVolume = 100.0;
   @override
   Widget build(BuildContext context) {
-    final audioState = ref.watch(audioProvider);
+    final volume = ref.watch(audioProvider.select((s) => s.volume));
+    final isPlaying = ref.watch(audioProvider.select((s) => s.isPlaying));
+    final isLoading = ref.watch(audioProvider.select((s) => s.isLoading));
+    final isShuffleEnabled =
+        ref.watch(audioProvider.select((s) => s.isShuffleEnabled));
+    final loopMode = ref.watch(audioProvider.select((s) => s.loopMode));
+    final isPreviousDisabled =
+        ref.watch(audioProvider.select((s) => s.currentIndex <= 0));
+    final isNextDisabled = ref.watch(audioProvider.select(
+      (s) => s.currentIndex >= s.queue.length - 1 && s.loopMode == LoopMode.off,
+    ));
+
     final audioNotifier = ref.read(audioProvider.notifier);
     final isLight = Theme.of(context).brightness == Brightness.light;
 
@@ -348,52 +362,99 @@ class _NavigationControlCardState extends ConsumerState<NavigationControlCard> {
       child: Container(
         decoration: BoxDecoration(
           color: isLight
-              ? Colors.white.withValues(alpha: 0.4)
-              : Colors.black.withValues(alpha: 0.4),
+              ? Colors.white.withValues(alpha: 0.65)
+              : Colors.black.withValues(alpha: 0.5),
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
             color: isLight
-                ? Colors.white.withValues(alpha: 0.5)
+                ? Colors.white.withValues(alpha: 0.4)
                 : Colors.white.withValues(alpha: 0.1),
           ),
         ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(24),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _PlaybackActionButtonsRow(
-                    audioState: audioState,
-                    audioNotifier: audioNotifier,
-                  ),
-                  const SizedBox(height: 20),
-                  _VolumeSliderRow(
-                    volume: audioState.volume,
-                    onVolumeChanged: (v) {
-                      audioNotifier.setVolume(v);
-                      if (v > 0) _prevVolume = v;
-                    },
-                    onMuteToggle: () {
-                      if (audioState.volume > 0) {
-                        _prevVolume = audioState.volume;
-                        audioNotifier.setVolume(0);
-                      } else {
-                        audioNotifier.setVolume(
-                          _prevVolume > 0 ? _prevVolume : 100,
-                        );
-                      }
-                    },
-                  ),
-                ],
-              ),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (widget.showSeekSlider) const _SeekSliderRow(),
+            if (widget.showSeekSlider) const SizedBox(height: 12),
+            _PlaybackActionButtonsRow(
+              isShuffleEnabled: isShuffleEnabled,
+              isPreviousDisabled: isPreviousDisabled,
+              isPlaying: isPlaying,
+              isLoading: isLoading,
+              isNextDisabled: isNextDisabled,
+              loopMode: loopMode,
+              audioNotifier: audioNotifier,
             ),
-          ),
+            const SizedBox(height: 20),
+            _VolumeSliderRow(
+              volume: volume,
+              onVolumeChanged: (v) {
+                audioNotifier.setVolume(v);
+                if (v > 0) _prevVolume = v;
+              },
+              onMuteToggle: () {
+                if (volume > 0) {
+                  _prevVolume = volume;
+                  audioNotifier.setVolume(0);
+                } else {
+                  audioNotifier.setVolume(
+                    _prevVolume > 0 ? _prevVolume : 100,
+                  );
+                }
+              },
+            ),
+          ],
         ),
       ),
+    );
+  }
+}
+
+/// Seek slider row with position / duration timestamps.
+/// Consumes [audioProvider] directly so it rebuilds every tick,
+/// keeping it isolated from the rest of the card.
+class _SeekSliderRow extends ConsumerWidget {
+  const _SeekSliderRow();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final pos = ref.watch(audioProvider.select((s) => s.position));
+    final dur = ref.watch(audioProvider.select((s) => s.duration));
+    final audioNotifier = ref.read(audioProvider.notifier);
+    final colorScheme = Theme.of(context).colorScheme;
+    final labelStyle = TextStyle(
+      fontSize: 11,
+      fontWeight: FontWeight.w600,
+      color: colorScheme.onSurface.withValues(alpha: 0.5),
+    );
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ReusableSeekSlider(
+          value: pos.inMilliseconds.toDouble(),
+          max: dur.inMilliseconds.toDouble() > 0
+              ? dur.inMilliseconds.toDouble()
+              : 1.0,
+          trackHeight: 4,
+          height: 28,
+          onChanged: (_) {},
+          onChangeEnd: (val) {
+            audioNotifier.seek(Duration(milliseconds: val.toInt()));
+          },
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(AppFormatters.formatDuration(pos), style: labelStyle),
+              Text(AppFormatters.formatDuration(dur), style: labelStyle),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -463,11 +524,21 @@ class _MiniLyricsCardHeader extends StatelessWidget {
 }
 
 class _PlaybackActionButtonsRow extends StatelessWidget {
-  final AudioState audioState;
+  final bool isShuffleEnabled;
+  final bool isPreviousDisabled;
+  final bool isPlaying;
+  final bool isLoading;
+  final bool isNextDisabled;
+  final LoopMode loopMode;
   final AudioNotifier audioNotifier;
 
   const _PlaybackActionButtonsRow({
-    required this.audioState,
+    required this.isShuffleEnabled,
+    required this.isPreviousDisabled,
+    required this.isPlaying,
+    required this.isLoading,
+    required this.isNextDisabled,
+    required this.loopMode,
     required this.audioNotifier,
   });
 
@@ -484,22 +555,22 @@ class _PlaybackActionButtonsRow extends StatelessWidget {
           icon: UIcons.regular.shuffle,
           iconSize: 20,
           isSelected: false,
-          color: audioState.isShuffleEnabled
+          color: isShuffleEnabled
               ? theme.primaryColor
-              : Colors.white,
+              : colorScheme.onSurface.withValues(alpha: 0.7),
           onTap: audioNotifier.toggleShuffle,
         ),
         ReusableHoverIconButton(
           tooltip: 'Previous',
           icon: UIcons.regular.step_backward,
           iconSize: 32,
-          isDisabled: audioState.currentIndex <= 0,
+          isDisabled: isPreviousDisabled,
           onTap: audioNotifier.skipToPrevious,
           color: colorScheme.onSurface.withValues(alpha: 0.8),
         ),
         PlayPauseButton(
-          isPlaying: audioState.isPlaying,
-          isLoading: audioState.isLoading,
+          isPlaying: isPlaying,
+          isLoading: isLoading,
           size: PlayPauseSize.medium,
           color: theme.primaryColor,
           onTap: audioNotifier.togglePlayPause,
@@ -508,26 +579,24 @@ class _PlaybackActionButtonsRow extends StatelessWidget {
           tooltip: 'Next',
           icon: UIcons.regular.step_forward,
           iconSize: 32,
-          isDisabled:
-              audioState.currentIndex >= audioState.queue.length - 1 &&
-              audioState.loopMode == LoopMode.off,
+          isDisabled: isNextDisabled,
           onTap: audioNotifier.skipToNext,
           color: colorScheme.onSurface.withValues(alpha: 0.8),
         ),
         ReusableHoverIconButton(
-          tooltip: audioState.loopMode == LoopMode.one
+          tooltip: loopMode == LoopMode.one
               ? 'Repeat One'
-              : audioState.loopMode == LoopMode.all
+              : loopMode == LoopMode.all
               ? 'Repeat All'
               : 'Repeat Off',
-          icon: audioState.loopMode == LoopMode.one
+          icon: loopMode == LoopMode.one
               ? UIcons.regular.arrows_repeat_1
               : UIcons.regular.arrows_repeat,
           iconSize: 20,
           isSelected: false,
-          color: audioState.loopMode != LoopMode.off
+          color: loopMode != LoopMode.off
               ? theme.primaryColor
-              : Colors.white,
+              : colorScheme.onSurface.withValues(alpha: 0.7),
           onTap: audioNotifier.cycleLoopMode,
         ),
       ],

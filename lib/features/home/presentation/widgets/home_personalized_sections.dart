@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:silky_scroll/silky_scroll.dart';
 import 'package:resonance/core/utils/app_icons.dart';
+import 'package:resonance/core/utils/thumbnail_utils.dart';
 import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/core/widgets/widgets.dart';
 import 'package:resonance/features/home/presentation/providers/home_feed_provider.dart';
@@ -47,9 +48,11 @@ Widget _buildPersonalizedArtwork(
     );
   } else if (item.thumbnailUrl != null && item.thumbnailUrl!.startsWith('http')) {
     imageWidget = CachedNetworkImage(
-      imageUrl: item.thumbnailUrl!,
+      imageUrl: ThumbnailUtils.toCardResolution(item.thumbnailUrl!),
       width: width,
       height: height,
+      memCacheWidth: 400,
+      memCacheHeight: 400,
       fit: BoxFit.cover,
       placeholder: (context, url) => Container(
         width: width,

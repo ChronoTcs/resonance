@@ -78,20 +78,20 @@ class _AboutCardState extends ConsumerState<AboutCard> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => const Center(
+      builder: (context) => Center(
         child: Card(
           child: Padding(
-            padding: EdgeInsets.all(24.0),
+            padding: const EdgeInsets.all(24.0),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                CircularProgressIndicator(),
-                SizedBox(height: 16),
-                Text('Restore Protocol...'),
-                SizedBox(height: 8),
+                const CircularProgressIndicator(),
+                const SizedBox(height: 16),
+                const Text('Restore Protocol...'),
+                const SizedBox(height: 8),
                 Text(
                   'Scanning & syncing metadata...',
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                  style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
                 ),
               ],
             ),

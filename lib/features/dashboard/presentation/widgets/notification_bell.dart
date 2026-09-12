@@ -85,7 +85,7 @@ class _NotificationBellState extends ConsumerState<NotificationBell> {
           clipBehavior: Clip.none,
           children: [
             _TitleBarBellIconButton(
-              iconColor: widget.iconColor ?? Colors.white,
+              iconColor: widget.iconColor ?? Theme.of(context).colorScheme.onSurface,
               onTap: () => ref.read(notificationProvider.notifier).toggleDropdown(),
             ),
             if (unreadCount > 0)

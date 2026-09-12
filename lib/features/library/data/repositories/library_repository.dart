@@ -6,6 +6,7 @@ import 'package:audio_metadata_reader/audio_metadata_reader.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/media_item.dart';
 
+import 'package:resonance/core/constants/audio_constants.dart';
 import 'package:resonance/core/data/services/cache_manager.dart';
 import 'package:resonance/core/data/services/discord_rpc_service.dart';
 import 'package:resonance/core/data/services/media_cache_service.dart';
@@ -67,8 +68,7 @@ class LibraryRepository {
         await for (final entity in musicDir.list(recursive: true)) {
           if (entity is File) {
             if (entity.path.endsWith('.pending_delete')) continue;
-            final ext = p.extension(entity.path).toLowerCase();
-            if (['.mp3', '.m4a', '.wav', '.flac'].contains(ext)) {
+            if (AppAudioFormats.isSupported(entity.path)) {
               audioPaths.add(entity.path);
             }
           }
@@ -184,18 +184,26 @@ class LibraryRepository {
     required String? musicFolderPath,
     required DiscordRpcService rpcService,
     required MediaCacheService mediaCacheService,
+    void Function(int current, int total)? onProgress,
+    bool copyToMusicFolder = false,
   }) async {
     final localImagesDir = await _cacheManager.getLocalImagesDir();
     final List<MediaItem> importedItems = [];
+    final bool isBatch = sourcePaths.length > 5;
+    final int total = sourcePaths.length;
 
-    for (final sourcePath in sourcePaths) {
+    for (int i = 0; i < total; i++) {
+      final sourcePath = sourcePaths[i];
       final sourceFile = File(sourcePath);
-      if (!await sourceFile.exists()) continue;
+      if (!await sourceFile.exists()) {
+        onProgress?.call(i + 1, total);
+        continue;
+      }
 
       String finalPath = sourcePath;
 
-      // 1. If musicFolderPath is configured and file is outside, copy into music folder
-      if (musicFolderPath != null && musicFolderPath.isNotEmpty) {
+      // 1. If copyToMusicFolder is true and musicFolderPath is configured, copy into music folder
+      if (copyToMusicFolder && musicFolderPath != null && musicFolderPath.isNotEmpty) {
         final musicDir = Directory(musicFolderPath);
         if (await musicDir.exists()) {
           if (!p.isWithin(musicFolderPath, sourcePath)) {
@@ -252,8 +260,8 @@ class LibraryRepository {
       String? album = tags.album;
       String? date = tags.date;
 
-      // 4. Online Auto-Enrichment if missing cover or artist/album
-      if (localThumbnailUrl == null || artist == null || album == null || artist == 'Unknown Artist') {
+      // 4. Online Auto-Enrichment ONLY for small imports (<= 5 tracks) to prevent batch hanging & HTTP 429 rate-limiting
+      if (!isBatch && (localThumbnailUrl == null || artist == null || album == null || artist == 'Unknown Artist')) {
         try {
           final online = await rpcService.resolveFullTrackInfo(title, artist);
           if (online.artistName != null && (artist == null || artist == 'Unknown Artist')) {
@@ -296,6 +304,13 @@ class LibraryRepository {
       mediaCacheService.saveMetadataForced(locId, mediaItem);
 
       importedItems.add(mediaItem);
+
+      onProgress?.call(i + 1, total);
+
+      // Yield to event loop periodically to keep UI responsive during large batches
+      if (i % 10 == 0) {
+        await Future.delayed(Duration.zero);
+      }
     }
 
     return importedItems;

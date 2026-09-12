@@ -14,6 +14,7 @@ import '../../download/application/providers/download_settings_provider.dart';
 import '../../playlist/application/playlist_provider.dart';
 import '../../player/application/providers/audio_provider.dart';
 import '../../settings/application/notification_provider.dart';
+import '../../../core/constants/audio_constants.dart';
 import '../../../core/utils/path_utils.dart';
 
 class LibraryState {
@@ -412,22 +413,21 @@ class LibraryNotifier extends Notifier<LibraryState> {
   }
 
   /// Opens file picker and imports external audio files with automatic metadata/artwork enrichment.
-  Future<void> importAudioFiles(BuildContext context) async {
+  Future<int> pickAndImportAudioFiles({void Function(int current, int total)? onProgress}) async {
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['mp3', 'm4a', 'wav', 'flac', 'ogg', 'opus', 'aac'],
+        allowedExtensions: AppAudioFormats.rawExtensions,
         allowMultiple: true,
         dialogTitle: 'Select Audio Files to Add to Library',
       );
 
-      if (result == null || result.paths.isEmpty) return;
+      if (result == null || result.paths.isEmpty) return 0;
 
       final validPaths = result.paths.whereType<String>().toList();
-      if (validPaths.isEmpty) return;
+      if (validPaths.isEmpty) return 0;
 
-      if (!context.mounted) return;
-      await importAudioPaths(validPaths, context: context);
+      return await importAudioPaths(validPaths, onProgress: onProgress);
     } catch (e) {
       debugPrint('[LibraryNotifier] Failed to pick audio files: $e');
       state = state.copyWith(isLoading: false);
@@ -437,12 +437,45 @@ class LibraryNotifier extends Notifier<LibraryState> {
         isError: true,
         silentOsNotification: true,
       );
+      return 0;
+    }
+  }
+
+  /// Legacy forwarder for backward compatibility
+  Future<void> importAudioFiles(BuildContext context) async {
+    await pickAndImportAudioFiles();
+  }
+
+  /// Opens directory picker and recursively imports all audio files inside.
+  Future<int> pickAndImportFolder({void Function(int current, int total)? onProgress}) async {
+    try {
+      final selectedDirectory = await FilePicker.platform.getDirectoryPath(
+        dialogTitle: 'Select Music Folder to Scan & Import',
+      );
+
+      if (selectedDirectory == null || selectedDirectory.isEmpty) return 0;
+
+      return await importDirectory(selectedDirectory, onProgress: onProgress);
+    } catch (e) {
+      debugPrint('[LibraryNotifier] Failed to pick folder: $e');
+      state = state.copyWith(isLoading: false);
+      ref.read(notificationProvider.notifier).showNotification(
+        'Scan Failed',
+        'Failed to scan folder.',
+        isError: true,
+        silentOsNotification: true,
+      );
+      return 0;
     }
   }
 
   /// Imports external audio files directly from paths (e.g. from drag-and-drop or picker)
   /// with automatic ID3 metadata/artwork extraction and persistent cache syncing.
-  Future<int> importAudioPaths(List<String> paths, {BuildContext? context}) async {
+  Future<int> importAudioPaths(
+    List<String> paths, {
+    void Function(int current, int total)? onProgress,
+    bool copyToFolder = false,
+  }) async {
     if (paths.isEmpty) return 0;
 
     state = state.copyWith(isLoading: true);
@@ -457,6 +490,8 @@ class LibraryNotifier extends Notifier<LibraryState> {
         musicFolderPath: state.musicFolderPath,
         rpcService: rpcService,
         mediaCacheService: mediaCacheService,
+        onProgress: onProgress,
+        copyToMusicFolder: copyToFolder,
       );
 
       if (importedItems.isEmpty) {
@@ -502,6 +537,96 @@ class LibraryNotifier extends Notifier<LibraryState> {
       );
       return 0;
     }
+  }
+
+  /// Recursively scans a directory for supported audio formats and imports them in batch.
+  Future<int> importDirectory(
+    String folderPath, {
+    void Function(int current, int total)? onProgress,
+  }) async {
+    if (folderPath.isEmpty) return 0;
+    final dir = Directory(folderPath);
+    if (!await dir.exists()) return 0;
+
+    state = state.copyWith(isLoading: true);
+
+    try {
+      final List<String> audioFiles = [];
+      await for (final entity in dir.list(recursive: true, followLinks: false)) {
+        if (entity is File && AppAudioFormats.isSupported(entity.path)) {
+          audioFiles.add(entity.path);
+        }
+      }
+
+      if (audioFiles.isEmpty) {
+        state = state.copyWith(isLoading: false);
+        ref.read(notificationProvider.notifier).showNotification(
+          'Folder Scan',
+          'No audio files found in selected folder.',
+          silentOsNotification: true,
+        );
+        return 0;
+      }
+
+      return await importAudioPaths(
+        audioFiles,
+        onProgress: onProgress,
+        copyToFolder: false, // In-place indexing to avoid multi-GB duplication
+      );
+    } catch (e) {
+      debugPrint('[LibraryNotifier] Failed to scan folder: $e');
+      state = state.copyWith(isLoading: false);
+      ref.read(notificationProvider.notifier).showNotification(
+        'Scan Failed',
+        'Could not scan selected folder.',
+        isError: true,
+        silentOsNotification: true,
+      );
+      return 0;
+    }
+  }
+
+  /// Takes a raw list of dropped paths (which may contain files, folders, or both),
+  /// resolves any directories recursively, filters by AppAudioFormats, and imports them.
+  Future<int> importDroppedPaths(
+    List<String> rawPaths, {
+    void Function(int current, int total)? onProgress,
+  }) async {
+    if (rawPaths.isEmpty) return 0;
+
+    state = state.copyWith(isLoading: true);
+
+    final List<String> audioFiles = [];
+    for (final rawPath in rawPaths) {
+      try {
+        final dir = Directory(rawPath);
+        if (await dir.exists()) {
+          await for (final entity in dir.list(recursive: true, followLinks: false)) {
+            if (entity is File && AppAudioFormats.isSupported(entity.path)) {
+              audioFiles.add(entity.path);
+            }
+          }
+        } else {
+          final file = File(rawPath);
+          if (await file.exists() && AppAudioFormats.isSupported(rawPath)) {
+            audioFiles.add(rawPath);
+          }
+        }
+      } catch (e) {
+        debugPrint('[LibraryNotifier] Error inspecting dropped path $rawPath: $e');
+      }
+    }
+
+    if (audioFiles.isEmpty) {
+      state = state.copyWith(isLoading: false);
+      return 0;
+    }
+
+    return await importAudioPaths(
+      audioFiles,
+      onProgress: onProgress,
+      copyToFolder: false,
+    );
   }
 }
 

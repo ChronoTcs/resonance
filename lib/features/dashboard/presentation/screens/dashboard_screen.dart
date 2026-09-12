@@ -211,11 +211,11 @@ class _MainDashboardState extends ConsumerState<MainDashboard> {
                     child: ClipRect(
                       child: Stack(
                         children: [
-                          // 1. Base Layer: Screen Navigation
+                          // 1. Base Layer: Screen Navigation (IndexedStack keeps all tabs alive)
                           _ScreenNavigationLayer(
                             isDesktopOs: isDesktopOs,
                             logicalIndex: logicalIndex,
-                            currentScreen: _getScreens(isWideLayout)[logicalIndex],
+                            screens: _getScreens(isWideLayout),
                           ),
 
                           // 2. Mid Layer: Now Playing (Slide transition)
@@ -237,7 +237,9 @@ class _MainDashboardState extends ConsumerState<MainDashboard> {
               ),
             ),
             // Persist the Mini Player at the bottom of the body
-            const DockedMiniPlayer(),
+            // On Android, hide it when Now Playing screen is open (NavigationControlCard
+            // already provides full seek + playback controls there).
+            if (!isAndroid || !showNowPlaying) const DockedMiniPlayer(),
           ],
         ),
         bottomNavigationBar: isWideLayout ? null : const AppBottomNavBar(),
@@ -249,25 +251,23 @@ class _MainDashboardState extends ConsumerState<MainDashboard> {
 class _ScreenNavigationLayer extends StatelessWidget {
   final bool isDesktopOs;
   final int logicalIndex;
-  final Widget currentScreen;
+  final List<Widget> screens;
 
   const _ScreenNavigationLayer({
     required this.isDesktopOs,
     required this.logicalIndex,
-    required this.currentScreen,
+    required this.screens,
   });
 
   @override
   Widget build(BuildContext context) {
+    final safeIndex = logicalIndex.clamp(0, screens.length - 1);
     return SafeArea(
       top: !isDesktopOs,
       bottom: false,
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 300),
-        child: Container(
-          key: ValueKey('main_page_$logicalIndex'),
-          child: currentScreen,
-        ),
+      child: IndexedStack(
+        index: safeIndex,
+        children: screens,
       ),
     );
   }

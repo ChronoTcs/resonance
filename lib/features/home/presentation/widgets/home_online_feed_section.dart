@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:silky_scroll/silky_scroll.dart';
 import 'package:resonance/core/utils/app_icons.dart';
+import 'package:resonance/core/utils/thumbnail_utils.dart';
 import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/core/widgets/widgets.dart';
 import 'package:resonance/core/application/services/network_connectivity_service.dart';
@@ -232,9 +233,11 @@ class _OnlineFeedCard extends ConsumerWidget {
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
                   child: CachedNetworkImage(
-                    imageUrl: item.thumbnailUrl,
+                    imageUrl: ThumbnailUtils.toCardResolution(item.thumbnailUrl),
                     width: 140,
                     height: 140,
+                    memCacheWidth: 400,
+                    memCacheHeight: 400,
                     fit: BoxFit.cover,
                     placeholder: (context, url) => Container(
                       color: theme.colorScheme.surfaceContainerHighest,

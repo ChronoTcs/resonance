@@ -35,9 +35,9 @@ class AppearanceSection extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'App & Appearance',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey),
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface),
         ),
         const SizedBox(height: 16),
 
@@ -118,9 +118,9 @@ class AppearanceSection extends ConsumerWidget {
           ],
         ),
         const SizedBox(height: 24),
-        const Text(
+        Text(
           'Lyrics Opacity',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey),
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface),
         ),
         const SizedBox(height: 12),
 
@@ -162,9 +162,9 @@ class AppearanceSection extends ConsumerWidget {
 
         if (Platform.isWindows) ...[
           const SizedBox(height: 24),
-          const Text(
+          Text(
             'App Behavior',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey),
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface),
           ),
           const SizedBox(height: 12),
 

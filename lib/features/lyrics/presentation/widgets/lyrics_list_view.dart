@@ -171,13 +171,11 @@ class _LyricsListViewState extends ConsumerState<LyricsListView> {
             final line = lyrics[lineIndex];
             final isActive = lineIndex == activeIndex;
 
-            final adjustedPosition = ref.watch(adjustedLyricsPositionProvider);
-
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 8.0),
               child: WordSyncedLyricRow(
                 line: line,
-                playerPosition: adjustedPosition,
+                playerPosition: Duration.zero,
                 isActive: isActive,
                 activeOpacity: activeOpacity,
                 inactiveOpacity: inactiveOpacity,
@@ -193,7 +191,6 @@ class _LyricsListViewState extends ConsumerState<LyricsListView> {
       content = LayoutBuilder(
         builder: (context, constraints) {
           _listHeight = constraints.maxHeight;
-          final adjustedPosition = ref.watch(adjustedLyricsPositionProvider);
           return RepaintBoundary(
             child: ScrollablePositionedList.builder(
               itemScrollController: _itemScrollController,
@@ -216,7 +213,7 @@ class _LyricsListViewState extends ConsumerState<LyricsListView> {
                   padding: const EdgeInsets.symmetric(vertical: 12.0),
                   child: WordSyncedLyricRow(
                     line: line,
-                    playerPosition: adjustedPosition,
+                    playerPosition: Duration.zero,
                     isActive: isActive,
                     activeOpacity: activeOpacity,
                     inactiveOpacity: inactiveOpacity,

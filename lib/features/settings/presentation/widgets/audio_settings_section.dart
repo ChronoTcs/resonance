@@ -13,6 +13,7 @@ class AudioSettingsSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final audioState = ref.watch(audioProvider);
     final audioNotifier = ref.read(audioProvider.notifier);
+    final theme = Theme.of(context);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -23,9 +24,9 @@ class AudioSettingsSection extends ConsumerWidget {
           spacing: 12,
           runSpacing: 8,
           children: [
-            const Text(
+            Text(
               'Playback & Audio',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface),
             ),
             ResonanceButton(
               onPressed: () {

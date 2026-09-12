@@ -91,37 +91,42 @@ class NotificationNotifier extends Notifier<NotificationState> {
   Future<void> _initNotifications() async {
     if (_isInitialized) return;
 
-    if (Platform.isWindows) {
-      const WindowsInitializationSettings initializationSettingsWindows =
-          WindowsInitializationSettings(
-        appName: 'Resonance',
-        appUserModelId: 'ChronoTechs.Resonance.App',
-        guid: 'e3d74cbb-5444-4828-98e3-b6d31de26ea8',
-      );
+    try {
+      if (Platform.isWindows) {
+        const WindowsInitializationSettings initializationSettingsWindows =
+            WindowsInitializationSettings(
+          appName: 'Resonance',
+          appUserModelId: 'ChronoTechs.Resonance.App',
+          guid: 'e3d74cbb-5444-4828-98e3-b6d31de26ea8',
+        );
 
-      const InitializationSettings initializationSettings = InitializationSettings(
-        windows: initializationSettingsWindows,
-      );
+        const InitializationSettings initializationSettings = InitializationSettings(
+          windows: initializationSettingsWindows,
+          android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+        );
 
-      await _localNotificationsPlugin.initialize(
-        settings: initializationSettings,
-        onDidReceiveNotificationResponse: (response) {
-          handleNotificationClick(targetScreen: response.payload);
-        },
-      );
-    } else if (Platform.isAndroid) {
-      const AndroidInitializationSettings androidSettings =
-          AndroidInitializationSettings('@mipmap/ic_launcher');
-      await _localNotificationsPlugin.initialize(
-        settings: const InitializationSettings(android: androidSettings),
-        onDidReceiveNotificationResponse: (response) => handleNotificationClick(targetScreen: response.payload),
-      );
-      // Request POST_NOTIFICATIONS permission (Android 13+)
-      await _localNotificationsPlugin
-          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-          ?.requestNotificationsPermission();
+        await _localNotificationsPlugin.initialize(
+          settings: initializationSettings,
+          onDidReceiveNotificationResponse: (response) {
+            handleNotificationClick(targetScreen: response.payload);
+          },
+        );
+      } else if (Platform.isAndroid) {
+        const AndroidInitializationSettings androidSettings =
+            AndroidInitializationSettings('@mipmap/ic_launcher');
+        await _localNotificationsPlugin.initialize(
+          settings: const InitializationSettings(android: androidSettings),
+          onDidReceiveNotificationResponse: (response) => handleNotificationClick(targetScreen: response.payload),
+        );
+        // Request POST_NOTIFICATIONS permission (Android 13+)
+        await _localNotificationsPlugin
+            .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+            ?.requestNotificationsPermission();
+      }
+      _isInitialized = true;
+    } catch (e) {
+      debugPrint('[NotificationNotifier] Local notifications plugin init skipped or unavailable: $e');
     }
-    _isInitialized = true;
   }
 
   Future<void> handleNotificationClick({String? targetScreen}) async {
@@ -230,18 +235,27 @@ class NotificationNotifier extends Notifier<NotificationState> {
     // 3. Trigger native notification on Android
     if (Platform.isAndroid && _isInitialized) {
       try {
-        const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-          'resonance_downloads',
-          'Download Notifications',
-          channelDescription: 'Resonance download progress and completion',
+        final bool isDownload = (target != null && target.contains('download')) ||
+            title.toLowerCase().contains('download');
+        final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+          isDownload ? 'resonance_downloads' : 'resonance_general',
+          isDownload ? 'Download Notifications' : 'General Notifications',
+          channelDescription: isDownload
+              ? 'Resonance download progress and completion'
+              : 'Resonance system alerts and general notifications',
           importance: Importance.high,
           priority: Priority.high,
+          ongoing: false,
+          autoCancel: true,
+          showWhen: true,
         );
+
+        final int notifId = newItem.id.hashCode & 0x7FFFFFFF;
         await _localNotificationsPlugin.show(
-          id: newItem.id.hashCode,
+          id: notifId,
           title: title,
           body: message,
-          notificationDetails: const NotificationDetails(android: androidDetails),
+          notificationDetails: NotificationDetails(android: androidDetails),
           payload: target,
         );
       } catch (e) {
@@ -257,6 +271,21 @@ class NotificationNotifier extends Notifier<NotificationState> {
 
   void clearAll() {
     state = state.copyWith(items: []);
+    if (_isInitialized) {
+      _localNotificationsPlugin.cancelAll().catchError((e) {
+        debugPrint('[NotificationNotifier] cancelAll failed: $e');
+      });
+    }
+  }
+
+  void removeItem(String id) {
+    final updated = state.items.where((i) => i.id != id).toList();
+    state = state.copyWith(items: updated);
+    if (_isInitialized) {
+      _localNotificationsPlugin.cancel(id: id.hashCode & 0x7FFFFFFF).catchError((e) {
+        debugPrint('[NotificationNotifier] cancel failed: $e');
+      });
+    }
   }
 
   void toggleDropdown({bool? visible}) {

@@ -49,7 +49,7 @@ class ResonanceAudioHandler extends BaseAudioHandler with QueueHandler, SeekHand
       // emitting mediaItem.add() here creates a stale setMediaItem(prevTrack) call
       // during gapless transitions that races with the correct thread.
       if (Platform.isWindows) return;
-      if (mediaItem.value != null) {
+      if (duration > Duration.zero && mediaItem.value != null) {
         mediaItem.add(mediaItem.value!.copyWith(duration: duration));
       }
     });

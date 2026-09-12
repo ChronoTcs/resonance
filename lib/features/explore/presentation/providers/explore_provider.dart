@@ -16,6 +16,23 @@ export 'package:resonance/features/home/presentation/providers/home_feed_provide
 import 'package:resonance/core/providers/cached_stream_music_provider.dart';
 import 'package:resonance/features/library/application/library_provider.dart';
 
+Duration? _parseDurationString(String durationStr) {
+  final parts = durationStr.split(':');
+  if (parts.length == 2) {
+    final m = int.tryParse(parts[0]) ?? 0;
+    final s = int.tryParse(parts[1]) ?? 0;
+    final d = Duration(minutes: m, seconds: s);
+    return d > Duration.zero ? d : null;
+  } else if (parts.length == 3) {
+    final h = int.tryParse(parts[0]) ?? 0;
+    final m = int.tryParse(parts[1]) ?? 0;
+    final s = int.tryParse(parts[2]) ?? 0;
+    final d = Duration(hours: h, minutes: m, seconds: s);
+    return d > Duration.zero ? d : null;
+  }
+  return null;
+}
+
 final searchResultsProvider = FutureProvider<List<ExploreItem>>((ref) async {
   final query = ref.watch(searchQueryProvider);
   if (query.isEmpty) return [];
@@ -71,6 +88,7 @@ final searchResultsProvider = FutureProvider<List<ExploreItem>>((ref) async {
         artist: e.author,
         album: e.album,
         thumbnailUrl: e.thumbnailUrl,
+        duration: _parseDurationString(e.duration),
         path: e.id,
         type: 'audio',
       )).toList();
@@ -111,6 +129,7 @@ final featuredMusicProvider = FutureProvider<List<ExploreItem>>((ref) async {
         title: e.title,
         artist: e.author,
         thumbnailUrl: e.thumbnailUrl,
+        duration: _parseDurationString(e.duration),
         path: e.id,
         type: 'audio',
       )).toList();

@@ -61,8 +61,10 @@ class _ReusableSeekSliderState extends State<ReusableSeekSlider> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final activeColor = widget.activeColor ?? theme.primaryColor;
-    final inactiveColor = widget.inactiveColor ?? theme.colorScheme.onSurface.withValues(alpha: 0.1);
+    final activeColor = widget.activeColor ?? theme.colorScheme.primary;
+    final inactiveColor = widget.inactiveColor ??
+        theme.sliderTheme.inactiveTrackColor ??
+        theme.colorScheme.onSurface.withValues(alpha: 0.12);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -221,7 +223,7 @@ class RetroSliderTrackShape extends SliderTrackShape with BaseSliderTrackShape {
     bool isEnabled = false,
     bool isDiscrete = false,
   }) {
-    final double trackHeight = sliderTheme.trackHeight ?? 4.0;
+    final double trackHeight = sliderTheme.trackHeight ?? 3.5;
     final double trackLeft = offset.dx + 14.0;
     final double trackTop = offset.dy + (parentBox.size.height - trackHeight) / 2;
     final double trackWidth = parentBox.size.width - 28.0;
@@ -254,39 +256,29 @@ class RetroSliderTrackShape extends SliderTrackShape with BaseSliderTrackShape {
       isDiscrete: isDiscrete,
     );
 
-    // Active track (thick)
-    final double activeTrackHeight = 6.0;
-    final activePaint = Paint()..color = sliderTheme.activeTrackColor ?? Colors.blue;
-    final activeRect = RRect.fromRectAndRadius(
-      Rect.fromLTRB(
-        trackRect.left,
-        thumbCenter.dy - (activeTrackHeight / 2),
-        thumbCenter.dx,
-        thumbCenter.dy + (activeTrackHeight / 2),
-      ),
-      const Radius.circular(3.0),
-    );
-    context.canvas.drawRRect(activeRect, activePaint);
+    final double trackHeight = sliderTheme.trackHeight ?? 3.5;
+    final Radius radius = Radius.circular(trackHeight / 2);
 
-    // Inactive track (thin with outline)
-    final double inactiveTrackHeight = 3.0;
+    // 1. Inactive track: full width, sleek solid rounded capsule
     final inactivePaint = Paint()..color = sliderTheme.inactiveTrackColor ?? Colors.grey;
-    final borderPaint = Paint()
-      ..color = sliderTheme.activeTrackColor ?? Colors.blue
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.0;
+    final inactiveRRect = RRect.fromRectAndRadius(trackRect, radius);
+    context.canvas.drawRRect(inactiveRRect, inactivePaint);
 
-    final inactiveRect = RRect.fromRectAndRadius(
-      Rect.fromLTRB(
-        thumbCenter.dx,
-        thumbCenter.dy - (inactiveTrackHeight / 2),
-        trackRect.right,
-        thumbCenter.dy + (inactiveTrackHeight / 2),
-      ),
-      const Radius.circular(1.5),
-    );
-    context.canvas.drawRRect(inactiveRect, inactivePaint);
-    context.canvas.drawRRect(inactiveRect, borderPaint);
+    // 2. Active track: from left to thumb position, sleek solid accent with rounded caps
+    final double currentThumbX = thumbCenter.dx.clamp(trackRect.left, trackRect.right);
+    if (currentThumbX > trackRect.left) {
+      final activePaint = Paint()..color = sliderTheme.activeTrackColor ?? Colors.blue;
+      final activeRRect = RRect.fromRectAndRadius(
+        Rect.fromLTRB(
+          trackRect.left,
+          trackRect.top,
+          currentThumbX,
+          trackRect.bottom,
+        ),
+        radius,
+      );
+      context.canvas.drawRRect(activeRRect, activePaint);
+    }
   }
 }
 
@@ -294,13 +286,13 @@ class RetroSliderThumbShape extends SliderComponentShape {
   final double width;
   final double height;
   final double radius;
-  final Color fillColor;
+  final Color? fillColor;
 
   const RetroSliderThumbShape({
     this.width = 12.0,
     this.height = 20.0,
     this.radius = 4.0,
-    required this.fillColor,
+    this.fillColor,
   });
 
   @override
@@ -325,22 +317,26 @@ class RetroSliderThumbShape extends SliderComponentShape {
   }) {
     final Canvas canvas = context.canvas;
 
-    final fillPaint = Paint()..color = fillColor;
+    final Color effectiveFill = fillColor ?? Colors.black;
+    final Color borderColor = sliderTheme.thumbColor ?? sliderTheme.activeTrackColor ?? Colors.blue;
+
+    final fillPaint = Paint()..color = effectiveFill;
     final borderPaint = Paint()
-      ..color = sliderTheme.activeTrackColor ?? Colors.blue
+      ..color = borderColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5;
 
-    // Use a pixel-snapped centered drawing approach to avoid pixel jittering during fast progress updates
     final double left = (center.dx - width / 2).roundToDouble();
     final double top = (center.dy - height / 2).roundToDouble();
     final Rect rect = Rect.fromLTWH(left, top, width, height);
+    final RRect rrect = RRect.fromRectAndRadius(rect, Radius.circular(radius));
 
-    final RRect rrect = RRect.fromRectAndRadius(
-      rect,
-      Radius.circular(radius),
-    );
+    // Subtle drop shadow for depth
+    final shadowPaint = Paint()
+      ..color = Colors.black.withValues(alpha: 0.3)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.0);
 
+    canvas.drawRRect(rrect.shift(const Offset(0, 1)), shadowPaint);
     canvas.drawRRect(rrect, fillPaint);
     canvas.drawRRect(rrect, borderPaint);
   }

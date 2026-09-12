@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:resonance/core/utils/app_icons.dart';
+import 'package:resonance/core/utils/thumbnail_utils.dart';
 import 'package:resonance/features/library/data/models/media_item.dart';
 import 'package:resonance/features/player/application/providers/audio_provider.dart';
 import 'package:resonance/features/player/utils/media_action_utils.dart';
@@ -61,9 +62,11 @@ class _RecentSearchesCardState extends ConsumerState<RecentSearchesCard> {
       );
     } else if (widget.item.thumbnailUrl != null && widget.item.thumbnailUrl!.startsWith('http')) {
       img = CachedNetworkImage(
-        imageUrl: widget.item.thumbnailUrl!,
+        imageUrl: ThumbnailUtils.toCardResolution(widget.item.thumbnailUrl!),
         width: widget.size,
         height: widget.size,
+        memCacheWidth: 400,
+        memCacheHeight: 400,
         fit: BoxFit.cover,
         placeholder: (_, _) => _buildPlaceholder(theme),
         errorWidget: (_, _, _) => _buildPlaceholder(theme),
@@ -91,6 +94,8 @@ class _RecentSearchesCardState extends ConsumerState<RecentSearchesCard> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _isHovered = true),
@@ -116,16 +121,16 @@ class _RecentSearchesCardState extends ConsumerState<RecentSearchesCard> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                _buildArtwork(Theme.of(context)),
+                _buildArtwork(theme),
                 const SizedBox(height: 6),
                 Text(
                   widget.item.title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.w600,
                     fontSize: 13,
-                    color: Colors.white,
+                    color: theme.colorScheme.onSurface,
                     letterSpacing: -0.1,
                   ),
                 ),

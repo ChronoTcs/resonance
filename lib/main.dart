@@ -27,6 +27,7 @@ import 'features/stream/platform/windows/windows_jump_list_service.dart';
 import 'package:resonance/features/settings/application/startup_service.dart';
 import 'package:resonance/core/application/services/window_persistence_service.dart';
 import 'package:resonance/core/application/services/lifecycle_service.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 Future<void> _cleanSharedPreferences() async {
   try {
@@ -164,8 +165,17 @@ void main([List<String> args = const []]) async {
   ]);
 
   if (Platform.isAndroid) {
-    PaintingBinding.instance.imageCache.maximumSizeBytes = 40 * 1024 * 1024; // 40MB RAM cap
-    PaintingBinding.instance.imageCache.maximumSize = 100; // max 100 decoded images
+    // Raise image cache so thumbnails survive scrolling large Home/Explore feeds.
+    // 128MB / 250 images vs the old 40MB / 100 images.
+    PaintingBinding.instance.imageCache.maximumSizeBytes = 128 * 1024 * 1024;
+    PaintingBinding.instance.imageCache.maximumSize = 250;
+  }
+
+  if (Platform.isWindows || Platform.isLinux) {
+    // Initialize sqflite FFI so flutter_cache_manager's SQLite disk cache
+    // works on desktop platforms (sqflite alone has no Windows/Linux impl).
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
   }
 
   if (Platform.isWindows || Platform.isAndroid) {

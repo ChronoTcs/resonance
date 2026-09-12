@@ -171,11 +171,20 @@ class AudioMetadataService {
         artUriString = track.thumbnailUrl;
       }
 
-      // Use real player duration if track.duration is null (common for local files
-      // before the player has fully loaded the media).
-      final effectiveDuration = track.duration ?? _ref.read(audioProvider).duration;
-
+      // Resolve best available positive duration (track -> player state -> existing audioHandler duration)
       final audioHandler = _ref.read(audioHandlerProvider);
+      final existingDuration = audioHandler.mediaItem.value?.duration;
+      final playerDuration = _ref.read(audioProvider).duration;
+
+      final Duration? effectiveDuration =
+          (track.duration != null && track.duration! > Duration.zero)
+              ? track.duration
+              : (playerDuration > Duration.zero
+                  ? playerDuration
+                  : ((existingDuration != null && existingDuration > Duration.zero)
+                      ? existingDuration
+                      : null));
+
       audioHandler.mediaItem.add(
         audio_svc.MediaItem(
           id: songId,

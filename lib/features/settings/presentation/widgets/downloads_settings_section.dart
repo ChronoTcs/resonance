@@ -15,13 +15,14 @@ class DownloadsSettingsSection extends ConsumerWidget {
     return settingsAsync.when(
       data: (settings) {
         final notifier = ref.read(downloadSettingsProvider.notifier);
+        final theme = Theme.of(context);
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Network Settings',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface),
             ),
             const SizedBox(height: 16),
 
@@ -41,9 +42,9 @@ class DownloadsSettingsSection extends ConsumerWidget {
             ),
 
             const SizedBox(height: 16),
-            const Text(
+            Text(
               'Advance Limits Downloads',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey),
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface),
             ),
             const SizedBox(height: 12),
 

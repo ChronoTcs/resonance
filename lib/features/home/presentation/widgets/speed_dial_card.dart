@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:resonance/core/utils/app_icons.dart';
+import 'package:resonance/core/utils/thumbnail_utils.dart';
 import 'package:resonance/features/library/data/models/media_item.dart';
 import 'package:resonance/features/player/application/providers/audio_provider.dart';
 import 'package:resonance/features/player/utils/media_action_utils.dart';
@@ -65,9 +66,11 @@ class _SpeedDialCardState extends ConsumerState<SpeedDialCard> {
 
     if (widget.item.thumbnailUrl != null && widget.item.thumbnailUrl!.startsWith('http')) {
       return CachedNetworkImage(
-        imageUrl: widget.item.thumbnailUrl!,
+        imageUrl: ThumbnailUtils.toCardResolution(widget.item.thumbnailUrl!),
         width: widget.size,
         height: widget.size,
+        memCacheWidth: 400,
+        memCacheHeight: 400,
         fit: BoxFit.cover,
         placeholder: (_, _) => _buildPlaceholder(theme),
         errorWidget: (_, _, _) => _buildPlaceholder(theme),
@@ -151,10 +154,10 @@ class _SpeedDialCardState extends ConsumerState<SpeedDialCard> {
             foregroundDecoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
               border: isCurrent
-                  ? Border.all(color: Colors.white, width: 2.5)
+                  ? Border.all(color: theme.colorScheme.primary, width: 2.5)
                   : (_isHovered
-                      ? Border.all(color: Colors.white.withValues(alpha: 0.8), width: 1.5)
-                      : Border.all(color: Colors.white.withValues(alpha: 0.12), width: 1)),
+                      ? Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.6), width: 1.5)
+                      : Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.15), width: 1)),
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(12),

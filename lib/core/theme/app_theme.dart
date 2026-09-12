@@ -100,10 +100,10 @@ class AppTheme {
         unselectedLabelTextStyle: TextStyle(color: accentGrey),
       ),
       iconTheme: const IconThemeData(color: textDark),
-      sliderTheme: const SliderThemeData(
-        activeTrackColor: textDark,
+      sliderTheme: SliderThemeData(
+        activeTrackColor: primary,
         inactiveTrackColor: accentSoft,
-        thumbColor: textDark,
+        thumbColor: primary,
       ),
       scrollbarTheme: ScrollbarThemeData(
         thickness: WidgetStateProperty.resolveWith((states) => 
@@ -211,10 +211,10 @@ class AppTheme {
         unselectedLabelTextStyle: TextStyle(color: accentGrey),
       ),
       iconTheme: const IconThemeData(color: textLight),
-      sliderTheme: const SliderThemeData(
-        activeTrackColor: creamBackground,
-        inactiveTrackColor: accentGrey,
-        thumbColor: creamBackground,
+      sliderTheme: SliderThemeData(
+        activeTrackColor: primary,
+        inactiveTrackColor: accentGrey.withValues(alpha: 0.3),
+        thumbColor: primary,
       ),
       scrollbarTheme: ScrollbarThemeData(
         thickness: WidgetStateProperty.resolveWith((states) => 
