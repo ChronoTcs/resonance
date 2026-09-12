@@ -89,8 +89,9 @@ class UpdateNotifier extends Notifier<UpdateState> {
     final prefs = await SharedPreferences.getInstance();
     final savedStagedTag = prefs.getString(_kStagedVersionTag);
     final packageInfo = await PackageInfo.fromPlatform();
-    final currentVersion = packageInfo.buildNumber.isNotEmpty && packageInfo.buildNumber != '0'
-        ? '${packageInfo.version}+${packageInfo.buildNumber}'
+    final normalizedBuild = AppRelease.normalizeBuildNumber(packageInfo.buildNumber);
+    final currentVersion = normalizedBuild.isNotEmpty && normalizedBuild != '0'
+        ? '${packageInfo.version}+$normalizedBuild'
         : packageInfo.version;
 
     if (savedStagedTag != null) {
@@ -135,8 +136,9 @@ class UpdateNotifier extends Notifier<UpdateState> {
     state = state.copyWith(isChecking: true, error: null);
     try {
       final packageInfo = await PackageInfo.fromPlatform();
-      final currentVersion = packageInfo.buildNumber.isNotEmpty && packageInfo.buildNumber != '0'
-          ? '${packageInfo.version}+${packageInfo.buildNumber}'
+      final normalizedBuild = AppRelease.normalizeBuildNumber(packageInfo.buildNumber);
+      final currentVersion = normalizedBuild.isNotEmpty && normalizedBuild != '0'
+          ? '${packageInfo.version}+$normalizedBuild'
           : packageInfo.version;
 
       final options = Options(

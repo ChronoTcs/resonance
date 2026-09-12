@@ -194,5 +194,43 @@ void main() {
       final v7aDesc = release.getCompatibleInstallerDescription(isAndroidOverride: true, abiOverride: Abi.androidArm);
       expect(v7aDesc, contains('32-bit (v7a)'));
     });
+
+    test('Android split-per-abi build number normalization & comparison', () {
+      // 1. normalizeBuildNumber handles standard ABI prefixes
+      expect(AppRelease.normalizeBuildNumber('2012'), equals('12')); // arm64-v8a (2000 + 12)
+      expect(AppRelease.normalizeBuildNumber('1012'), equals('12')); // armeabi-v7a (1000 + 12)
+      expect(AppRelease.normalizeBuildNumber('3012'), equals('12')); // x86_64 (3000 + 12)
+      expect(AppRelease.normalizeBuildNumber('2013'), equals('13')); // arm64-v8a (2000 + 13)
+      expect(AppRelease.normalizeBuildNumber('12'), equals('12'));   // Universal / Windows
+      expect(AppRelease.normalizeBuildNumber('0'), equals('0'));
+
+      // 2. compareSemVer correctly identifies Build 13 as newer than installed ARM64 Build 12 (2012)
+      expect(AppRelease.compareSemVer('0.1.8-beta+13', '0.1.8-beta+2012'), greaterThan(0));
+      expect(AppRelease.compareSemVer('0.1.8-beta+13', '0.1.8-beta+1012'), greaterThan(0));
+      expect(AppRelease.compareSemVer('0.1.8-beta+13', '0.1.8-beta+2013'), equals(0));
+      expect(AppRelease.compareSemVer('0.1.8-beta+12', '0.1.8-beta+2013'), lessThan(0));
+      expect(AppRelease.compareSemVer('0.1.8.13', '0.1.8.2012'), greaterThan(0));
+
+      // 3. Full AppRelease.fromJson test with user running 0.1.8-beta+2012
+      final releaseJson = {
+        'tag_name': 'v0.1.8-beta',
+        'name': 'Resonance v0.1.8-beta',
+        'body': 'What\'s New in v0.1.8-beta (Build 13)',
+        'prerelease': true,
+        'published_at': '2026-09-12T18:00:00Z',
+        'assets': [
+          {
+            'name': 'Resonance-v0.1.8-beta.13-Android-64bit-arm64.apk',
+            'browser_download_url': 'https://github.com/.../arm64.apk',
+            'size': 34300000,
+          },
+        ]
+      };
+
+      final release = AppRelease.fromJson(releaseJson, '0.1.8-beta+2012');
+      expect(release.isNewerThanCurrent, isTrue);
+      expect(release.isOlderThanCurrent, isFalse);
+      expect(release.isCurrentVersion, isFalse);
+    });
   });
 }

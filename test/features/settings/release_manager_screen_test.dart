@@ -9,6 +9,7 @@ import 'package:resonance/features/settings/data/models/release_model.dart';
 import 'package:resonance/features/settings/presentation/screens/release_manager_screen.dart';
 import 'package:resonance/features/settings/presentation/screens/settings_screen.dart';
 import 'package:resonance/features/settings/presentation/widgets/appearance_section.dart';
+import 'package:resonance/core/widgets/inputs/resonance_switch.dart';
 
 class FakeUpdateNotifier extends UpdateNotifier {
   final UpdateState initialState;
@@ -312,6 +313,41 @@ void main() {
 
       expect(tester.takeException(), isNull);
       expect(find.text('Accent Colour'), findsOneWidget);
+    });
+
+    testWidgets('Automatic Updates switch toggles cleanly without blocking on install permissions', (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(prefs),
+            updateProvider.overrideWith(() => FakeUpdateNotifier(
+                  UpdateState(
+                    currentVersion: '0.1.6',
+                    releases: [testRelease],
+                  ),
+                )),
+          ],
+          child: const MaterialApp(
+            home: Scaffold(
+              body: ReleaseManagerScreen(),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Automatic Updates'), findsOneWidget);
+      // Tap switch to toggle off and on without throws
+      final switchFinder = find.byType(ResonanceSwitch);
+      expect(switchFinder, findsOneWidget);
+
+      await tester.tap(switchFinder);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(switchFinder);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
     });
   });
 }

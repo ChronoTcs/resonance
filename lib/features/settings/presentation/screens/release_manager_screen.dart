@@ -142,28 +142,13 @@ class _ReleaseManagerScreenState extends ConsumerState<ReleaseManagerScreen> {
                   ),
                   subtitle: Text(
                     Platform.isAndroid
-                        ? 'Automatically download APK updates in the background when available'
+                        ? 'Automatically download APK updates in the background. Install permission requested when update is ready.'
                         : 'Automatically download and stage updates in the background when available',
                     style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
                   ),
                   trailing: ResonanceSwitch(
                     value: appBehavior.autoUpdate,
-                    onChanged: (val) async {
-                      if (val && Platform.isAndroid) {
-                        final granted = await PermissionService.checkAndRequestInstallPermission(context);
-                        if (!granted) {
-                          if (context.mounted) {
-                            ref.read(notificationProvider.notifier).showNotification(
-                              'Automatic Updates',
-                              'Install Unknown Apps permission is required to enable automatic updates.',
-                              isError: true,
-                              target: 'target:settings',
-                              silentOsNotification: true,
-                            );
-                          }
-                          return;
-                        }
-                      }
+                    onChanged: (val) {
                       ref.read(appBehaviorProvider.notifier).setAutoUpdate(val);
                     },
                   ),

@@ -163,13 +163,34 @@ class AppRelease {
     return null;
   }
 
+  /// Normalizes build numbers by stripping Android ABI split prefixes (e.g. 2012 -> 12, 1012 -> 12, 3012 -> 12).
+  ///
+  /// Flutter's Gradle split-per-abi adds ABI offsets (1000 for armv7, 2000 for arm64, 3000 for x86_64)
+  /// to ensure higher versionCode for 64-bit packages on Google Play.
+  static String normalizeBuildNumber(String buildNumber) {
+    final b = int.tryParse(buildNumber);
+    if (b != null && b >= 1000) {
+      return (b % 1000).toString();
+    }
+    return buildNumber;
+  }
+
   /// Compares two version strings (e.g. '0.1.2-beta+3' vs '0.1.1-beta').
   /// Returns > 0 if v1 is newer than v2, < 0 if v1 is older than v2, and 0 if equal.
   static int compareSemVer(String v1, String v2) {
     List<int> parseNumeric(String v) {
       final sanitized = v.replaceAll(RegExp(r'^[vV]'), '').split('-')[0].split('+')[0];
       final parts = sanitized.split('.');
-      return parts.map((p) => int.tryParse(p) ?? 0).toList();
+      final result = <int>[];
+      for (int i = 0; i < parts.length; i++) {
+        var num = int.tryParse(parts[i]) ?? 0;
+        // If 4th component (e.g. 0.1.8.2012), normalize ABI split offset
+        if (i == 3 && num >= 1000) {
+          num = num % 1000;
+        }
+        result.add(num);
+      }
+      return result;
     }
 
     final nums1 = parseNumeric(v1);
@@ -199,7 +220,8 @@ class AppRelease {
 
     int extractBuild(String v) {
       final buildStr = v.split('+').last;
-      return int.tryParse(buildStr) ?? 0;
+      final b = int.tryParse(buildStr) ?? 0;
+      return b >= 1000 ? (b % 1000) : b;
     }
 
     final b1 = extractBuild(v1);
@@ -230,7 +252,8 @@ class AppRelease {
         // toPart is like "v0.1.7-beta.1" — extract trailing build number after last dot
         final dotBuildMatch = RegExp(r'\.([0-9]+)$').firstMatch(toPart);
         if (dotBuildMatch != null) {
-          final b = int.tryParse(dotBuildMatch.group(1)!) ?? 0;
+          var b = int.tryParse(dotBuildMatch.group(1)!) ?? 0;
+          if (b >= 1000) b = b % 1000;
           if (b > highestBuild) {
             highestBuild = b;
             final base = rawTag.split('+')[0];
@@ -239,7 +262,8 @@ class AppRelease {
         } else if (toPart.contains('+')) {
           // Legacy: handle old + style just in case
           final buildStr = toPart.split('+').last;
-          final b = int.tryParse(buildStr) ?? 0;
+          var b = int.tryParse(buildStr) ?? 0;
+          if (b >= 1000) b = b % 1000;
           if (b > highestBuild) {
             highestBuild = b;
             final base = rawTag.split('+')[0];
@@ -251,7 +275,8 @@ class AppRelease {
         final normalized = assetName.replaceAll('%2b', '.').replaceAll('+', '.');
         final apkBuildMatch = RegExp(r'v?\d+\.\d+\.\d+(?:-[a-zA-Z0-9]+)?[\.+](\d+)').firstMatch(normalized);
         if (apkBuildMatch != null) {
-          final b = int.tryParse(apkBuildMatch.group(1)!) ?? 0;
+          var b = int.tryParse(apkBuildMatch.group(1)!) ?? 0;
+          if (b >= 1000) b = b % 1000;
           if (b > highestBuild) {
             highestBuild = b;
             final base = rawTag.split('+')[0];
@@ -263,7 +288,8 @@ class AppRelease {
         final normalized = assetName.replaceAll('%2b', '.').replaceAll('+', '.');
         final exeBuildMatch = RegExp(r'v?\d+\.\d+\.\d+(?:-[a-zA-Z0-9]+)?[\.+](\d+)').firstMatch(normalized);
         if (exeBuildMatch != null) {
-          final b = int.tryParse(exeBuildMatch.group(1)!) ?? 0;
+          var b = int.tryParse(exeBuildMatch.group(1)!) ?? 0;
+          if (b >= 1000) b = b % 1000;
           if (b > highestBuild) {
             highestBuild = b;
             final base = rawTag.split('+')[0];
