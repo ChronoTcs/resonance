@@ -256,7 +256,7 @@ jobs:
           name: Resonance ${{ steps.meta.outputs.tag }}
           body_path: ${{ steps.meta.outputs.notes }}
           draft: false
-          prerelease: true
+          prerelease: false
           make_latest: true
           files: |
             android-binaries/*.apk
