@@ -60,12 +60,12 @@
 
 | Platform / Device | File to Download | Approximate Size | Description |
 | :--- | :--- | :--- | :--- |
-| **Android (Modern Phones)** | `Resonance-v0.1.8.12-Android-64bit-arm64.apk` | **~35 MB** | **Recommended for 99% of Android devices** (Samsung, Xiaomi, Pixel, Oppo, Vivo, etc. made after 2017). |
-| **Android (Older Devices)** | `Resonance-v0.1.8.12-Android-32bit-v7a.apk` | **~30 MB** | For older 32-bit Android phones and legacy tablets. |
-| **Android (All Devices)** | `Resonance-v0.1.8.12-Android-Universal.apk` | **~96 MB** | Universal fallback containing all CPU architectures. |
-| **Windows 10 / 11** | `Resonance-Setup-v0.1.8-beta.exe` | **~75 MB** | Recommended full installer with desktop shortcut and Start Menu integration. |
-| **Windows Portable** | `Resonance-v0.1.8-beta-Windows-Portable.zip` | **~85 MB** | Standalone portable zip — extract and run without installation. |
-| **Windows Delta Patch** | `Resonance-...-to-v0.1.8-beta...delta.patch` | **< 10 MB** | Lightweight binary update patch for existing installations. |
+| **Android (Modern Phones)** | `Resonance-v0.1.8.12-Android-64bit-arm64.apk` | **~33 MB** | **Recommended for 99% of Android devices** (Samsung, Xiaomi, Pixel, Oppo, Vivo, etc. made after 2017). |
+| **Android (Older Devices)** | `Resonance-v0.1.8.12-Android-32bit-v7a.apk` | **~29 MB** | For older 32-bit Android phones and legacy tablets. |
+| **Android (All Devices)** | `Resonance-v0.1.8.12-Android-Universal.apk` | **~92 MB** | Universal fallback containing all CPU architectures. |
+| **Windows 10 / 11** | `Resonance-Setup-v0.1.8-beta.exe` | **~97 MB** | Recommended full installer with bundled FFmpeg, desktop shortcut, and Start Menu integration. |
+| **Windows Portable** | `Resonance-v0.1.8-beta-Windows-Portable.zip` | **~124 MB** | Standalone portable zip — extract and run without installation. |
+| **Windows Delta Patch** | `Resonance-...-to-v0.1.8-beta...delta.patch` | **< 26 MB** | Lightweight binary update patch for existing installations. |
 
 ---
 

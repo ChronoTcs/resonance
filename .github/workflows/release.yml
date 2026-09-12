@@ -111,17 +111,43 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Path "python_engine\bin" -Force
+
+          # 1. Check if real static FFmpeg (> 10 MB) is already installed
           $ffmpeg = (Get-Command ffmpeg -ErrorAction SilentlyContinue)?.Source
           $ffprobe = (Get-Command ffprobe -ErrorAction SilentlyContinue)?.Source
-          if ($ffmpeg -and $ffprobe) {
+          if ($ffmpeg -and (Get-Item $ffmpeg).Length -gt 10MB -and $ffprobe -and (Get-Item $ffprobe).Length -gt 10MB) {
             Copy-Item $ffmpeg "python_engine\bin\ffmpeg.exe" -Force
             Copy-Item $ffprobe "python_engine\bin\ffprobe.exe" -Force
-            Write-Host "Bundled pre-installed FFmpeg from runner" -ForegroundColor Green
+            Write-Host "Bundled pre-installed standalone FFmpeg from runner" -ForegroundColor Green
           } else {
+            # 2. Install via Chocolatey and resolve REAL static binaries under lib/ (avoiding 50KB ShimGen shims in bin/)
             choco install ffmpeg --no-progress
-            Copy-Item "C:\ProgramData\chocolatey\bin\ffmpeg.exe" "python_engine\bin\ffmpeg.exe" -Force
-            Copy-Item "C:\ProgramData\chocolatey\bin\ffprobe.exe" "python_engine\bin\ffprobe.exe" -Force
-            Write-Host "Installed and bundled FFmpeg via Chocolatey" -ForegroundColor Green
+            $realFfmpeg = (Get-ChildItem -Path "C:\ProgramData\chocolatey\lib\ffmpeg" -Recurse -Filter "ffmpeg.exe" | Where-Object { $_.Length -gt 10MB } | Select-Object -First 1)?.FullName
+            $realFfprobe = (Get-ChildItem -Path "C:\ProgramData\chocolatey\lib\ffmpeg" -Recurse -Filter "ffprobe.exe" | Where-Object { $_.Length -gt 10MB } | Select-Object -First 1)?.FullName
+
+            if ($realFfmpeg -and $realFfprobe) {
+              Copy-Item $realFfmpeg "python_engine\bin\ffmpeg.exe" -Force
+              Copy-Item $realFfprobe "python_engine\bin\ffprobe.exe" -Force
+              Write-Host "Bundled real standalone FFmpeg binaries from Chocolatey lib directory" -ForegroundColor Green
+            } else {
+              # Fallback: Download official Gyan.dev release essentials zip if chocolatey lib changes
+              Write-Host "Chocolatey real binary not found. Downloading official Gyan.dev FFmpeg essentials..." -ForegroundColor Yellow
+              Invoke-WebRequest -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" -OutFile "ffmpeg.zip"
+              Expand-Archive -Path "ffmpeg.zip" -DestinationPath "ffmpeg_extracted"
+              $realFfmpeg = (Get-ChildItem -Path "ffmpeg_extracted" -Recurse -Filter "ffmpeg.exe" | Where-Object { $_.Length -gt 10MB } | Select-Object -First 1)?.FullName
+              $realFfprobe = (Get-ChildItem -Path "ffmpeg_extracted" -Recurse -Filter "ffprobe.exe" | Where-Object { $_.Length -gt 10MB } | Select-Object -First 1)?.FullName
+              Copy-Item $realFfmpeg "python_engine\bin\ffmpeg.exe" -Force
+              Copy-Item $realFfprobe "python_engine\bin\ffprobe.exe" -Force
+            }
+          }
+
+          # 3. Size Assertion: Ensure bundled binaries are authentic full static builds (> 10MB)
+          $ffmpegSize = (Get-Item "python_engine\bin\ffmpeg.exe").Length / 1MB
+          $ffprobeSize = (Get-Item "python_engine\bin\ffprobe.exe").Length / 1MB
+          Write-Host ("Verified FFmpeg:  {0:N2} MB" -f $ffmpegSize) -ForegroundColor Green
+          Write-Host ("Verified FFprobe: {0:N2} MB" -f $ffprobeSize) -ForegroundColor Green
+          if ($ffmpegSize -lt 10 -or $ffprobeSize -lt 10) {
+            throw "Error: FFmpeg or FFprobe is under 10MB. Likely a Chocolatey shim instead of real binary!"
           }
 
       - name: Compile Python Downloader Engine
