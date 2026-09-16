@@ -65,6 +65,8 @@ jobs:
         run: flutter pub get
 
       - name: Build Android Release APKs (Split per ABI & Universal)
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.internal.http.socketTimeout=120000 -Dorg.gradle.internal.http.connectionTimeout=120000"
         run: |
           mkdir -p Output
           BASE_VER="${{ steps.version_info.outputs.base_version }}"
@@ -326,7 +328,7 @@ jobs:
       - name: Install Linux System Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libmpv-dev libasound2-dev
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libmpv-dev libasound2-dev libayatana-appindicator3-dev
 
       - name: Install Flutter Dependencies
         run: flutter pub get
