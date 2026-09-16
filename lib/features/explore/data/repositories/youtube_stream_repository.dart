@@ -20,8 +20,8 @@ final youtubeStreamRepositoryProvider = Provider<YoutubeStreamRepository>((
 
   final repo = YoutubeStreamRepository(ref, client, cacheService, prefs);
   ref.onDispose(() => repo.dispose());
-  // Warm-up visitorData on both Android and Windows at boot to eliminate cold-start lag
-  if (Platform.isAndroid || Platform.isWindows) repo.warmUpSession();
+  // Warm-up visitorData on Android, Windows, and Linux at boot to eliminate cold-start lag
+  if (Platform.isAndroid || Platform.isWindows || Platform.isLinux) repo.warmUpSession();
   return repo;
 });
 
@@ -66,11 +66,7 @@ class YoutubeStreamRepository {
     try {
       final resolver = _ref.read(platformStreamResolverProvider);
       final resolution = await resolver.resolveStream(videoId);
-      return await _cacheService.getAudioPath(
-        videoId,
-        resolution.streamUrl,
-        headers: resolution.playbackHeaders,
-      );
+      return resolution.streamUrl;
     } catch (e) {
       debugPrint(
         '[YoutubeStreamRepo] Platform resolver failed for $videoId: $e',

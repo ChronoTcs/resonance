@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:path/path.dart' as p;
 import '../../../../core/data/services/media_cache_service.dart';
+import '../../../../core/application/services/network_connectivity_service.dart';
+import '../../../../core/exceptions/offline_exception.dart';
 import '../../../library/data/models/media_item.dart';
 import '../../../stream/domain/interfaces/i_platform_stream_resolver.dart';
 import '../../../stream/application/platform_stream_provider.dart';
@@ -55,23 +57,62 @@ class StreamResolutionService {
     }
 
     // ── 3. Architecture service (stream URL) ───────────────────────────────
+    if (!_ref.read(networkConnectivityProvider).isOnline) {
+      throw const OfflinePlaybackException(
+        'Device is offline and no cached audio is available.',
+      );
+    }
+
     final archService = _ref.read(playbackArchitectureServiceProvider);
-    final streamUrl = await archService.getStreamUrl(songId);
+    final String? streamUrl;
+    try {
+      streamUrl = await archService.getStreamUrl(songId);
+    } on OfflinePlaybackException {
+      rethrow;
+    }
     if (streamUrl == null) {
       throw Exception('[StreamResolution] Failed to resolve stream for $songId');
     }
 
     debugPrint('[StreamResolution] Stream URL resolved for $songId');
 
-    // Defer disk caching by 10s — gives player 100% bandwidth to fill demuxer buffer
-    if (streamUrl.startsWith('http') && !streamUrl.contains('c=ANDROID_VR')) {
-      Future.delayed(const Duration(seconds: 10), () {
-        final headers = _resolver.getPlaybackHeaders(streamUrl);
-        cacheService.getAudioPath(songId, streamUrl, headers: headers);
-      });
-    }
+    // NOTE: Background caching is now triggered from AudioNotifier on track completion
+    // (after FFmpeg closes its socket) to avoid concurrent socket collision on the same CDN URL.
     Future.microtask(() => cacheService.saveMetadata(songId, item));
 
+    return streamUrl;
+  }
+
+  /// Returns platform-specific playback headers for a given stream URL.
+  /// Used by the completion caching logic in AudioNotifier.
+  Map<String, String> getHeaders(String streamUrl) {
+    return _resolver.getPlaybackHeaders(streamUrl);
+  }
+
+  /// Force-resolves a fresh stream URL, bypassing all caches.
+  /// Used for 1-shot retry after a resolution failure in playTrack.
+  Future<String> resolveForced(MediaItem item) async {
+    final songId = (item.id != null && item.id!.isNotEmpty && !item.id!.startsWith('http'))
+        ? item.id!
+        : (item.path.startsWith('http') ? (item.id ?? item.path) : item.path);
+
+    if (!_ref.read(networkConnectivityProvider).isOnline) {
+      throw const OfflinePlaybackException(
+        'Device is offline and no cached audio is available.',
+      );
+    }
+
+    final archService = _ref.read(playbackArchitectureServiceProvider);
+    final String? streamUrl;
+    try {
+      streamUrl = await archService.getStreamUrl(songId, forceRefresh: true);
+    } on OfflinePlaybackException {
+      rethrow;
+    }
+    if (streamUrl == null) {
+      throw Exception('[StreamResolution] Force-resolve failed for $songId');
+    }
+    debugPrint('[StreamResolution] Force-resolved $songId');
     return streamUrl;
   }
 

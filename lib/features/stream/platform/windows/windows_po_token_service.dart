@@ -39,10 +39,13 @@ class WindowsPoTokenService implements IPlatformPoTokenService {
     _isGenerating = true;
 
     try {
-      String execPath = p.join('python_engine', 'dist', 'bgutil-pot-windows-x86_64.exe');
+      final binName = Platform.isWindows
+          ? 'bgutil-pot-windows-x86_64.exe'
+          : 'bgutil-pot-linux-x86_64';
+      String execPath = p.join('python_engine', 'dist', binName);
       if (!File(execPath).existsSync()) {
         final appDir = File(Platform.resolvedExecutable).parent.path;
-        execPath = p.join(appDir, 'bgutil-pot-windows-x86_64.exe');
+        execPath = p.join(appDir, binName);
       }
 
       if (!File(execPath).existsSync()) {
@@ -52,7 +55,7 @@ class WindowsPoTokenService implements IPlatformPoTokenService {
       }
 
       debugPrint('[WindowsPoTokenService] Executing bgutil process: $execPath');
-      final result = await Process.run(execPath, [], runInShell: true)
+      final result = await Process.run(execPath, [], runInShell: Platform.isWindows)
           .timeout(const Duration(seconds: 10));
 
       if (result.exitCode == 0 && result.stdout != null) {

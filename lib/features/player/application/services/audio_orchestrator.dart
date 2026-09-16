@@ -1,6 +1,9 @@
-import 'dart:io';
+ import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/providers/overlay_provider.dart';
+import '../../../../core/application/services/network_connectivity_service.dart';
+import '../../../../core/providers/cached_stream_music_provider.dart';
 import '../../../../core/application/services/maintenance_service.dart';
 import '../../../explore/data/repositories/youtube_search_repository.dart';
 import '../../../home/presentation/providers/recently_played_provider.dart';
@@ -95,7 +98,11 @@ class AudioOrchestrator {
         final seedId = next.id ?? next.path;
         if (seedId.isNotEmpty) {
           final audioState = _ref.read(audioProvider);
-          if (audioState.loopMode == LoopMode.all) return; // no radio during loop-all
+          // Suppress radio during loop-all ONLY if in playlist mode or if queue already has multiple tracks (> 1)
+          if (audioState.loopMode == LoopMode.all &&
+              (audioState.isPlaylistMode || audioState.queue.length > 1)) {
+            return;
+          }
 
           if (audioState.isPlaylistMode) {
             final activePlId = audioState.activePlaylistId;
@@ -165,16 +172,44 @@ class AudioOrchestrator {
   /// Deduplicates against current queue before appending.
   Future<void> _fetchAndAppendRadio(String videoId) async {
     try {
+      final isOnline = _ref.read(networkConnectivityProvider).isOnline;
       final windowSize = _ref.read(queueWindowSizeProvider);
+      final notifier = _ref.read(audioProvider.notifier);
+      final blocked = _ref.read(blockedTracksProvider.notifier);
+      final existingIds = _ref
+          .read(audioProvider)
+          .queue
+          .map((t) => t.id ?? t.path)
+          .toSet();
+
+      if (!isOnline) {
+        // Offline Radio Fallback: query cachedStreamMusicProvider
+        final cachedAsync = _ref.read(cachedStreamMusicProvider);
+        final cachedTracks = cachedAsync.asData?.value ?? const <MediaItem>[];
+        if (cachedTracks.isEmpty) return;
+
+        final newTracks = <MediaItem>[];
+        final shuffled = List<MediaItem>.from(cachedTracks)..shuffle();
+        for (final track in shuffled) {
+          final id = track.id ?? track.path;
+          if (!existingIds.contains(id) && !blocked.isBlocked(track.id, path: track.path)) {
+            newTracks.add(track);
+            existingIds.add(id);
+            if (newTracks.length >= windowSize) break;
+          }
+        }
+        if (newTracks.isNotEmpty) {
+          notifier.addTracksToQueue(newTracks);
+          debugPrint(
+            '[AudioOrchestrator] Appended ${newTracks.length} offline cached tracks to radio queue',
+          );
+        }
+        return;
+      }
+
       final repo = _ref.read(youtubeSearchRepositoryProvider);
       final recs = await repo.getRadioRecommendations(videoId, limit: windowSize);
       if (recs.isEmpty) return;
-
-      final notifier = _ref.read(audioProvider.notifier);
-      final blocked = _ref.read(blockedTracksProvider.notifier);
-      final existingIds = _ref.read(audioProvider).queue
-          .map((t) => t.id ?? t.path)
-          .toSet();
 
       // batch-append to fire _updateNextTrack once, not once per track
       final newTracks = <MediaItem>[];

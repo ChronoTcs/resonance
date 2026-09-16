@@ -1,14 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance/core/configs/app_breakpoints.dart';
-import 'package:resonance/core/providers/overlay_provider.dart';
 import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/core/widgets/buttons/collapse_button.dart';
 import 'package:resonance/core/widgets/buttons/reusable_hover_icon_button.dart';
-import 'queue_buffer_selector.dart';
 
 /// Modular top header bar for the Queue screen.
-class QueueHeaderBar extends ConsumerWidget {
+class QueueHeaderBar extends StatelessWidget {
   final int totalUpcoming;
   final VoidCallback onClose;
   final VoidCallback onClearUpcoming;
@@ -21,11 +18,10 @@ class QueueHeaderBar extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isCompact = AppBreakpoints.isCompact(context);
     final iconColor = theme.colorScheme.onSurface.withValues(alpha: 0.75);
-    final windowSize = ref.watch(queueWindowSizeProvider);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8),
@@ -66,15 +62,7 @@ class QueueHeaderBar extends ConsumerWidget {
           ),
           const Spacer(),
 
-          // Queue Buffer Pill Selector (N+1 to N+20)
-          QueueBufferSelector(
-            currentSize: windowSize,
-            onSelected: (size) =>
-                ref.read(queueWindowSizeProvider.notifier).setWindowSize(size),
-          ),
-
-          if (totalUpcoming > 0) ...[
-            const SizedBox(width: 8),
+          if (totalUpcoming > 0)
             ReusableHoverIconButton(
               icon: UIcons.regular.trash,
               tooltip: 'Clear upcoming',
@@ -82,7 +70,6 @@ class QueueHeaderBar extends ConsumerWidget {
               color: iconColor,
               onTap: onClearUpcoming,
             ),
-          ],
         ],
       ),
     );

@@ -1,21 +1,32 @@
 <#
 .SYNOPSIS
     Resonance Windows Release & Delta Patch Packager
-    Builds Flutter Windows, Inno Setup Installer, Portable Zip, Delta Patch, and Manifest.
+    Builds Python Downloader Engine, Flutter Windows, Inno Setup Installer, Portable Zip, Delta Patch, and Manifest.
     Saves outputs into unified: Releases/v<Version>/Windows/
 
 .PARAMETER Version
     Optional version string. If omitted, automatically parsed from pubspec.yaml.
 
 .PARAMETER PreviousVersion
-    Optional previous version to generate a delta patch against (e.g. "0.1.2-beta").
+    Optional previous version to generate a delta patch against (e.g. "0.1.7-beta" or "0.1.7-beta.11").
     If omitted, the script automatically searches the Releases/ folder for the latest older version.
+
+.PARAMETER MaxDeltaReleases
+    Maximum number of prior releases to generate delta patches against. Default is 3.
+
+.PARAMETER SkipPythonEngine
+    Switch to skip compiling python_engine/build_downloader.py.
+
+.PARAMETER SkipInstaller
+    Switch to skip compiling Inno Setup .exe installer.
 #>
 
 param(
     [string]$Version = "",
     [string]$PreviousVersion = "",
-    [int]$MaxDeltaReleases = 3
+    [int]$MaxDeltaReleases = 3,
+    [switch]$SkipPythonEngine = $false,
+    [switch]$SkipInstaller = $false
 )
 
 $ErrorActionPreference = "Stop"
@@ -40,7 +51,16 @@ if ($PubspecContent -match 'version:\s*([^\s]+)') {
     }
 }
 
-if ([string]::IsNullOrWhiteSpace($Version)) {
+if (-not [string]::IsNullOrWhiteSpace($Version)) {
+    if ($Version -match '^([^\+]+)\+(\d+)$') {
+        $BaseVersion = $matches[1]
+        $BuildNumber = [int]$matches[2]
+        $FullVersion = $Version
+    } else {
+        $BaseVersion = $Version
+        $FullVersion = if ($BuildNumber -gt 0) { "$Version+$BuildNumber" } else { $Version }
+    }
+} else {
     $Version = $BaseVersion
 }
 
@@ -62,13 +82,59 @@ if (-not (Test-Path $WindowsOutputDir)) {
     Write-Host "[Dir] Updating existing release folder: $WindowsOutputDir" -ForegroundColor Yellow
 }
 
-# 3. Build Flutter Windows (Release)
-Write-Host "`n[1/5] Building Flutter Windows (Release)..." -ForegroundColor Yellow
-Set-Location $WorkspaceRoot
-flutter build windows --release
+# 3. Check & Compile Python Downloader Engine
+if (-not $SkipPythonEngine) {
+    Write-Host "`n[1/6] Preparing Python Downloader Engine..." -ForegroundColor Yellow
+    $PythonEngineDir = Join-Path $WorkspaceRoot "python_engine"
+    $DownloaderExe = Join-Path $PythonEngineDir "dist\resonance_downloader.exe"
+    $BuildDownloaderScript = Join-Path $PythonEngineDir "build_downloader.py"
+    $FfmpegBinDir = Join-Path $PythonEngineDir "bin"
 
-if (-not (Test-Path $BuildDir)) {
-    Write-Error "Flutter build failed. $BuildDir not found."
+    # Verify FFmpeg & FFprobe binaries (>10MB)
+    $FfmpegExe = Join-Path $FfmpegBinDir "ffmpeg.exe"
+    $FfprobeExe = Join-Path $FfmpegBinDir "ffprobe.exe"
+    if ((-not (Test-Path $FfmpegExe)) -or ((Get-Item $FfmpegExe).Length -lt 10MB)) {
+        Write-Warning "python_engine\bin\ffmpeg.exe is missing or under 10MB! Downloads may fail."
+    } else {
+        $ffSize = [math]::Round((Get-Item $FfmpegExe).Length / 1MB, 1)
+        Write-Host "  -> Verified FFmpeg:  $ffSize MB" -ForegroundColor DarkGray
+    }
+    if ((-not (Test-Path $FfprobeExe)) -or ((Get-Item $FfprobeExe).Length -lt 10MB)) {
+        Write-Warning "python_engine\bin\ffprobe.exe is missing or under 10MB! Audio analysis may fail."
+    } else {
+        $fpSize = [math]::Round((Get-Item $FfprobeExe).Length / 1MB, 1)
+        Write-Host "  -> Verified FFprobe: $fpSize MB" -ForegroundColor DarkGray
+    }
+
+    # Compile resonance_downloader.exe using PyInstaller
+    if (Test-Path $BuildDownloaderScript) {
+        $pythonObj = Get-Command python -ErrorAction SilentlyContinue
+        $PythonCmd = if ($pythonObj) { $pythonObj.Source } else { $null }
+        if ($PythonCmd) {
+            Write-Host "  -> Compiling resonance_downloader.exe via PyInstaller..." -ForegroundColor Cyan
+            & python "$BuildDownloaderScript"
+            if ($LASTEXITCODE -ne 0) { throw "python build_downloader.py failed with code $LASTEXITCODE" }
+            if (Test-Path $DownloaderExe) {
+                $exeSizeMb = [math]::Round((Get-Item $DownloaderExe).Length / 1MB, 2)
+                Write-Host "  -> Successfully compiled: resonance_downloader.exe ($exeSizeMb MB)" -ForegroundColor Green
+            } else {
+                Write-Warning "resonance_downloader.exe was not created by build_downloader.py!"
+            }
+        } else {
+            Write-Warning "python command not found in PATH. Skipping Python downloader compilation."
+        }
+    }
+} else {
+    Write-Host "`n[1/6] Skipping Python Downloader Engine compilation (-SkipPythonEngine specified)." -ForegroundColor Gray
+}
+
+# 4. Build Flutter Windows (Release)
+Write-Host "`n[2/6] Building Flutter Windows (Release)..." -ForegroundColor Yellow
+Set-Location $WorkspaceRoot
+$env:CL = "/D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS"
+flutter build windows --release
+if ($LASTEXITCODE -ne 0) {
+    throw "Flutter build windows failed with exit code $LASTEXITCODE"
 }
 
 # Auto-download HDiffPatch tools if not already present
@@ -107,8 +173,8 @@ if (Test-Path $ToolsDir) {
     Copy-Item -Recurse "$ToolsDir\*" $BuildToolsDir -Force
 }
 
-# 4. Create/Update Portable Folder & Zip Archive
-Write-Host "`n[2/5] Creating Portable Release Bundle..." -ForegroundColor Yellow
+# 5. Create/Update Portable Folder & Zip Archive
+Write-Host "`n[3/6] Creating Portable Release Bundle..." -ForegroundColor Yellow
 $PortableDir = Join-Path $WindowsOutputDir "Release_v$Version"
 if (Test-Path $PortableDir) {
     Remove-Item -Recurse -Force $PortableDir
@@ -138,23 +204,32 @@ if (Test-Path $PortableZip) {
 Compress-Archive -Path "$PortableDir\*" -DestinationPath $PortableZip -Force
 Write-Host "  -> Portable Zip: $PortableZip" -ForegroundColor Green
 
-# 5. Compile Inno Setup Installer
-Write-Host "`n[3/5] Compiling Inno Setup Installer..." -ForegroundColor Yellow
-$InnoCompiler = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
-if (-not (Test-Path $InnoCompiler)) {
-    $InnoCompiler = "C:\Program Files\Inno Setup 6\ISCC.exe"
-}
+# 6. Compile Inno Setup Installer
+if (-not $SkipInstaller) {
+    Write-Host "`n[4/6] Compiling Inno Setup Installer..." -ForegroundColor Yellow
+    $InnoCompiler = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+    if (-not (Test-Path $InnoCompiler)) {
+        $InnoCompiler = "C:\Program Files\Inno Setup 6\ISCC.exe"
+    }
+    if (-not (Test-Path $InnoCompiler)) {
+        $isccObj = Get-Command iscc -ErrorAction SilentlyContinue
+        if ($isccObj) { $InnoCompiler = $isccObj.Source }
+    }
 
-if (Test-Path $InnoCompiler) {
-    $InnoScript = Join-Path $WorkspaceRoot "windows\resonance_installer.iss"
-    & "$InnoCompiler" "/DMyAppVersion=$Version" "/O$WindowsOutputDir" "$InnoScript"
-    Write-Host "  -> Installer generated in: $WindowsOutputDir" -ForegroundColor Green
+    if (Test-Path $InnoCompiler) {
+        $InnoScript = Join-Path $WorkspaceRoot "windows\resonance_installer.iss"
+        & "$InnoCompiler" "/DMyAppVersion=$Version" "/O$WindowsOutputDir" "$InnoScript"
+        if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed with exit code $LASTEXITCODE" }
+        Write-Host "  -> Installer generated in: $WindowsOutputDir" -ForegroundColor Green
+    } else {
+        Write-Host "  -> Inno Setup Compiler (ISCC.exe) not found. Skipping installer exe." -ForegroundColor DarkYellow
+    }
 } else {
-    Write-Host "  -> Inno Setup Compiler (ISCC.exe) not found. Skipping installer exe." -ForegroundColor DarkYellow
+    Write-Host "`n[4/6] Skipping Inno Setup Installer (-SkipInstaller specified)." -ForegroundColor Gray
 }
 
-# 6. Automatic Multi-Release & Hotfix Delta Patch Generation (HDiffPatch)
-Write-Host "`n[4/5] Checking for Previous Releases to Generate Delta Patches..." -ForegroundColor Yellow
+# 7. Automatic Multi-Release & Hotfix Delta Patch Generation (HDiffPatch)
+Write-Host "`n[5/6] Checking for Previous Releases to Generate Delta Patches..." -ForegroundColor Yellow
 
 $GeneratedPatches = @()
 
@@ -198,9 +273,7 @@ if (-not [string]::IsNullOrWhiteSpace($PreviousVersion)) {
     $SnapshotsDir = Join-Path $WindowsOutputDir "snapshots"
     if (Test-Path $SnapshotsDir) {
         Get-ChildItem -Path $SnapshotsDir -Directory | Where-Object { $_.Name -like "Release_v*" } | ForEach-Object {
-            # Snapshot dirs use dot-separated build (e.g. Release_v0.1.6-beta.8)
             $snapVer = $_.Name.Replace("Release_v", "")
-            # Normalize back to + for SemVer tuple comparison (0.1.6-beta.8 -> 0.1.6-beta+8)
             $snapVerNorm = $snapVer -replace '([\w-]+)\.([0-9]+)$', '$1+$2'
             $snapTuple = Get-SemVerTuple $snapVerNorm
             if ($snapTuple -lt $CurrentTuple) {
@@ -274,8 +347,8 @@ if ((Test-Path $HDiffzExe) -and ($TargetPrevReleases.Count -gt 0)) {
     Write-Host "  -> No previous release found or hdiffz.exe missing. Skipping delta patch." -ForegroundColor Gray
 }
 
-# 7. Generate Manifest JSON
-Write-Host "`n[5/5] Generating Manifest (manifest.json)..." -ForegroundColor Yellow
+# 8. Generate Manifest JSON
+Write-Host "`n[6/6] Generating Manifest (manifest.json)..." -ForegroundColor Yellow
 $ManifestFile = Join-Path $WindowsOutputDir "manifest.json"
 $ZipHash = (Get-FileHash -Path $PortableZip -Algorithm SHA256).Hash.ToLower()
 $ZipSizeBytes = (Get-Item $PortableZip).Length
@@ -294,9 +367,13 @@ $Manifest = @{
 }
 
 $InstallerExe = Join-Path $WindowsOutputDir "Resonance-v$Version-Windows.exe"
+if (-not (Test-Path $InstallerExe)) {
+    $AltInstaller = Join-Path $WindowsOutputDir "Resonance-Setup-v$Version.exe"
+    if (Test-Path $AltInstaller) { $InstallerExe = $AltInstaller }
+}
 if (Test-Path $InstallerExe) {
     $Manifest["installer"] = @{
-        name = "Resonance-v$Version-Windows.exe"
+        name = Split-Path -Leaf $InstallerExe
         size_bytes = (Get-Item $InstallerExe).Length
         sha256 = (Get-FileHash -Path $InstallerExe -Algorithm SHA256).Hash.ToLower()
     }
@@ -304,7 +381,6 @@ if (Test-Path $InstallerExe) {
 
 if ($GeneratedPatches.Count -gt 0) {
     $Manifest["delta_patches"] = $GeneratedPatches
-    # Backwards compatibility with single delta_patch consumers
     $Manifest["delta_patch"] = $GeneratedPatches[0]
 }
 
@@ -314,3 +390,4 @@ Write-Host "  -> Manifest saved: $ManifestFile" -ForegroundColor Green
 Write-Host "`n=====================================================" -ForegroundColor Cyan
 Write-Host "  Windows Release Package Ready: $WindowsOutputDir" -ForegroundColor Cyan
 Write-Host "=====================================================" -ForegroundColor Cyan
+$global:LASTEXITCODE = 0

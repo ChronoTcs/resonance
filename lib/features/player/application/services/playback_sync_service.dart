@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../tray/application/tray_service.dart';
 import '../../../library/data/models/media_item.dart';
-import '../../../../core/data/services/media_cache_service.dart';
 import '../../../lyrics/data/repositories/lyrics_repository.dart';
 import 'windows_system_media_service.dart';
 
@@ -47,19 +46,6 @@ class PlaybackSyncService {
 
   Future<void> _syncPersistentMetadata(MediaItem track) async {
     if (!track.isStreaming) return;
-    final songId = track.id ?? track.path;
-    final cache = _ref.read(mediaCacheServiceProvider);
-    
-    // Non-blocking background task for artwork so it does not delay lyrics fetching
-    Future.microtask(() async {
-      try {
-        if (track.thumbnailUrl != null && track.thumbnailUrl!.startsWith('http')) {
-          await cache.cacheArtwork(songId, track.thumbnailUrl);
-        }
-      } catch (e) {
-        debugPrint('[PlaybackSyncService] Failed to cache artwork: $e');
-      }
-    });
 
     try {
       await _ref.read(lyricsRepositoryProvider).getLyrics(track);

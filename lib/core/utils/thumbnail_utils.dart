@@ -25,9 +25,9 @@ class ThumbnailUtils {
     String sized = url.replaceAll(RegExp(r'=w\d+-h\d+(?:-[a-z0-9-]+)?'), '=w400-h400-l90-rj')
                       .replaceAll(RegExp(r'=s\d+(?:-[a-z0-9-]+)?'), '=s400');
 
-    // For YT video thumbnails use hqdefault (640x480) as a good-enough card resolution
+    // For YT video thumbnails use mqdefault (320x180 16:9) so BoxFit.cover crops side bars cleanly
     if (sized.contains('i.ytimg.com/vi/')) {
-      sized = sized.replaceAll(RegExp(r'/(?:maxres|mq|sd)?default\.jpg'), '/hqdefault.jpg');
+      sized = sized.replaceAll(RegExp(r'/(?:maxres|hq|sd)?default\.jpg'), '/mqdefault.jpg');
     }
 
     return sized;

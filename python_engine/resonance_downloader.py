@@ -353,6 +353,62 @@ def handle_download(cmd: dict):
                 del _active_events[download_id]
 
 
+_bgutil_alive = None
+_bgutil_lock = threading.Lock()
+
+def check_bgutil():
+    global _bgutil_alive
+    if _bgutil_alive is not None:
+        return _bgutil_alive
+    with _bgutil_lock:
+        if _bgutil_alive is not None:
+            return _bgutil_alive
+        bgutil_url = "http://127.0.0.1:4416"
+        alive = False
+        try:
+            import urllib.request
+            urllib.request.urlopen(bgutil_url, timeout=0.2)
+            alive = True
+        except Exception:
+            pass
+        _bgutil_alive = alive
+        if not alive:
+            sys.stderr.write(f"[resolve] INFO: bgutil-pot not reachable at {bgutil_url} — resolving without PoToken\n")
+            sys.stderr.flush()
+        return _bgutil_alive
+
+
+def _warmup_ytdlp():
+    """Background warm-up for yt-dlp: pre-caches YouTube player JS and checks bgutil on launch."""
+    import time
+    start = time.time()
+    try:
+        check_bgutil()
+        sys.stderr.write("[warmup] Pre-warming yt-dlp YouTube player JS in background...\n")
+        sys.stderr.flush()
+        ydl_opts = {
+            "quiet": True,
+            "no_warnings": True,
+            "nocheckcertificate": True,
+            "youtube_include_dash_manifest": False,
+            "youtube_include_hls_playlist": False,
+            "extractor_args": {
+                "youtube": {
+                    "player_client": ["android", "ios", "web", "mweb"]
+                }
+            },
+        }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            # process=False fetches the webpage and extracts player JS without processing full stream formats
+            ydl.extract_info("https://www.youtube.com/watch?v=jNQXAC9IVRw", download=False, process=False)
+        elapsed = time.time() - start
+        sys.stderr.write(f"[warmup] yt-dlp YouTube player JS pre-cached in {elapsed:.2f}s\n")
+        sys.stderr.flush()
+    except Exception as e:
+        sys.stderr.write(f"[warmup] Warmup note (non-blocking): {e}\n")
+        sys.stderr.flush()
+
+
 def handle_resolve_stream(cmd: dict):
     req_id = cmd.get("id", "unknown")
     video_id = cmd.get("videoId", "")
@@ -360,15 +416,7 @@ def handle_resolve_stream(cmd: dict):
     sys.stderr.flush()
     try:
         url = f"https://www.youtube.com/watch?v={video_id}"
-        # Probe bgutil-pot liveness at hardcoded port 4416 before attaching extractor arg
-        bgutil_url = "http://127.0.0.1:4416"
-        bgutil_alive = False
-        try:
-            import urllib.request
-            urllib.request.urlopen(bgutil_url, timeout=0.5)
-            bgutil_alive = True
-        except Exception:
-            pass
+        bgutil_alive = check_bgutil()
 
         extractor_args = {
             "youtube": {
@@ -376,10 +424,7 @@ def handle_resolve_stream(cmd: dict):
             }
         }
         if bgutil_alive:
-            extractor_args["youtubepot-bgutilhttp"] = {"base_url": bgutil_url}
-        else:
-            sys.stderr.write(f"[resolve] INFO: bgutil-pot not reachable at {bgutil_url} — resolving without PoToken\n")
-            sys.stderr.flush()
+            extractor_args["youtubepot-bgutilhttp"] = {"base_url": "http://127.0.0.1:4416"}
 
         ydl_opts = {
             "quiet": True,
@@ -413,6 +458,9 @@ def main():
 
     sys.stderr.write('[main] Entering stdin loop\n')
     sys.stderr.flush()
+
+    # Launch background warm-up immediately so the first user click is instant
+    threading.Thread(target=_warmup_ytdlp, daemon=True).start()
 
     buf = b''
     while True:

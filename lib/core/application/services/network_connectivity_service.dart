@@ -9,7 +9,6 @@ import 'package:resonance/features/download/application/download_service.dart';
 import 'package:resonance/features/download/application/providers/download_provider.dart';
 import 'package:resonance/features/download/data/models/download_item.dart';
 import 'package:resonance/features/settings/application/startup_service.dart';
-import 'package:resonance/features/explore/presentation/providers/explore_provider.dart';
 import 'package:resonance/features/playlist/application/services/playlist_stream_cache_handler.dart';
 
 /// Global connectivity state for Resonance.
@@ -126,12 +125,39 @@ class NetworkConnectivityNotifier extends Notifier<NetworkConnectivityState> {
 
     if (wasOffline && online) {
       debugPrint('[NetworkConnectivity] 🌐 Network connection restored (Online). Triggering global sync...');
-      _onReconnected();
+      Future.microtask(() => _onReconnected());
     } else if (!online) {
       debugPrint('[NetworkConnectivity] 📴 Device is currently Offline.');
     }
 
     return online;
+  }
+
+  /// Manually force offline state for testing.
+  @visibleForTesting
+  void simulateOfflineForTesting() {
+    _previousOnline = false;
+    state = state.copyWith(
+      isOnline: false,
+      isProbing: false,
+      lastChecked: DateTime.now(),
+    );
+  }
+
+  /// Manually force reconnection for testing, properly dispatching deferred _onReconnected microtask.
+  @visibleForTesting
+  void simulateReconnectionForTesting() {
+    final wasOffline = !_previousOnline;
+    _previousOnline = true;
+    state = state.copyWith(
+      isOnline: true,
+      isProbing: false,
+      lastChecked: DateTime.now(),
+    );
+
+    if (wasOffline) {
+      Future.microtask(() => _onReconnected());
+    }
   }
 
   /// Global trigger executed whenever the app reconnects to the internet.
@@ -156,13 +182,9 @@ class NetworkConnectivityNotifier extends Notifier<NetworkConnectivityState> {
         ref.read(downloadServiceProvider).scheduleNext(downloadQueue);
       }
 
-      // 5. Invalidate Home & Explore feed providers to refresh content
-      ref.invalidate(homeFeedProvider);
-      ref.invalidate(quickPicksProvider);
-      ref.invalidate(dailyDiscoverProvider);
-      ref.invalidate(similarArtistsProvider);
-      ref.invalidate(speedDialProvider);
-      ref.invalidate(searchResultsProvider);
+      // 5. Feed providers (homeFeed, quickPicks, dailyDiscover, similarArtists, speedDial, searchResults)
+      // already watch networkConnectivityProvider.select((s) => s.isOnline) and automatically refresh.
+      // Manual ref.invalidate calls removed to prevent CircularDependencyError and wasteful double-fetches.
 
       // 6. Process pending playlist stream cache queue
       unawaited(ref.read(playlistStreamCacheHandlerProvider).processPendingQueue());

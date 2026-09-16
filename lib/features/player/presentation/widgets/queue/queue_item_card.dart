@@ -59,16 +59,16 @@ class QueueItemCard extends ConsumerWidget {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Row(
               children: [
-                // Position Tag (N+1, N+2, etc.)
+                // Position Index (1, 2, 3, etc.)
                 Container(
-                  width: 38,
+                  width: 28,
                   alignment: Alignment.center,
                   child: Text(
                     positionTag,
                     style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.primary.withValues(alpha: 0.85),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.65),
                     ),
                   ),
                 ),

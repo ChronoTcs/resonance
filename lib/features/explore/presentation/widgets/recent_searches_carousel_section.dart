@@ -8,6 +8,7 @@ import 'package:resonance/features/explore/presentation/providers/recent_searche
 import 'package:resonance/features/library/data/models/media_item.dart';
 import 'package:resonance/core/application/services/network_connectivity_service.dart';
 import 'package:resonance/core/providers/cached_stream_music_provider.dart';
+import 'package:resonance/features/library/application/blocked_tracks_provider.dart';
 
 /// Horizontal carousel displaying recent searches / tracks played from search.
 ///
@@ -25,6 +26,8 @@ class RecentSearchesCarouselSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    ref.watch(blockedTracksProvider);
+    final blockedNotifier = ref.read(blockedTracksProvider.notifier);
     final recentAsync = ref.watch(recentSearchesProvider);
     final isOnline = ref.watch(networkConnectivityProvider.select((s) => s.isOnline));
     final cachedAsync = ref.watch(cachedStreamMusicProvider);
@@ -33,7 +36,9 @@ class RecentSearchesCarouselSection extends ConsumerWidget {
     return recentAsync.when(
       data: (items) {
         final validItems = items
-            .where((item) => (item.id ?? item.path).isNotEmpty)
+            .where((item) =>
+                (item.id ?? item.path).isNotEmpty &&
+                !blockedNotifier.isBlocked(item.id, path: item.path))
             .where((item) {
               if (isOnline) return true;
               final isLocal = !item.isStreaming ||

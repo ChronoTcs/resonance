@@ -30,7 +30,7 @@ class AudioExtraActions extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     if (!isDesktop) {
       return ReusableHoverIconButton(
-        icon: UIcons.regular.add,
+        icon: UIcons.regular.menu_dots,
         iconSize: 20,
         tooltip: 'Media actions',
         onTap: () => MediaActionUtils.showMediaActions(
@@ -47,17 +47,6 @@ class AudioExtraActions extends ConsumerWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          ReusableHoverIconButton(
-            icon: UIcons.regular.add,
-            iconSize: 20,
-            tooltip: 'Media actions',
-            onTap: () => MediaActionUtils.showMediaActions(
-              context: context,
-              ref: ref,
-              item: track,
-            ),
-          ),
-          const SizedBox(width: 8),
           Consumer(
             builder: (context, ref, _) {
               final pos = ref.watch(audioProvider.select((s) => s.position));
@@ -103,7 +92,7 @@ class AudioExtraActions extends ConsumerWidget {
             },
           ),
           ReusableHoverIconButton(
-            icon: UIcons.regular.settings,
+            icon: UIcons.regular.settings_sliders,
             iconSize: 20,
             tooltip: 'Audio Settings',
             onTap: () => AudioSettingsSheet.show(context),
@@ -142,6 +131,16 @@ class AudioExtraActions extends ConsumerWidget {
                 ),
               );
             },
+          ),
+          ReusableHoverIconButton(
+            icon: UIcons.regular.menu_dots,
+            iconSize: 20,
+            tooltip: 'Media actions',
+            onTap: () => MediaActionUtils.showMediaActions(
+              context: context,
+              ref: ref,
+              item: track,
+            ),
           ),
           const SizedBox(width: 16),
         ],

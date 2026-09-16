@@ -7,6 +7,7 @@ import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/core/widgets/widgets.dart';
 import 'package:resonance/features/dashboard/presentation/widgets/top_navigation_header.dart';
 import 'package:resonance/features/explore/presentation/providers/explore_provider.dart';
+import 'package:resonance/features/explore/presentation/widgets/mobile_search_history_section.dart';
 import 'package:resonance/features/home/presentation/providers/home_navigation_provider.dart';
 import 'package:resonance/features/home/presentation/providers/recently_played_provider.dart';
 import 'package:resonance/features/home/presentation/widgets/adaptive_home_header.dart';
@@ -41,7 +42,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _isSearchFieldOpen = false;
 
   @override
+  void initState() {
+    super.initState();
+    _searchController.addListener(_onSearchChanged);
+  }
+
+  void _onSearchChanged() {
+    if (_isSearchFieldOpen) {
+      setState(() {});
+    }
+  }
+
+  @override
   void dispose() {
+    _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     super.dispose();
   }
@@ -154,8 +168,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               },
               onRefresh: _refreshAll,
             ),
-            const Expanded(
-              child: UnifiedHomeFeed(),
+            Expanded(
+              child: isCompact && _isSearchFieldOpen
+                  ? MobileSearchHistorySection(
+                      onSelect: _submitSearch,
+                      onInsert: (query) {
+                        _searchController.text = query;
+                        _searchController.selection =
+                            TextSelection.collapsed(offset: query.length);
+                        setState(() {});
+                      },
+                      filterText: _searchController.text,
+                    )
+                  : const UnifiedHomeFeed(),
             ),
           ],
         ),

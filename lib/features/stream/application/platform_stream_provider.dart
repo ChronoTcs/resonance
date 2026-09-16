@@ -4,6 +4,7 @@ import '../domain/interfaces/i_platform_po_token_service.dart';
 import '../domain/interfaces/i_platform_stream_resolver.dart';
 import '../domain/models/po_token_pair.dart';
 import '../platform/android/android_stream_provider.dart';
+import '../platform/linux/linux_stream_provider.dart';
 import '../platform/windows/windows_stream_provider.dart';
 
 // ── No-Op Fallback for Web / Linux / macOS ────────────────────────────────────
@@ -35,5 +36,9 @@ final platformStreamResolverProvider = Provider<IPlatformStreamResolver>((ref) {
   if (Platform.isAndroid) {
     return ref.watch(androidStreamResolverProvider);
   }
+  if (Platform.isLinux) {
+    return ref.watch(linuxStreamResolverProvider);
+  }
   throw UnsupportedError('Platform ${Platform.operatingSystem} not yet supported');
 });
+

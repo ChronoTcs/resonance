@@ -18,6 +18,9 @@ import '../../data/models/player_enums.dart';
 import 'package:audio_session/audio_session.dart';
 import '../audio_handler.dart';
 import '../../../../core/data/services/stream_cache_tracker_service.dart';
+import '../../../../core/application/services/network_connectivity_service.dart';
+import '../../../../core/providers/cached_stream_music_provider.dart';
+import '../services/queue_orchestrator.dart';
 
 import '../services/playback_engine_service.dart';
 import '../../../settings/application/notification_provider.dart';
@@ -203,6 +206,36 @@ class AudioNotifier extends Notifier<AudioState> {
           return;
         }
         _lastCompletionTime = now;
+
+        // [State-Based Completion Caching]
+        // Only trigger background cache for tracks that played as live network streams.
+        // If track was already playing from local disk cache, do nothing (0MB, no double-fetch).
+        final completedTrack = state.currentTrack;
+        final wasLiveStream = completedTrack != null &&
+            completedTrack.isStreaming &&
+            (completedTrack.path.startsWith('http') ||
+                (!completedTrack.path.contains('/stream/audio/') &&
+                    !completedTrack.path.contains(r'\stream\audio\')));
+
+        if (completedTrack != null && wasLiveStream) {
+          final completedId = completedTrack.id ?? completedTrack.path;
+          final archService = ref.read(playbackArchitectureServiceProvider);
+          Future.microtask(() async {
+            try {
+              final cacheService = ref.read(mediaCacheServiceProvider);
+              final existingCache = await cacheService.getCachedAudioPath(completedId);
+              if (existingCache == null && !cacheService.isCaching(completedId)) {
+                final streamUrl = await archService.getStreamUrl(completedId);
+                if (streamUrl != null && streamUrl.startsWith('http')) {
+                  final headers = _resolver.getHeaders(streamUrl);
+                  debugPrint('[AudioNotifier] Caching completed live stream for $completedId');
+                  cacheService.getAudioPath(completedId, streamUrl, headers: headers);
+                }
+              }
+            } catch (_) {}
+          });
+        }
+
         if (ref.read(mediaFocusProvider) == MediaFocus.audio) {
           next(fromCompletion: true);
         }
@@ -232,10 +265,26 @@ class AudioNotifier extends Notifier<AudioState> {
         final isStreamErr = errStr.contains('403') ||
             errStr.contains('forbidden') ||
             errStr.contains('expired') ||
-            errStr.contains('failed to open');
+            errStr.contains('failed to open') ||
+            errStr.contains('tcp:') ||
+            errStr.contains('ffurl_') ||
+            errStr.contains('0xffffd8ba') ||
+            errStr.contains('connection reset') ||
+            errStr.contains('econnreset') ||
+            errStr.contains('broken pipe') ||
+            errStr.contains('error decoding audio') ||
+            errStr.contains('end of file') ||
+            errStr.contains('eof');
         if (isStreamErr && currentId != null && (state.currentTrack?.isStreaming ?? false)) {
           debugPrint('[AudioPlayer] Stream failure detected — attempting self-heal re-resolve for $currentId');
           Future.microtask(() async {
+            if (!ref.read(networkConnectivityProvider).isOnline) {
+              debugPrint('[AudioPlayer] Offline — cannot self-heal stream, switching to offline playback');
+              if (state.currentTrack != null) {
+                await _handleOfflinePlayback(state.currentTrack!, state.currentIndex);
+              }
+              return;
+            }
             try {
               final url = await ref.read(playbackArchitectureServiceProvider)
                   .getStreamUrl(currentId, forceRefresh: true);
@@ -247,6 +296,11 @@ class AudioNotifier extends Notifier<AudioState> {
                 );
                 return;
               }
+            } on OfflinePlaybackException {
+              if (state.currentTrack != null) {
+                await _handleOfflinePlayback(state.currentTrack!, state.currentIndex);
+              }
+              return;
             } catch (_) {}
             debugPrint('[AudioPlayer] Self-heal failed — skipping to next');
             if (ref.read(mediaFocusProvider) == MediaFocus.audio) {
@@ -327,6 +381,16 @@ class AudioNotifier extends Notifier<AudioState> {
   }
 
   Future<void> playTrack(MediaItem item, {int index = -1}) async {
+    if (ref.read(blockedTracksProvider.notifier).isBlocked(item.id, path: item.path)) {
+      ref.read(notificationProvider.notifier).showNotification(
+        'Track Blocked',
+        '"${item.title}" is in your blocked list.',
+        target: 'target:blocked_tracks',
+        silentOsNotification: true,
+      );
+      return;
+    }
+
     // Guard: normalize streaming item so path is always the video ID, never an ephemeral stream URL
     final cleanItem = (item.isStreaming &&
             item.path.startsWith('http') &&
@@ -358,60 +422,63 @@ class AudioNotifier extends Notifier<AudioState> {
         cleanItem.path.endsWith('.mp3');
 
     if (cleanItem.isStreaming || !isPhysicalLocal) {
+      // [Fast-Skip Collision Abort] Abort any in-flight background pre-cache for this song
+      // so the live player connection has 100% exclusive access without socket collisions (0xffffd8ba).
+      ref.read(mediaCacheServiceProvider).cancelActiveDownload(targetId);
+
       state = state.copyWith(isLoading: true, currentTrack: cleanItem);
       try {
         final resolvedPath = await _resolver.resolve(cleanItem);
         trackToPlay = cleanItem.copyWith(path: resolvedPath);
       } on OfflinePlaybackException {
-        debugPrint('[AudioNotifier] Offline — checking upcoming queue for playable tracks');
-        state = state.copyWith(isPlaying: false, isLoading: false);
-
-        final cacheService = ref.read(mediaCacheServiceProvider);
-        int nextPlayableIndex = -1;
-
-        for (int i = index + 1; i < state.queue.length; i++) {
-          final t = state.queue[i];
-          final isLocal = !t.isStreaming ||
-              (t.path.isNotEmpty &&
-                  !t.path.startsWith('http') &&
-                  (t.path.contains('/') || t.path.contains('\\')));
-          if (isLocal) {
-            nextPlayableIndex = i;
-            break;
-          }
-          final cachedPath = await cacheService.getCachedAudioPath(t.id ?? t.path);
-          if (cachedPath != null) {
-            nextPlayableIndex = i;
-            break;
-          }
-        }
-
-        if (nextPlayableIndex != -1) {
-          ref.read(notificationProvider.notifier).showNotification(
-            'You\'re Offline',
-            'Skipping to next available offline track.',
-            target: 'target:download',
-            silentOsNotification: true,
-          );
-          await playTrack(state.queue[nextPlayableIndex], index: nextPlayableIndex);
-        } else {
-          ref.read(notificationProvider.notifier).showNotification(
-            'You\'re Offline',
-            'No offline playable tracks remaining in queue.',
-            target: 'target:download',
-            silentOsNotification: true,
-          );
-        }
+        await _handleOfflinePlayback(cleanItem, index);
         return;
       } catch (e) {
         debugPrint('[AudioNotifier] Stream resolution failed in playTrack: $e');
         state = state.copyWith(isPlaying: false, isLoading: false);
+
+        final isOffline = !ref.read(networkConnectivityProvider).isOnline;
+        if (isOffline) {
+          await _handleOfflinePlayback(cleanItem, index);
+          return;
+        }
+
+        // [Resilient Queue] Never leave player frozen. Auto-skip on completion-triggered failure.
+        Future.microtask(() async {
+          try {
+            // 1 retry with forceRefresh before giving up
+            debugPrint('[AudioNotifier] Retrying resolution for ${cleanItem.id ?? cleanItem.path}');
+            final retryPath = await _resolver.resolveForced(cleanItem);
+            final retryTrack = cleanItem.copyWith(path: retryPath);
+            _onTrackChanged(retryTrack, index);
+            state = state.copyWith(isLoading: true);
+            await _player.open(_resolver.buildMedia(retryTrack.path, player: _player), play: true);
+            state = state.copyWith(isLoading: false);
+            return;
+          } catch (retryError) {
+            if (retryError is OfflinePlaybackException || !ref.read(networkConnectivityProvider).isOnline) {
+              await _handleOfflinePlayback(cleanItem, index);
+              return;
+            }
+          }
+          // Retry also failed — auto-skip if from queue completion
+          debugPrint('[AudioNotifier] Retry failed — auto-advancing queue');
+          ref.read(notificationProvider.notifier).showNotification(
+            'Skipping Unplayable Track',
+            '"${cleanItem.title}" could not be loaded.',
+            isError: true,
+            silentOsNotification: true,
+          );
+          if (ref.read(mediaFocusProvider) == MediaFocus.audio) {
+            next(fromCompletion: true);
+          }
+        });
         return;
       }
     }
 
-    _onTrackChanged(cleanItem, index);
-    state = state.copyWith(isLoading: true);
+    _onTrackChanged(trackToPlay, index);
+    state = state.copyWith(isLoading: true, currentTrack: trackToPlay);
     try {
       await _player.open(_resolver.buildMedia(trackToPlay.path, player: _player), play: true);
     } catch (e) {
@@ -420,6 +487,79 @@ class AudioNotifier extends Notifier<AudioState> {
       state = state.copyWith(isLoading: false);
     }
     _updateNextTrack();
+  }
+
+  Future<void> _handleOfflinePlayback(MediaItem cleanItem, int index) async {
+    debugPrint('[AudioNotifier] Offline — scanning upcoming queue for playable tracks');
+    state = state.copyWith(isPlaying: false, isLoading: false);
+
+    final cacheService = ref.read(mediaCacheServiceProvider);
+    int nextPlayableIndex = -1;
+
+    for (int i = index + 1; i < state.queue.length; i++) {
+      final t = state.queue[i];
+      final isLocal = !t.isStreaming ||
+          (t.path.isNotEmpty &&
+              !t.path.startsWith('http') &&
+              (t.path.contains('/') || t.path.contains('\\')));
+      if (isLocal) {
+        nextPlayableIndex = i;
+        break;
+      }
+      final cachedPath = await cacheService.getCachedAudioPath(t.id ?? t.path);
+      if (cachedPath != null) {
+        nextPlayableIndex = i;
+        break;
+      }
+    }
+
+    if (nextPlayableIndex != -1) {
+      ref.read(notificationProvider.notifier).showNotification(
+        'You\'re Offline',
+        'Skipping to next available offline track.',
+        target: 'target:download',
+        silentOsNotification: true,
+      );
+      await playTrack(state.queue[nextPlayableIndex], index: nextPlayableIndex);
+      return;
+    }
+
+    // Queue has no more offline tracks! Fallback to Cached Stream Music library
+    List<MediaItem> cachedTracks = const [];
+    try {
+      cachedTracks = await ref.read(cachedStreamMusicProvider.future);
+    } catch (_) {
+      cachedTracks = ref.read(cachedStreamMusicProvider).asData?.value ?? const <MediaItem>[];
+    }
+    final blockedNotifier = ref.read(blockedTracksProvider.notifier);
+    final playableCached = cachedTracks
+        .where((t) => !blockedNotifier.isBlocked(t.id, path: t.path))
+        .toList();
+
+    if (playableCached.isNotEmpty) {
+      ref.read(notificationProvider.notifier).showNotification(
+        'You\'re Offline',
+        'Queue exhausted. Switching to your cached stream music library.',
+        target: 'target:download',
+        silentOsNotification: true,
+      );
+      debugPrint(
+        '[AudioNotifier] Queue exhausted offline — falling back to ${playableCached.length} cached stream tracks',
+      );
+      ref.read(queueOrchestratorProvider).playOfflineRadioFallback(
+        failedTrack: cleanItem,
+        cachedTracks: playableCached,
+      );
+      return;
+    }
+
+    // Zero cached or local tracks available on entire machine
+    ref.read(notificationProvider.notifier).showNotification(
+      'You\'re Offline',
+      'No offline playable tracks remaining in queue.',
+      target: 'target:download',
+      silentOsNotification: true,
+    );
   }
 
   Future<void> playPlaylist(
@@ -680,7 +820,7 @@ class AudioNotifier extends Notifier<AudioState> {
               'Repeating: ${nextTrack.title}',
             );
       }
-      _playCurrentFromQueue(nextTrack).then((_) => _isNavigating = false);
+      _playCurrentFromQueue(nextTrack).whenComplete(() => _isNavigating = false);
     } else if (fromCompletion) {
       _isNavigating = false;
       pause();
@@ -705,7 +845,7 @@ class AudioNotifier extends Notifier<AudioState> {
     _isNavigating = true;
     final prev = _queue.getPreviousTrack();
     if (prev != null) {
-      _playCurrentFromQueue(prev).then((_) => _isNavigating = false);
+      _playCurrentFromQueue(prev).whenComplete(() => _isNavigating = false);
     } else {
       _isNavigating = false;
     }

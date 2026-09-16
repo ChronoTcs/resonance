@@ -14,6 +14,7 @@ import '../../../features/settings/application/maintenance_provider.dart';
 import '../../utils/thumbnail_utils.dart';
 import '../../application/services/network_connectivity_service.dart';
 import 'package:flutter/painting.dart';
+import '../../providers/cached_stream_music_provider.dart';
 
 Future<int> _scanDirectoryBytesAsync(Directory dir) async {
   int total = 0;
@@ -49,6 +50,14 @@ class MediaCacheService {
   final StreamCacheTrackerService _trackerService;
   final http.Client _client = http.Client(); // Persistent HTTP client
   Timer? _cleanupTimer;
+  Timer? _invalidateDebounce;
+
+  void _notifyCacheChanged() {
+    _invalidateDebounce?.cancel();
+    _invalidateDebounce = Timer(const Duration(milliseconds: 500), () {
+      _ref.invalidate(cachedStreamMusicProvider);
+    });
+  }
 
   // ── High-Performance Storage Cache & Delta Accounting ──
   final Map<String, int> _cachedSizes = {};
@@ -106,7 +115,14 @@ class MediaCacheService {
 
   void dispose() {
     _client.close(); // Close the client when the service is disposed
+    for (final client in _activeClients.values) {
+      try {
+        client.close();
+      } catch (_) {}
+    }
+    _activeClients.clear();
     _cleanupTimer?.cancel();
+    _invalidateDebounce?.cancel();
   }
 
   String getSafeFilename(String id) {
@@ -114,10 +130,25 @@ class MediaCacheService {
   }
 
   final Map<String, Future<void>> _activeDownloads = {};
+  final Map<String, http.Client> _activeClients = {};
+  final Set<String> _cancelledDownloads = {};
   final Set<String> _activeArtworkDownloads = {};
   // cooldown map prevents retry deadlock on network flicker
   final Map<String, DateTime> _failedDownloads = {};
   static const _kFailureCooldown = Duration(seconds: 60);
+
+  /// Cancels an in-flight background audio download for [songId] immediately.
+  /// Aborts the underlying HTTP socket and cleans up any partial .tmp file.
+  void cancelActiveDownload(String songId) {
+    _cancelledDownloads.add(songId);
+    final client = _activeClients.remove(songId);
+    if (client != null) {
+      debugPrint('[MediaCache] Aborting active background download for $songId');
+      try {
+        client.close();
+      } catch (_) {}
+    }
+  }
 
   Future<String> getAudioPath(
     String songId,
@@ -180,10 +211,18 @@ class MediaCacheService {
   Future<void>? getActiveDownload(String songId) => _activeDownloads[songId];
 
   Future<String?> getCachedAudioPath(String songId) async {
+    // [Race Guard] If a download is in-flight, never return the partial file
+    if (_activeDownloads.containsKey(songId)) return null;
+
     final dir = await _cacheManager.getStreamAudioDir();
     final safeId = getSafeFilename(songId);
     final file = File(p.join(dir.path, '$safeId.m4a'));
-    return file.existsSync() ? file.path : null;
+
+    // [Integrity Guard] Only return path if file is fully written (> 64 KB)
+    if (file.existsSync() && file.lengthSync() > 64 * 1024) {
+      return file.path;
+    }
+    return null;
   }
 
   Future<void> _downloadAudioInBackground(
@@ -193,102 +232,215 @@ class MediaCacheService {
     String? userAgent,
     Map<String, String>? headers,
   }) async {
-    final file = File(savePath);
-    IOSink? sink;
+    // [Atomic Write] Write to .tmp first; rename to final only on success
+    final tmpPath = '$savePath.tmp';
+    final tmpFile = File(tmpPath);
+    final finalFile = File(savePath);
+
+    int attempts = 0;
+    const maxAttempts = 3;
+    int downloadedBytes = 0;
+
+    if (tmpFile.existsSync()) {
+      try {
+        downloadedBytes = tmpFile.lengthSync();
+      } catch (_) {
+        downloadedBytes = 0;
+      }
+    }
 
     try {
-      final request = http.Request('GET', Uri.parse(url));
-
-      if (headers != null && headers.isNotEmpty) {
-        request.headers.addAll(headers);
-      } else {
-        final activeUA =
-            userAgent ??
-            (url.contains('c=ANDROID_VR')
-                ? 'com.google.android.apps.youtube.vr.oculus/1.56.21 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1)'
-                : url.contains('c=ANDROID')
-                ? 'com.google.android.youtube/19.29.37 (Linux; U; Android 14; GB) gzip'
-                : url.contains('c=IOS')
-                ? 'com.google.ios.youtube/19.29.1 (iPhone14,3; U; CPU iOS 15_6_1 like Mac OS X)'
-                : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36");
-
-        final isMobileClient = activeUA.toLowerCase().contains('android') ||
-            activeUA.toLowerCase().contains('ios') ||
-            url.contains('c=ANDROID_VR') ||
-            url.contains('c=ANDROID') ||
-            url.contains('c=IOS');
-
-        final Map<String, String> resolvedHeaders = {
-          'User-Agent': activeUA,
-          'Accept': '*/*',
-          'Accept-Language': 'en-US,en;q=0.9',
-          'Connection': 'keep-alive',
-          if (!url.contains('c=ANDROID')) 'Range': 'bytes=0-',
-        };
-
-        if (!isMobileClient) {
-          final origin = url.contains('music.youtube.com')
-              ? 'https://music.youtube.com'
-              : 'https://www.youtube.com';
-          resolvedHeaders.addAll({
-            'Origin': origin,
-            'Referer': '$origin/',
-            'Sec-Fetch-Dest': 'audio',
-            'Sec-Fetch-Mode': 'cors',
-            'Sec-Fetch-Site': 'cross-site',
-          });
+      while (attempts < maxAttempts) {
+        if (_cancelledDownloads.contains(songId)) {
+          debugPrint('[MediaCache] Background cache cancelled for $songId (skipped)');
+          _cleanupTmpFile(tmpFile);
+          return;
         }
 
-        request.headers.addAll(resolvedHeaders);
-      }
+        attempts++;
+        final client = http.Client();
+        _activeClients[songId] = client;
+        IOSink? sink;
 
-      final response = await _client
-          .send(request)
-          .timeout(const Duration(minutes: 5));
+        try {
+          final request = http.Request('GET', Uri.parse(url));
 
-      if (response.statusCode == 200 || response.statusCode == 206) {
-        sink = file.openWrite();
-        int downloadedBytes = 0;
+          if (headers != null && headers.isNotEmpty) {
+            request.headers.addAll(headers);
+            if (downloadedBytes > 0) {
+              request.headers['Range'] = 'bytes=$downloadedBytes-';
+            }
+          } else {
+            final activeUA =
+                userAgent ??
+                (url.contains('c=ANDROID_VR')
+                    ? 'com.google.android.apps.youtube.vr.oculus/1.56.21 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1)'
+                    : url.contains('c=ANDROID')
+                    ? 'com.google.android.youtube/19.29.37 (Linux; U; Android 14; GB) gzip'
+                    : url.contains('c=IOS')
+                    ? 'com.google.ios.youtube/19.29.1 (iPhone14,3; U; CPU iOS 15_6_1 like Mac OS X)'
+                    : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36");
 
-        await response.stream.forEach((chunk) {
-          sink!.add(chunk);
-          downloadedBytes += chunk.length;
-        });
+            final isMobileClient = activeUA.toLowerCase().contains('android') ||
+                activeUA.toLowerCase().contains('ios') ||
+                url.contains('c=ANDROID_VR') ||
+                url.contains('c=ANDROID') ||
+                url.contains('c=IOS');
 
-        await sink.flush();
-        await sink.close();
-        sink = null;
+            final Map<String, String> resolvedHeaders = {
+              'User-Agent': activeUA,
+              'Accept': '*/*',
+              'Accept-Language': 'en-US,en;q=0.9',
+              'Connection': 'keep-alive',
+              if (downloadedBytes > 0)
+                'Range': 'bytes=$downloadedBytes-'
+              else if (!url.contains('c=ANDROID'))
+                'Range': 'bytes=0-',
+            };
 
-        _dataUsageService.addBytes(downloadedBytes);
-        notifyDelta('stream_audio', downloadedBytes);
-        debugPrint(
-          '[MediaCache] Audio cached successfully for $songId ($downloadedBytes bytes)',
-        );
+            if (!isMobileClient) {
+              final origin = url.contains('music.youtube.com')
+                  ? 'https://music.youtube.com'
+                  : 'https://www.youtube.com';
+              resolvedHeaders.addAll({
+                'Origin': origin,
+                'Referer': '$origin/',
+                'Sec-Fetch-Dest': 'audio',
+                'Sec-Fetch-Mode': 'cors',
+                'Sec-Fetch-Site': 'cross-site',
+              });
+            }
 
-        // Tandai sebagai 'biasa diputar' agar masuk siklus 30 hari
-        _trackerService.updateLastPlayed(songId);
+            request.headers.addAll(resolvedHeaders);
+          }
 
-        _scheduleCleanup();
-      } else {
-        throw Exception(
-          'Media Integrity Check failed: Server returned ${response.statusCode}',
-        );
+          final response = await client
+              .send(request)
+              .timeout(const Duration(minutes: 5));
+
+          if (response.statusCode == 200 || response.statusCode == 206) {
+            final isAppend = response.statusCode == 206 && downloadedBytes > 0;
+            if (!isAppend) {
+              downloadedBytes = 0;
+              sink = tmpFile.openWrite(mode: FileMode.write);
+            } else {
+              sink = tmpFile.openWrite(mode: FileMode.append);
+            }
+
+            await response.stream.forEach((chunk) {
+              if (_cancelledDownloads.contains(songId)) {
+                throw _CancelledDownloadException();
+              }
+              sink!.add(chunk);
+              downloadedBytes += chunk.length;
+            });
+
+            await sink.flush();
+            await sink.close();
+            sink = null;
+
+            // [Integrity Check] Only promote to final path if download is substantive
+            if (downloadedBytes > 64 * 1024) {
+              // Atomically rename .tmp -> .m4a
+              await tmpFile.rename(savePath);
+
+              _dataUsageService.addBytes(downloadedBytes);
+              notifyDelta('stream_audio', downloadedBytes);
+              debugPrint(
+                '[MediaCache] Audio cached successfully for $songId ($downloadedBytes bytes)',
+              );
+
+              // Tandai sebagai 'biasa diputar' agar masuk siklus 30 hari
+              _trackerService.updateLastPlayed(songId);
+
+              _scheduleCleanup();
+              _notifyCacheChanged();
+              return;
+            } else {
+              // Suspiciously small — discard .tmp
+              debugPrint(
+                '[MediaCache] Download too small for $songId ($downloadedBytes bytes) — discarding',
+              );
+              _cleanupTmpFile(tmpFile);
+              throw Exception('Download too small: $downloadedBytes bytes');
+            }
+          } else if (response.statusCode == 416) {
+            // Range Not Satisfiable: bytes requested were beyond end of file
+            if (downloadedBytes > 64 * 1024) {
+              await tmpFile.rename(savePath);
+              debugPrint(
+                '[MediaCache] Range 416 received for $songId with $downloadedBytes bytes present. Treating as complete.',
+              );
+              _scheduleCleanup();
+              _notifyCacheChanged();
+              return;
+            } else {
+              _cleanupTmpFile(tmpFile);
+              throw Exception('HTTP 416 Range Not Satisfiable for $songId');
+            }
+          } else {
+            throw Exception(
+              'Media Integrity Check failed: Server returned ${response.statusCode}',
+            );
+          }
+        } on _CancelledDownloadException {
+          debugPrint('[MediaCache] Background cache cancelled for $songId (skipped)');
+          if (sink != null) {
+            try {
+              await sink.close();
+            } catch (_) {}
+          }
+          _cleanupTmpFile(tmpFile);
+          return;
+        } catch (e) {
+          if (sink != null) {
+            try {
+              await sink.close();
+            } catch (_) {}
+          }
+
+          if (_cancelledDownloads.contains(songId)) {
+            debugPrint('[MediaCache] Background cache cancelled for $songId (skipped)');
+            _cleanupTmpFile(tmpFile);
+            return;
+          }
+
+          if (tmpFile.existsSync()) {
+            try {
+              downloadedBytes = tmpFile.lengthSync();
+            } catch (_) {}
+          }
+
+          if (attempts < maxAttempts) {
+            debugPrint(
+              '[MediaCache] Connection dropped for $songId at $downloadedBytes bytes: $e. Resuming via HTTP Range ($attempts/$maxAttempts)...',
+            );
+            await Future.delayed(const Duration(milliseconds: 300));
+            continue;
+          } else {
+            rethrow;
+          }
+        } finally {
+          try {
+            client.close();
+          } catch (_) {}
+          _activeClients.remove(songId);
+        }
       }
     } catch (e) {
-      _activeDownloads.remove(songId);
-      // [Deadlock Guard] Record failure time to suppress retry spam
-      _failedDownloads[songId] = DateTime.now();
-
-      debugPrint('[MediaCache] Audio caching failed for $songId: $e');
-      if (sink != null) {
-        try {
-          await sink.close();
-        } catch (_) {}
+      if (_cancelledDownloads.contains(songId)) {
+        debugPrint('[MediaCache] Background cache cancelled for $songId (skipped)');
+        _cleanupTmpFile(tmpFile);
+        return;
       }
+      _failedDownloads[songId] = DateTime.now();
+      debugPrint('[MediaCache] Audio caching failed for $songId: $e');
+      _cleanupTmpFile(tmpFile);
 
-      if (file.existsSync()) {
+      // Also clean stale final file if it somehow got written
+      if (finalFile.existsSync()) {
         try {
-          await file.delete();
+          await finalFile.delete();
           debugPrint(
             '[MediaCache] Cleaned up corrupted session for $songId',
           );
@@ -296,8 +448,20 @@ class MediaCacheService {
       }
       rethrow; // Propagate error back to repository to trigger escalation
     } finally {
-      // Double check removal to prevent any deadlock
-      _activeDownloads.remove(songId);
+      try {
+        _activeClients.remove(songId);
+        _activeDownloads.remove(songId);
+        _cancelledDownloads.remove(songId);
+      } catch (_) {}
+    }
+  }
+
+  void _cleanupTmpFile(File tmpFile) {
+    if (tmpFile.existsSync()) {
+      try {
+        tmpFile.deleteSync();
+        debugPrint('[MediaCache] Cleaned up .tmp file');
+      } catch (_) {}
     }
   }
 
@@ -453,6 +617,7 @@ class MediaCacheService {
       // Use locked write
       await _cacheManager.synchronizedWrite(file, jsonEncode(map));
       _scheduleCleanup();
+      _notifyCacheChanged();
     } catch (e) {
       debugPrint('[MediaCache] Metadata caching error: $e');
     }
@@ -501,6 +666,7 @@ class MediaCacheService {
 
       await _cacheManager.synchronizedWrite(file, jsonEncode(cleanItem.toJson(includeArt: false)));
       debugPrint('[MediaCache] Forced sidecar update for $songId (album/art enriched)');
+      _notifyCacheChanged();
     } catch (e) {
       debugPrint('[MediaCache] Metadata forced-save error: $e');
     }
@@ -577,6 +743,7 @@ class MediaCacheService {
           }
         }
       }
+      _notifyCacheChanged();
     } catch (e) {
       debugPrint('[MediaCache] Cache removal error for $songId: $e');
     }
@@ -761,7 +928,31 @@ class MediaCacheService {
 
       enforceCacheLimit(limitMb);
       _cacheManager.cleanupTemporaryStreams(maxAgeDays: secondaryDays);
+      _cleanupOrphanTmpFiles(); // [Atomic Write] Clean stale .tmp files
     });
+  }
+
+  /// Purges orphaned `.tmp` download files older than 1 hour.
+  /// These are left behind if the app crashed mid-download.
+  Future<void> _cleanupOrphanTmpFiles() async {
+    try {
+      final dir = await _cacheManager.getStreamAudioDir();
+      if (!dir.existsSync()) return;
+      final cutoff = DateTime.now().subtract(const Duration(hours: 1));
+      await for (final entity in dir.list()) {
+        if (entity is File && entity.path.endsWith('.tmp')) {
+          final stat = entity.statSync();
+          if (stat.modified.isBefore(cutoff)) {
+            try {
+              await entity.delete();
+              debugPrint('[MediaCache] Purged orphan .tmp: ${entity.path}');
+            } catch (_) {}
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[MediaCache] Orphan .tmp cleanup error: $e');
+    }
   }
 
   Future<void> enforceCacheLimit(int limitMb) async {
@@ -778,3 +969,5 @@ class MediaCacheService {
     await _cacheManager.enforceStreamAudioLimit(limitMb, pinnedIds: pinnedIds);
   }
 }
+
+class _CancelledDownloadException implements Exception {}

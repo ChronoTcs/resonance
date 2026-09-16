@@ -4,6 +4,7 @@ import 'package:silky_scroll/silky_scroll.dart';
 import 'package:resonance/core/providers/cached_stream_music_provider.dart';
 import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/features/home/presentation/widgets/hover_track_card.dart';
+import 'package:resonance/features/library/application/blocked_tracks_provider.dart';
 
 /// Standalone section displaying all cached stream songs on disk.
 ///
@@ -14,10 +15,15 @@ class HomeCachedMusicSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    ref.watch(blockedTracksProvider);
+    final blockedNotifier = ref.read(blockedTracksProvider.notifier);
     final cachedAsync = ref.watch(cachedStreamMusicProvider);
 
     return cachedAsync.when(
-      data: (cachedTracks) {
+      data: (rawTracks) {
+        final cachedTracks = rawTracks
+            .where((t) => !blockedNotifier.isBlocked(t.id, path: t.path))
+            .toList();
         if (cachedTracks.isEmpty) {
           return const SliverToBoxAdapter(child: SizedBox.shrink());
         }

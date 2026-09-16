@@ -126,7 +126,7 @@ void main([List<String> args = const []]) async {
   debugPrint('[ResonanceInit] Starting main()... args: $args');
   WidgetsFlutterBinding.ensureInitialized();
 
-  if (Platform.isWindows) {
+  if (Platform.isWindows || Platform.isLinux) {
     await WindowsPoTokenService().start();
   }
 

@@ -13,7 +13,7 @@ The primary production release engine runs via GitHub Actions defined in [`.gith
 ```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                            Trigger Event                                    │
-│       • Push Tag: git push origin v* (e.g., v0.1.8-beta)                    │
+│       • Push Tag: git push origin v* (e.g., v0.1.9-beta)                    │
 │       • Manual Workflow Dispatch: Actions > Release Pipeline > Run          │
 └───────────────────────┬─────────────────────────────────────┬───────────────┘
                         │                                     │
@@ -57,26 +57,26 @@ Follow this checklist whenever releasing an update, pushing new commits, or trig
 Always keep the version and build numbers in sync across configuration files:
 1. **`pubspec.yaml`**:
    ```yaml
-   version: 0.1.8-beta+13   # Format: <major>.<minor>.<patch>[-<prerelease>]+<build_number>
+   version: 0.1.9-beta+14   # Format: <major>.<minor>.<patch>[-<prerelease>]+<build_number>
    ```
 2. **`python_engine/version_info.txt`**:
    ```python
-   filevers=(0, 1, 8, 13),
-   prodvers=(0, 1, 8, 13),
+   filevers=(0, 1, 9, 14),
+   prodvers=(0, 1, 9, 14),
    # ...
-   StringStruct(u'FileVersion', u'0.1.8.13'),
-   StringStruct(u'ProductVersion', u'0.1.8-beta+13')
+   StringStruct(u'FileVersion', u'0.1.9.14'),
+   StringStruct(u'ProductVersion', u'0.1.9-beta+14')
    ```
 3. **`windows/resonance_installer.iss`** (when updating base version):
    ```iss
-   #define MyAppVersion "0.1.8-beta"
-   #define MyAppNumericVersion "0.1.8.0"
+   #define MyAppVersion "0.1.9-beta"
+   #define MyAppNumericVersion "0.1.9.0"
    ```
 
 ### Step 2: Prepare Release Notes & Commit Reports
 Document what changed in the project reports folders:
-- **Commit Summary**: Create `reports/commits/commit_v<version>_build<build>.md` (e.g. [`commit_v0.1.8_build13.md`](file:///d:/File%20Mata%20Kuliah/Projek/streamly/resonance/reports/commits/commit_v0.1.8_build13.md)).
-- **Release Notes**: Update `reports/releases/release_v<version>_notes.md` and create `reports/releases/release_v<version>-beta_notes.md` (e.g. [`release_v0.1.8-beta_notes.md`](file:///d:/File%20Mata%20Kuliah/Projek/streamly/resonance/reports/releases/release_v0.1.8-beta_notes.md)).
+- **Commit Summary**: Create `reports/commits/commit_v<version>_build<build>.md` (e.g. `reports/commits/commit_v0.1.9_build14.md`).
+- **Release Notes**: Update `reports/releases/release_v<version>_notes.md` and create `reports/releases/release_v<version>-beta_notes.md` (e.g. `reports/releases/release_v0.1.9-beta_notes.md`).
 - **State Memory**: Update `graphify-out/Resonance_State.md` with new features, bug fixes, and architectural notes.
 
 ### Step 3: Run Automated Verification
@@ -88,7 +88,7 @@ flutter test
 ### Step 4: Commit & Push Code to Main Branch
 ```powershell
 git add .
-git commit -F "reports/commits/commit_v0.1.8_build13.md"
+git commit -F "reports/commits/commit_v0.1.9_build14.md"
 git push origin main
 ```
 
@@ -97,61 +97,89 @@ git push origin main
 #### Option A: Trigger via Git Tag (Automatic)
 - **New Release Tag:**
   ```powershell
-  git tag -a v0.1.8-beta -m "Release v0.1.8-beta (Build 13)"
-  git push origin v0.1.8-beta
+  git tag -a v0.1.9-beta -m "Release v0.1.9-beta (Build 14)"
+  git push origin v0.1.9-beta
   ```
 - **Updating an Existing Release Tag with a New Build:**
-  If the release tag `v0.1.8-beta` already exists on GitHub and you want to rebuild it with the new build number:
+  If the release tag `v0.1.9-beta` already exists on GitHub and you want to rebuild it with the new build number:
   ```powershell
-  git tag -fa v0.1.8-beta -m "Update v0.1.8-beta to Build 13"
-  git push origin v0.1.8-beta --force
+  git tag -fa v0.1.9-beta -m "Update v0.1.9-beta to Build 14"
+  git push origin v0.1.9-beta --force
   ```
 
 #### Option B: Trigger via GitHub Actions UI (Manual Dispatch)
 1. Navigate to the repository on GitHub.
 2. Go to **Actions** → select **Release Pipeline**.
 3. Click **Run workflow** dropdown on the right.
-4. Select the `main` branch and enter the target tag (e.g. `v0.1.8-beta`).
+4. Select the `main` branch and enter the target tag (e.g. `v0.1.9-beta`).
 5. Click **Run workflow**.
 
 ---
 
 ## 📦 Expected Release Assets & File Naming
 
-The pipeline compiles and publishes the following binaries to the GitHub Release:
+The pipeline and local packaging scripts produce matching binaries conforming to Proposal B naming:
 
 | File Name | Platform | Description |
 | :--- | :--- | :--- |
-| `Resonance-v0.1.8-beta.13-Android-64bit-arm64.apk` | Android | Optimized 64-bit ARM APK (~33 MB) |
-| `Resonance-v0.1.8-beta.13-Android-32bit-v7a.apk` | Android | Optimized 32-bit ARM APK (~29 MB) |
-| `Resonance-v0.1.8-beta.13-Android-Universal.apk` | Android | Universal APK for all CPU architectures (~92 MB) |
-| `Resonance-Setup-v0.1.8-beta.exe` | Windows | Inno Setup Windows Full Installer (~97 MB) |
-| `Resonance-v0.1.8-beta-Windows-Portable.zip` | Windows | Standalone portable zip archive (~124 MB) |
-| `Resonance-...-to-v0.1.8-beta...delta.patch` | Windows | Differential binary patch via HDiffPatch (<26 MB) |
+| `Resonance-v0.1.9-beta.14-Android-64bit-arm64.apk` | Android | Optimized 64-bit ARM APK (~33 MB) |
+| `Resonance-v0.1.9-beta.14-Android-32bit-v7a.apk` | Android | Optimized 32-bit ARM APK (~29 MB) |
+| `Resonance-v0.1.9-beta.14-Android-Universal.apk` | Android | Universal APK for all CPU architectures (~92 MB) |
+| `Resonance-v0.1.9-beta-Windows.exe` | Windows | Inno Setup Windows Full Installer (~97 MB) |
+| `Resonance-v0.1.9-beta-Windows-Portable.zip` | Windows | Standalone portable zip archive (~124 MB) |
+| `Resonance-...-to-v0.1.9-beta.14-delta.patch` | Windows | Differential binary patch via HDiffPatch (<26 MB) |
 
 ---
 
 ## 💻 Local Packaging Scripts (PowerShell)
 
-For building release packages locally without GitHub Actions:
+All local packaging scripts are synchronized with GitHub Actions to output identical directory hierarchies, naming conventions, and manifests under `Releases/v<BaseVersion>/`:
 
-### 1. `package_windows.ps1`
-Builds Flutter Windows release, compiles Inno Setup installer, packages portable ZIP, auto-detects previous release to generate binary delta patches (`.patch`), and produces `manifest.json`.
+### 1. `package_all.ps1` (Master Packager)
+Master runner script that executes Windows, Android, or all platform packaging sequentially.
+```powershell
+# Package all platforms (Windows + Android)
+powershell -ExecutionPolicy Bypass -File "scripts/package_all.ps1"
+
+# Package Windows only (fast portable build without installer or python rebuild)
+powershell -ExecutionPolicy Bypass -File "scripts/package_all.ps1" -Platform Windows -SkipPythonEngine -SkipInstaller
+
+# Package Android only
+powershell -ExecutionPolicy Bypass -File "scripts/package_all.ps1" -Platform Android
+```
+
+**Parameters**:
+- `-Platform`: `All` (default), `Windows`, or `Android`.
+- `-Version`: Target version string (defaults to `pubspec.yaml`).
+- `-PreviousVersion`: Specify baseline for Windows delta patch generation.
+- `-SkipPythonEngine`: Skip compiling `python_engine/build_downloader.py`.
+- `-SkipInstaller`: Skip compiling Inno Setup `.exe` installer.
+- `-BuildAppBundle`: Also compile Android `.aab` for Play Store.
+
+### 2. `package_windows.ps1`
+Builds Python Downloader Engine (`resonance_downloader.exe`), Flutter Windows release, Inno Setup installer, packages portable ZIP, auto-detects previous releases to generate delta patches (`.patch`), and produces `manifest.json`.
 ```powershell
 powershell -ExecutionPolicy Bypass -File "scripts/package_windows.ps1"
 ```
 
-### 2. `package_android.ps1`
-Builds Android Universal APK, Split-ABI APKs (`arm64-v8a`, `armeabi-v7a`, `x86_64`), and Google Play AppBundle (`.aab`) into `Releases/v<Version>/Android/`.
+### 3. `package_android.ps1`
+Builds Proposal B Split-ABI APKs (`64bit-arm64`, `32bit-v7a`, `x86_64`) and Universal APK into `Releases/v<BaseVersion>/Android/` alongside `manifest.json`.
 ```powershell
 powershell -ExecutionPolicy Bypass -File "scripts/package_android.ps1"
 ```
 
-### 3. `package_all.ps1`
-Master runner script that executes both Windows and Android packaging sequentially.
-```powershell
-powershell -ExecutionPolicy Bypass -File "scripts/package_all.ps1"
-```
+---
+
+## 📱 Local Device Testing Instructions
+
+To test a release build on your own devices before publishing:
+- **Android Phone**:
+  ```powershell
+  adb install -r "Releases\v0.1.9-beta\Android\Resonance-v0.1.9-beta.14-Android-64bit-arm64.apk"
+  ```
+- **Windows PC**:
+  - Run `Releases\v0.1.9-beta\Windows\Resonance-v0.1.9-beta-Windows.exe` to test full installer installation and registry registration.
+  - Or extract `Releases\v0.1.9-beta\Windows\Resonance-v0.1.9-beta-Windows-Portable.zip` into any test directory to test standalone portable execution without overwriting your current app data.
 
 ---
 

@@ -109,14 +109,7 @@ class FullScreenAudioView extends ConsumerWidget {
       ),
       actions: [
         ReusableHoverIconButton(
-          icon: UIcons.regular.add,
-          iconSize: 20,
-          color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
-          tooltip: 'Media Actions',
-          onTap: () => _showMediaActions(context, ref, displayTrack),
-        ),
-        ReusableHoverIconButton(
-          icon: UIcons.regular.menu_dots_vertical,
+          icon: UIcons.regular.settings_sliders,
           iconSize: 20,
           color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
           tooltip: 'Audio Settings',
@@ -124,6 +117,14 @@ class FullScreenAudioView extends ConsumerWidget {
           // to avoid duplicating Speed/Pitch slider code.
           onTap: () => AudioSettingsSheet.show(context),
         ),
+        ReusableHoverIconButton(
+          icon: UIcons.regular.menu_dots,
+          iconSize: 20,
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+          tooltip: 'Media Actions',
+          onTap: () => _showMediaActions(context, ref, displayTrack),
+        ),
+        const SizedBox(width: 8),
       ],
     );
   }

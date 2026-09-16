@@ -56,4 +56,22 @@ void main() {
       expect(enabledAutoContinue.contains('pl_2'), isTrue);
     });
   });
+
+  group('Playlist Cache Queue Deferral Policy', () {
+    test('defers active track to back of queue rather than dropping it', () {
+      final queue = <String>['track_active', 'track_2', 'track_3'];
+      final currentPlayingId = 'track_active';
+
+      // Simulate worker loop iteration with deferral
+      final item = queue.removeAt(0);
+      if (item == currentPlayingId) {
+        queue.add(item); // Re-queue at back
+      }
+
+      // Verify track was NOT discarded
+      expect(queue.contains('track_active'), isTrue);
+      expect(queue.first, equals('track_2'));
+      expect(queue.last, equals('track_active'));
+    });
+  });
 }

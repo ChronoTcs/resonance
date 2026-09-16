@@ -167,9 +167,10 @@ class DownloaderBridgeDatasource {
 
   ({String exe, List<String> args}) _resolveBridge() {
     final exeDir = File(Platform.resolvedExecutable).parent.path;
+    final binaryName = Platform.isWindows ? 'resonance_downloader.exe' : 'resonance_downloader';
 
-    // 1) Production — .exe built by PyInstaller lives next to our .exe
-    final prodExe = p.join(exeDir, 'resonance_downloader.exe');
+    // 1) Production — standalone binary built by PyInstaller lives next to app binary
+    final prodExe = p.join(exeDir, binaryName);
     if (File(prodExe).existsSync()) {
       return (exe: prodExe, args: []);
     }
@@ -191,20 +192,20 @@ class DownloaderBridgeDatasource {
           pyExe = customPy;
           debugPrint('[DownloaderBridge] Initializing bridge via RESONANCE_PYTHON_EXE env: $pyExe');
         } else {
-          pyExe = 'python';
+          pyExe = Platform.isWindows ? 'python' : 'python3';
           debugPrint('[DownloaderBridge] Initializing bridge via system python fallback: $pyExe');
         }
         return (exe: pyExe, args: ['-u', devPy]);
       }
 
-      // 3) PyInstaller .exe already built — Fallback
-      final devExe = p.join(downloaderRoot, 'python_engine', 'dist', 'resonance_downloader.exe');
+      // 3) PyInstaller binary already built — Fallback
+      final devExe = p.join(downloaderRoot, 'python_engine', 'dist', binaryName);
       if (File(devExe).existsSync()) {
         return (exe: devExe, args: []);
       }
     }
 
-    return (exe: 'resonance_downloader.exe', args: []);
+    return (exe: binaryName, args: []);
   }
 
   static String? resolveFFmpegDir() {
@@ -233,12 +234,23 @@ class DownloaderBridgeDatasource {
     return null;
   }
 
-  /// Builds a sanitized PATH environment for Windows process spawning.
-  /// Strips directories that are NTFS reparse points (junctions/symlinks),
-  /// which cause WinError 448 when Windows traverses them during PATH resolution.
+  /// Builds a sanitized PATH environment for process spawning.
+  /// On Linux, safely prepends executable and ffmpeg paths to POSIX PATH.
+  /// On Windows, strips NTFS reparse points (junctions/symlinks) that cause WinError 448.
   static Map<String, String> buildCleanEnvironment() {
     final ffmpegDir = resolveFFmpegDir();
     final exeDir = File(Platform.resolvedExecutable).parent.path;
+
+    if (!Platform.isWindows) {
+      final env = Map<String, String>.from(Platform.environment);
+      final pathParts = <String>[
+        exeDir,
+        ?ffmpegDir,
+        env['PATH'] ?? '',
+      ].where((s) => s.isNotEmpty).toList();
+      env['PATH'] = pathParts.join(':');
+      return env;
+    }
 
     // Essential base paths only — no user PATH junk
     final essentialPaths = [

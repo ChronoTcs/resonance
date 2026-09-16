@@ -4,6 +4,7 @@ import 'package:silky_scroll/silky_scroll.dart';
 import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/features/home/presentation/widgets/hover_track_card.dart';
 import 'package:resonance/features/library/application/library_provider.dart';
+import 'package:resonance/features/library/application/blocked_tracks_provider.dart';
 
 /// Standalone section displaying scanned local music tracks.
 class LocalQuickPicksSection extends ConsumerWidget {
@@ -13,8 +14,12 @@ class LocalQuickPicksSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final libraryState = ref.watch(libraryProvider);
-    final localAudios =
-        libraryState.allMedia.where((m) => m.type == 'audio').take(12).toList();
+    ref.watch(blockedTracksProvider);
+    final blockedNotifier = ref.read(blockedTracksProvider.notifier);
+    final localAudios = libraryState.allMedia
+        .where((m) => m.type == 'audio' && !blockedNotifier.isBlocked(m.id, path: m.path))
+        .take(12)
+        .toList();
 
     if (localAudios.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
 

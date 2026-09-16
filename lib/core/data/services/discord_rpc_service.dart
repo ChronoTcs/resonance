@@ -25,6 +25,7 @@ class DiscordRpcService {
 
   DiscordRPC? _discord;
   bool _isInitialized = false;
+  bool get isInitialized => _isInitialized;
   String? _lastTrackId;
   String _currentAlbumArtKey = 'resonance_logo';
 
@@ -114,16 +115,11 @@ class DiscordRpcService {
   Future<({String? artworkUrl, String? albumName})> resolveArtworkAndMetadata(
     MediaItem track,
   ) async {
-    final songId = track.id ?? track.path;
-    final res = await _fetchAlbumArtAndMetadata(track.title, track.artist);
-    if (res.artworkUrl != null && res.artworkUrl!.isNotEmpty) {
-      unawaited(
-        _ref
-            .read(mediaCacheServiceProvider)
-            .cacheArtwork(songId, res.artworkUrl!, forceOverwrite: true),
-      );
+    if (!_ref.read(networkConnectivityProvider).isOnline) {
+      debugPrint('[DiscordRPC] Offline — skipping iTunes metadata fetch for ${track.title}');
+      return (artworkUrl: null, albumName: null);
     }
-    return res;
+    return _fetchAlbumArtAndMetadata(track.title, track.artist);
   }
 
   /// Resolves full official metadata (Title, Artist, Album, ReleaseDate, High-Res Artwork) from iTunes.
@@ -134,6 +130,16 @@ class DiscordRpcService {
     String? artistName,
     String? releaseDate,
   })> resolveFullTrackInfo(String rawTitle, String? rawArtist) async {
+    if (!_ref.read(networkConnectivityProvider).isOnline) {
+      debugPrint('[DiscordRPC] Offline — skipping full track info fetch for $rawTitle');
+      return (
+        artworkUrl: null,
+        albumName: null,
+        trackTitle: null,
+        artistName: null,
+        releaseDate: null,
+      );
+    }
     try {
       final cleanedTitle = _stripMovieSubtitle(rawTitle);
       final queries = _generateSearchQueries(cleanedTitle, rawArtist);
@@ -230,6 +236,10 @@ class DiscordRpcService {
     String rawTitle,
     String? rawArtist,
   ) async {
+    if (!_ref.read(networkConnectivityProvider).isOnline) {
+      debugPrint('[DiscordRPC] Offline — skipping iTunes album art fetch for "$rawTitle"');
+      return (artworkUrl: null, albumName: null);
+    }
     try {
       // Strip movie/show subtitles for a broader, popularity-ranked search
       final cleanedTitle = _stripMovieSubtitle(rawTitle);
@@ -584,6 +594,17 @@ class DiscordRpcService {
     return null;
   }
 
+  void _handlePipeError(Object error) {
+    debugPrint('[DiscordRPC] Pipe write error ($error) — resetting RPC connection state');
+    _isInitialized = false;
+    _lastTrackId = null;
+    _currentAlbumArtKey = 'resonance_logo';
+    try {
+      _discord?.dispose();
+    } catch (_) {}
+    _discord = null;
+  }
+
   void _sendActivity(
     MediaItem track,
     bool isPlaying,
@@ -596,49 +617,62 @@ class DiscordRpcService {
 
     final hasVideoLink = targetVideoId != null && targetVideoId.isNotEmpty;
 
-    _discord!.setPresence(
-      DiscordPresence(
-        type: DiscordActivityType.listening,
-        state: track.artist ?? 'Unknown Artist',
-        details: track.title,
-        largeAsset: DiscordAsset(
-          key: largeImageKey,
-          text: track.album ?? 'Resonance',
-        ),
-        smallAsset: DiscordAsset(
-          key: isPlaying ? 'play_icon' : 'pause_icon',
-          text: isPlaying ? 'Playing' : 'Paused',
-        ),
-        timestamps: isPlaying
-            ? DiscordTimestamps(start: startTimestamp, end: endTimestamp)
-            : null, // Omit timestamps to keep it cleared
-        buttons: isPlaying
-            ? null // Omit buttons during active music playback so Discord renders the timeline progress line bar
-            : [
-                // Show custom buttons when paused since the timeline line is hidden
-                if (hasVideoLink)
+    try {
+      _discord!.setPresence(
+        DiscordPresence(
+          type: DiscordActivityType.listening,
+          state: track.artist ?? 'Unknown Artist',
+          details: track.title,
+          largeAsset: DiscordAsset(
+            key: largeImageKey,
+            text: track.album ?? 'Resonance',
+          ),
+          smallAsset: DiscordAsset(
+            key: isPlaying ? 'play_icon' : 'pause_icon',
+            text: isPlaying ? 'Playing' : 'Paused',
+          ),
+          timestamps: isPlaying
+              ? DiscordTimestamps(start: startTimestamp, end: endTimestamp)
+              : null, // Omit timestamps to keep it cleared
+          buttons: isPlaying
+              ? null // Omit buttons during active music playback so Discord renders the timeline progress line bar
+              : [
+                  // Show custom buttons when paused since the timeline line is hidden
+                  if (hasVideoLink)
+                    DiscordButton(
+                      label: 'Listen Along',
+                      url: 'https://youtube.com/watch?v=$targetVideoId',
+                    ),
                   DiscordButton(
-                    label: 'Listen Along',
-                    url: 'https://youtube.com/watch?v=$targetVideoId',
+                    label: 'Play on Resonance',
+                    url: _ref.read(appConfigProvider).releasesUrl,
                   ),
-                DiscordButton(
-                  label: 'Play on Resonance',
-                  url: _ref.read(appConfigProvider).releasesUrl,
-                ),
-              ],
-      ),
-    );
+                ],
+        ),
+      );
+    } catch (e) {
+      _handlePipeError(e);
+    }
   }
 
   void clearPresence() {
     if (!_isInitialized || _discord == null) return;
-    _discord!.clearPresence();
-    _lastTrackId = null;
-    _currentAlbumArtKey = 'resonance_logo';
+    try {
+      _discord!.clearPresence();
+    } catch (e) {
+      _handlePipeError(e);
+    } finally {
+      _lastTrackId = null;
+      _currentAlbumArtKey = 'resonance_logo';
+    }
   }
 
   void dispose() {
     clearPresence();
-    _discord?.dispose();
+    try {
+      _discord?.dispose();
+    } catch (_) {}
+    _discord = null;
+    _isInitialized = false;
   }
 }

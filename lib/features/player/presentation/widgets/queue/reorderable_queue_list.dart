@@ -80,7 +80,7 @@ class _ReorderableQueueListState extends ConsumerState<ReorderableQueueList> {
               },
               itemBuilder: (context, index) {
                 final track = widget.upcomingTracks[index];
-                final positionTag = 'N+${index + 1}';
+                final positionTag = '${index + 1}';
 
                 return ReorderableDelayedDragStartListener(
                   key: ValueKey('queue_item_${track.id ?? track.path}_$index'),

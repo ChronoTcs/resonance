@@ -6,6 +6,7 @@ import '../../../explore/data/repositories/youtube_stream_repository.dart';
 import '../../../library/application/library_provider.dart';
 import '../../../../core/constants/audio_constants.dart';
 import '../../../../core/data/services/media_cache_service.dart';
+import '../../../../core/exceptions/offline_exception.dart';
 
 class CachedStreamInfo {
   final String url;
@@ -107,6 +108,8 @@ class PlaybackArchitectureService {
         return url;
       }
       return null;
+    } on OfflinePlaybackException {
+      rethrow;
     } catch (e) {
       debugPrint('[RateLimitDefender] Fetch ERROR for $videoId: $e');
       return null;

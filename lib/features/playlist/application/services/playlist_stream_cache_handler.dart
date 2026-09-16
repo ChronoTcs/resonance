@@ -10,6 +10,7 @@ import 'package:resonance/features/library/data/models/media_item.dart';
 import 'package:resonance/features/player/application/providers/audio_provider.dart';
 import 'package:resonance/features/playlist/application/playlist_auto_cache_provider.dart';
 import 'package:resonance/features/playlist/application/playlist_provider.dart';
+import 'package:resonance/features/stream/application/platform_stream_provider.dart';
 
 class _PendingCacheItem {
   final MediaItem track;
@@ -51,6 +52,16 @@ class PlaylistStreamCacheHandler {
           _idleDebounceTimer?.cancel();
           debugPrint('[PlaylistStreamCacheHandler] Playback busy. Background cache paused.');
         } else {
+          _scheduleIdleWorker();
+        }
+      },
+    );
+
+    // Re-evaluate queue when track changes (e.g. active track skipped or finished)
+    _ref.listen<String?>(
+      audioProvider.select((s) => s.currentTrack?.id ?? s.currentTrack?.path),
+      (previous, currentId) {
+        if (!_isPlaybackActive) {
           _scheduleIdleWorker();
         }
       },
@@ -171,6 +182,15 @@ class PlaylistStreamCacheHandler {
         final item = _memoryQueue.removeAt(0);
         final trackId = item.track.id ?? item.track.path;
 
+        // Collision guard: if currently active in player, defer to back of queue so it isn't lost if skipped
+        final currentTrack = _ref.read(audioProvider).currentTrack;
+        final currentId = currentTrack?.id ?? currentTrack?.path;
+        if (currentId != null && currentId == trackId) {
+          debugPrint('[PlaylistStreamCacheHandler] Deferring track $trackId — currently active in player');
+          _memoryQueue.add(item);
+          break;
+        }
+
         final cacheService = _ref.read(mediaCacheServiceProvider);
         final cachedPath = await cacheService.getCachedAudioPath(trackId);
         if (cachedPath == null) {
@@ -248,8 +268,21 @@ class PlaylistStreamCacheHandler {
 
       // 3. Initiate background audio caching via stream resolver
       final streamRepo = _ref.read(youtubeStreamRepositoryProvider);
-      await streamRepo.getStreamUrl(id);
-      debugPrint('[PlaylistStreamCacheHandler] Successfully initiated cache for $id (${track.title})');
+      final streamUrl = await streamRepo.getStreamUrl(id);
+      if (streamUrl != null && streamUrl.startsWith('http')) {
+        final resolver = _ref.read(platformStreamResolverProvider);
+        await cacheService.getAudioPath(
+          id,
+          streamUrl,
+          headers: resolver.getPlaybackHeaders(streamUrl),
+        );
+        // Await the active download so batch items are processed strictly sequentially
+        final activeFuture = cacheService.getActiveDownload(id);
+        if (activeFuture != null) {
+          await activeFuture;
+        }
+      }
+      debugPrint('[PlaylistStreamCacheHandler] Successfully cached for $id (${track.title})');
     } catch (e) {
       debugPrint('[PlaylistStreamCacheHandler] Failed to auto-cache track $id: $e');
     }

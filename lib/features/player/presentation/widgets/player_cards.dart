@@ -24,6 +24,35 @@ class MetadataCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (track == null) return const SizedBox.shrink();
+
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'Track Info',
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurface,
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+          ),
+        ),
+        const SizedBox(height: 16),
+        _InfoLine(label: 'Title', value: track.title),
+        _InfoLine(
+          label: 'Artist',
+          value: track.artist ?? 'Unknown Artist',
+        ),
+        _InfoLine(label: 'Album', value: track.album ?? 'Unknown Album'),
+        if (track.date != null && track.date.isNotEmpty)
+          _InfoLine(label: 'Year', value: _formatYear(track.date)),
+      ],
+    );
+
+    final isMobile = Theme.of(context).platform == TargetPlatform.android ||
+        Theme.of(context).platform == TargetPlatform.iOS;
+
     return RepaintBoundary(
       child: Container(
         height: height,
@@ -42,29 +71,18 @@ class MetadataCard extends StatelessWidget {
             width: 1,
           ),
         ),
-        child: SilkySingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Track Info',
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurface,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-              ),
-              const SizedBox(height: 16),
-              _InfoLine(label: 'Title', value: track.title),
-              _InfoLine(
-                label: 'Artist',
-                value: track.artist ?? 'Unknown Artist',
-              ),
-              _InfoLine(label: 'Album', value: track.album ?? 'Unknown Album'),
-              if (track.date != null && track.date.isNotEmpty)
-                _InfoLine(label: 'Year', value: _formatYear(track.date)),
-            ],
-          ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            if (constraints.maxHeight.isFinite) {
+              return isMobile
+                  ? SingleChildScrollView(
+                      physics: const ClampingScrollPhysics(),
+                      child: content,
+                    )
+                  : SilkySingleChildScrollView(child: content);
+            }
+            return content;
+          },
         ),
       ),
     );
@@ -101,6 +119,8 @@ class _InfoLine extends StatelessWidget {
           const SizedBox(height: 2),
           Text(
             value,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: Theme.of(context).colorScheme.onSurface,
               fontSize: 13,
@@ -232,12 +252,16 @@ class NextInQueueCard extends ConsumerWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      'Next in queue',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurface,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
+                    Flexible(
+                      child: Text(
+                        'Next in queue',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurface,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
                       ),
                     ),
                     InkWell(
@@ -295,10 +319,8 @@ class NextInQueueCard extends ConsumerWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              next.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                            ResonanceMarqueeText(
+                              text: next.title,
                               style: TextStyle(
                                 color: Theme.of(context).colorScheme.onSurface,
                                 fontWeight: FontWeight.bold,

@@ -50,7 +50,7 @@ void main() {
 
       const ytVideoUrl = 'https://i.ytimg.com/vi/12345/maxresdefault.jpg';
       expect(ThumbnailUtils.toCardResolution(ytVideoUrl),
-          equals('https://i.ytimg.com/vi/12345/hqdefault.jpg'));
+          equals('https://i.ytimg.com/vi/12345/mqdefault.jpg'));
 
       expect(ThumbnailUtils.toCardResolution(''), equals(''));
       expect(ThumbnailUtils.toCardResolution(null), equals(''));

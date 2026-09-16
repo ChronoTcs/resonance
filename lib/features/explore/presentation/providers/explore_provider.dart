@@ -15,6 +15,7 @@ export 'package:resonance/features/home/presentation/providers/home_feed_provide
 
 import 'package:resonance/core/providers/cached_stream_music_provider.dart';
 import 'package:resonance/features/library/application/library_provider.dart';
+import 'package:resonance/features/library/application/blocked_tracks_provider.dart';
 
 Duration? _parseDurationString(String durationStr) {
   final parts = durationStr.split(':');
@@ -119,8 +120,11 @@ final exploreSearchTabProvider = NotifierProvider<ExploreSearchTabNotifier, int>
 
 final featuredMusicProvider = FutureProvider<List<ExploreItem>>((ref) async {
   if (!ref.watch(networkConnectivityProvider.select((s) => s.isOnline))) return [];
+  ref.watch(blockedTracksProvider);
+  final blockedNotifier = ref.read(blockedTracksProvider.notifier);
   final repo = ref.read(youtubeSearchRepositoryProvider);
-  final results = await repo.getFeaturedMusic();
+  final rawResults = await repo.getFeaturedMusic();
+  final results = rawResults.where((e) => !blockedNotifier.isBlocked(e.id)).toList();
   
   if (results.isNotEmpty) {
     Future.microtask(() {

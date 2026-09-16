@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:audio_service/audio_service.dart' as audio_svc;
+import '../../../../core/application/services/network_connectivity_service.dart';
 import '../../../../core/data/services/discord_rpc_service.dart';
 import '../../../../core/data/services/media_cache_service.dart';
 import '../../../library/data/models/media_item.dart';
@@ -63,6 +64,9 @@ class AudioMetadataService {
     if (track.isLocal && (track.albumArt != null || (track.thumbnailUrl != null && !track.thumbnailUrl!.startsWith('http')))) {
       return;
     }
+    if (!_ref.read(networkConnectivityProvider).isOnline) {
+      return;
+    }
 
     final trackKey = '${track.title}-${track.artist}';
     try {
@@ -73,10 +77,20 @@ class AudioMetadataService {
       // Guard: abort if track changed while fetching
       if (_pendingUpgradeTrackKey != trackKey) return;
 
+      final songId = track.id ?? track.path;
+      final cacheService = _ref.read(mediaCacheServiceProvider);
+
       final bool needsArtUpgrade = highResUrl != null && highResUrl.isNotEmpty && highResUrl != track.thumbnailUrl && _lastUpgradedArtworkUrl != highResUrl;
       final bool needsAlbumUpgrade = albumName != null && albumName.isNotEmpty && (track.album == null || track.album == 'Unknown Album');
 
-      if (!needsArtUpgrade && !needsAlbumUpgrade) return;
+      if (!needsArtUpgrade && !needsAlbumUpgrade) {
+        // Fallback: iTunes art unavailable/identical, cache standard track thumbnail once if not cached yet
+        final existing = await cacheService.getCachedArtPath(songId);
+        if (existing == null && track.thumbnailUrl != null && track.thumbnailUrl!.startsWith('http')) {
+          await cacheService.cacheArtwork(songId, track.thumbnailUrl);
+        }
+        return;
+      }
 
       if (needsArtUpgrade) _lastUpgradedArtworkUrl = highResUrl;
 
@@ -91,13 +105,16 @@ class AudioMetadataService {
 
       // Persist enriched album + thumbnailUrl to sidecar JSON so downloads read correct metadata.
       // fire-and-forget — does not block SMTC/AudioService sync below.
-      final songId = track.id ?? track.path;
-      _ref.read(mediaCacheServiceProvider).saveMetadataForced(songId, upgradedTrack);
+      cacheService.saveMetadataForced(songId, upgradedTrack);
 
-      // Force-overwrite stream art cache with high-res iTunes image, replacing the
-      // low-res YouTube thumbnail that was cached when the track first started playing.
+      // Cache high-res iTunes image (single download)
       if (needsArtUpgrade) {
-        await _ref.read(mediaCacheServiceProvider).cacheArtwork(songId, highResUrl, forceOverwrite: true);
+        await cacheService.cacheArtwork(songId, highResUrl, forceOverwrite: true);
+      } else {
+        final existing = await cacheService.getCachedArtPath(songId);
+        if (existing == null && track.thumbnailUrl != null && track.thumbnailUrl!.startsWith('http')) {
+          await cacheService.cacheArtwork(songId, track.thumbnailUrl);
+        }
       }
 
       if (_pendingUpgradeTrackKey != trackKey) return;
@@ -106,7 +123,17 @@ class AudioMetadataService {
         _syncWindowsSmtc(upgradedTrack, isPlaying: isPlaying),
         _syncDiscordPresence(upgradedTrack, position: Duration.zero, duration: track.duration ?? Duration.zero, isPlaying: isPlaying),
       ]);
-    } catch (_) {}
+    } catch (_) {
+      // If iTunes lookup fails, ensure standard track thumbnail is cached once as fallback
+      try {
+        final songId = track.id ?? track.path;
+        final cacheService = _ref.read(mediaCacheServiceProvider);
+        final existing = await cacheService.getCachedArtPath(songId);
+        if (existing == null && track.thumbnailUrl != null && track.thumbnailUrl!.startsWith('http')) {
+          await cacheService.cacheArtwork(songId, track.thumbnailUrl);
+        }
+      } catch (_) {}
+    }
   }
 
   // ── Playback Status Changed ────────────────────────────────────────────────
@@ -166,8 +193,10 @@ class AudioMetadataService {
       final cachedPath = await _ref.read(mediaCacheServiceProvider).getCachedArtPath(songId);
       if (cachedPath != null && File(cachedPath).existsSync()) {
         artUriString = cachedPath;
-      } else if (track.thumbnailUrl != null && track.thumbnailUrl!.isNotEmpty) {
-        // 2. Fallback to online HTTP URL
+      } else if (_ref.read(networkConnectivityProvider).isOnline &&
+          track.thumbnailUrl != null &&
+          track.thumbnailUrl!.isNotEmpty) {
+        // 2. Fallback to online HTTP URL only if online
         artUriString = track.thumbnailUrl;
       }
 

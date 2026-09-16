@@ -34,26 +34,41 @@ class AdaptiveHomeHeader extends StatelessWidget {
           searchController: searchController,
           onSubmitSearch: onSubmitSearch,
         ),
-        right: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ReusableHoverIconButton(
-              icon: isSearchFieldOpen
-                  ? UIcons.regular.cross_small
-                  : UIcons.regular.search,
-              tooltip: isSearchFieldOpen ? 'Close search' : 'Search',
-              iconSize: 18,
-              onTap: onToggleSearch,
-            ),
-            const SizedBox(width: 6),
-            ReusableHoverIconButton(
-              icon: UIcons.regular.refresh,
-              tooltip: 'Refresh feed',
-              iconSize: 18,
-              onTap: onRefresh,
-            ),
-          ],
-        ),
+        right: isSearchFieldOpen
+            ? TextButton(
+                onPressed: onToggleSearch,
+                style: TextButton.styleFrom(
+                  foregroundColor: theme.colorScheme.primary,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  minimumSize: const Size(0, 36),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: Text(
+                  'Cancel',
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              )
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ReusableHoverIconButton(
+                    icon: UIcons.regular.search,
+                    tooltip: 'Search',
+                    iconSize: 18,
+                    onTap: onToggleSearch,
+                  ),
+                  const SizedBox(width: 6),
+                  ReusableHoverIconButton(
+                    icon: UIcons.regular.refresh,
+                    tooltip: 'Refresh feed',
+                    iconSize: 18,
+                    onTap: onRefresh,
+                  ),
+                ],
+              ),
       );
     }
 
@@ -91,15 +106,38 @@ class _CompactHomeHeaderContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (isSearchFieldOpen) {
-      return TextField(
-        controller: searchController,
-        autofocus: true,
-        textInputAction: TextInputAction.search,
-        onSubmitted: onSubmitSearch,
-        decoration: const InputDecoration(
-          hintText: 'Search songs, artists, albums...',
-          border: InputBorder.none,
-        ),
+      return ValueListenableBuilder<TextEditingValue>(
+        valueListenable: searchController,
+        builder: (context, value, _) {
+          return TextField(
+            controller: searchController,
+            autofocus: true,
+            textInputAction: TextInputAction.search,
+            onSubmitted: onSubmitSearch,
+            decoration: InputDecoration(
+              hintText: 'Search songs, artists, albums...',
+              border: InputBorder.none,
+              suffixIcon: value.text.isNotEmpty
+                  ? SizedBox(
+                      width: 28,
+                      height: 28,
+                      child: Center(
+                        child: ReusableHoverIconButton(
+                          icon: UIcons.regular.cross_small,
+                          tooltip: 'Clear text',
+                          iconSize: 16,
+                          padding: 2.0,
+                          borderRadius: BorderRadius.circular(6),
+                          onTap: () {
+                            searchController.clear();
+                          },
+                        ),
+                      ),
+                    )
+                  : null,
+            ),
+          );
+        },
       );
     }
 

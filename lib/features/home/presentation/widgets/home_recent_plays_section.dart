@@ -11,6 +11,7 @@ import 'package:resonance/features/home/presentation/providers/recently_played_p
 import 'package:resonance/features/library/data/models/media_item.dart';
 import 'package:resonance/features/player/application/providers/audio_provider.dart';
 import 'package:resonance/features/player/utils/media_action_utils.dart';
+import 'package:resonance/features/library/application/blocked_tracks_provider.dart';
 
 /// Standalone Recently Played section for Home screen.
 class HomeRecentPlaysSection extends ConsumerWidget {
@@ -26,11 +27,16 @@ class HomeRecentPlaysSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(blockedTracksProvider);
+    final blockedNotifier = ref.read(blockedTracksProvider.notifier);
     final recentAsync = ref
         .watch(recentlyPlayedProvider)
         .whenData(
-          (items) =>
-              items.where((item) => (item.id ?? item.path).isNotEmpty).toList(),
+          (items) => items
+              .where((item) =>
+                  (item.id ?? item.path).isNotEmpty &&
+                  !blockedNotifier.isBlocked(item.id, path: item.path))
+              .toList(),
         );
 
     return recentAsync.when(

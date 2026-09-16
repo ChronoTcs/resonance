@@ -39,7 +39,7 @@ class NowPlayingScreen extends ConsumerWidget {
         SafeArea(
           child: Column(
             children: [
-              _NowPlayingTopBar(
+              NowPlayingTopBar(
                 track: track,
                 onClose: () =>
                     ref.read(nowPlayingOverlayProvider.notifier).setVisible(false),
@@ -77,7 +77,9 @@ class _NowPlayingBody extends StatelessWidget {
   Widget _buildScrollable(Widget child) {
     if (isAndroid) {
       return SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
+        physics: const ClampingScrollPhysics(
+          parent: AlwaysScrollableScrollPhysics(),
+        ),
         padding: _scrollPadding,
         child: child,
       );
@@ -166,14 +168,15 @@ class _NowPlayingBackground extends StatelessWidget {
   }
 }
 
-class _NowPlayingTopBar extends StatelessWidget {
+class NowPlayingTopBar extends StatelessWidget {
   final dynamic track;
   final VoidCallback onClose;
   final VoidCallback onQueue;
   final VoidCallback onMediaActions;
   final VoidCallback onAudioSettings;
 
-  const _NowPlayingTopBar({
+  const NowPlayingTopBar({
+    super.key,
     required this.track,
     required this.onClose,
     required this.onQueue,
@@ -215,17 +218,18 @@ class _NowPlayingTopBar extends StatelessWidget {
             onTap: onQueue,
           ),
           ReusableHoverIconButton(
-            icon: UIcons.regular.add,
+            icon: UIcons.regular.settings_sliders,
+            iconSize: 20,
+            tooltip: 'Audio Settings',
+            color: iconColor,
+            onTap: onAudioSettings,
+          ),
+          ReusableHoverIconButton(
+            icon: UIcons.regular.menu_dots,
             iconSize: 20,
             tooltip: 'Media Actions',
             color: iconColor,
             onTap: onMediaActions,
-          ),
-          OverflowMenuButton(
-            tooltip: 'Audio Settings',
-            iconSize: 20,
-            color: iconColor,
-            onTap: onAudioSettings,
           ),
         ],
       ),
@@ -475,7 +479,7 @@ class _DesktopLayout extends StatelessWidget {
                 const SizedBox(height: 24),
                 SizedBox(
                   height: 240,
-                  child: MetadataCard(track: track),
+                  child: MetadataCard(track: track, height: 240),
                 ),
               ],
             ),

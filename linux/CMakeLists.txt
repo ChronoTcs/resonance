@@ -79,9 +79,7 @@ include(flutter/generated_plugins.cmake)
 # By default, "installing" just makes a relocatable bundle in the build
 # directory.
 set(BUILD_BUNDLE_DIR "${PROJECT_BINARY_DIR}/bundle")
-if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
-  set(CMAKE_INSTALL_PREFIX "${BUILD_BUNDLE_DIR}" CACHE PATH "..." FORCE)
-endif()
+set(CMAKE_INSTALL_PREFIX "${BUILD_BUNDLE_DIR}" CACHE PATH "..." FORCE)
 
 # Start with a clean build bundle directory every time.
 install(CODE "
@@ -126,3 +124,31 @@ if(NOT CMAKE_BUILD_TYPE MATCHES "Debug")
   install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
     COMPONENT Runtime)
 endif()
+
+# ── Resonance Downloader Bridge ──────────────────────────────────────────────
+# Copy the self-contained resonance_downloader (built with PyInstaller)
+# next to the main application executable so it can be found at runtime.
+# Build it first by running:  python3 python_engine/build_downloader.py
+set(DOWNLOADER_BIN "${CMAKE_CURRENT_SOURCE_DIR}/../python_engine/dist/resonance_downloader")
+if(EXISTS "${DOWNLOADER_BIN}")
+  install(PROGRAMS "${DOWNLOADER_BIN}"
+    DESTINATION "${CMAKE_INSTALL_PREFIX}"
+    COMPONENT Runtime)
+  message(STATUS "[Resonance] resonance_downloader will be bundled into Linux release.")
+else()
+  message(WARNING
+    "[Resonance] resonance_downloader not found at ${DOWNLOADER_BIN}.\n"
+    "  Run  python3 python_engine/build_downloader.py  before flutter build linux.\n"
+    "  The stream deciphering & download feature will not work until this step is completed.")
+endif()
+
+# ── BgUtils PoToken Provider ──────────────────────────────────────────────────
+set(BGUTIL_BIN "${CMAKE_CURRENT_SOURCE_DIR}/../python_engine/dist/bgutil-pot-linux-x86_64")
+if(EXISTS "${BGUTIL_BIN}")
+  install(PROGRAMS "${BGUTIL_BIN}"
+    DESTINATION "${CMAKE_INSTALL_PREFIX}"
+    COMPONENT Runtime)
+  message(STATUS "[Resonance] bgutil-pot-linux-x86_64 will be bundled into Linux release.")
+endif()
+
+

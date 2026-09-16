@@ -96,6 +96,7 @@ reports/*
 !reports/releases/
 !reports/releases/**
 scratch/
+linux/info/
 
 # Android release keystore & signing secrets
 **/key.properties

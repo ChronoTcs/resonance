@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/application/services/network_connectivity_service.dart';
 import '../../../library/data/models/media_item.dart';
 import '../models/explore_item.dart';
 import '../models/explore_playlist.dart';
@@ -9,18 +10,24 @@ import '../../../../core/utils/thumbnail_utils.dart';
 
 final youtubeSearchRepositoryProvider = Provider<YoutubeSearchRepository>((ref) {
   final client = ref.watch(youtubeInnerTubeClientProvider);
-  final repo = YoutubeSearchRepository(client);
+  final repo = YoutubeSearchRepository(client, ref: ref);
   ref.onDispose(() => repo.dispose());
   return repo;
 });
 
 class YoutubeSearchRepository {
   final YoutubeInnerTubeClient _client;
-  YoutubeSearchRepository(this._client);
+  final Ref? ref;
+
+  YoutubeSearchRepository(this._client, {this.ref});
 
   /// Search for tracks using YT Music InnerTube (webRemix profile).
   /// Returns official YTM audio tracks only.
   Future<List<ExploreItem>> search(String query) async {
+    if (ref != null && !ref!.read(networkConnectivityProvider).isOnline) {
+      debugPrint('[YoutubeSearchRepo] Offline — skipping search for "$query"');
+      return [];
+    }
     try {
       final data = await _client.post(
         'search',
@@ -146,6 +153,10 @@ class YoutubeSearchRepository {
 
   /// Search for playlists using YT Music InnerTube (webRemix profile).
   Future<List<ExplorePlaylist>> searchPlaylists(String query) async {
+    if (ref != null && !ref!.read(networkConnectivityProvider).isOnline) {
+      debugPrint('[YoutubeSearchRepo] Offline — skipping searchPlaylists for "$query"');
+      return [];
+    }
     try {
       final data = await _client.post(
         'search',
@@ -229,6 +240,10 @@ class YoutubeSearchRepository {
     String videoId, {
     int limit = 20,
   }) async {
+    if (ref != null && !ref!.read(networkConnectivityProvider).isOnline) {
+      debugPrint('[YoutubeSearchRepo] Offline — skipping radio recommendations for $videoId');
+      return [];
+    }
     try {
       final data = await _client.post(
         'next',

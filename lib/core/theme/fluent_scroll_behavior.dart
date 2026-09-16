@@ -8,10 +8,10 @@ import 'package:flutter/material.dart';
 class FluentScrollBehavior extends MaterialScrollBehavior {
   @override
   ScrollPhysics getScrollPhysics(BuildContext context) {
-    if (Platform.isAndroid || Platform.isIOS) {
+    if (Platform.isIOS) {
       return const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics());
     }
-    return const ClampingScrollPhysics();
+    return const ClampingScrollPhysics(parent: AlwaysScrollableScrollPhysics());
   }
 
   @override

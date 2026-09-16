@@ -62,7 +62,10 @@ class QueueService {
         return null; // No more tracks in shuffle with LoopMode.off
       }
       final nextId = _shuffleQueue[_shuffleQueueIndex + 1];
-      return _queue.firstWhere((item) => (item.id ?? item.path) == nextId);
+      return _queue.firstWhere(
+        (item) => (item.id ?? item.path) == nextId,
+        orElse: () => _queue.first,
+      );
     } else {
       int nextIndex = _currentIndex + 1;
       if (nextIndex >= _queue.length) {
@@ -94,7 +97,8 @@ class QueueService {
         _shuffleQueueIndex++;
       }
       final nextId = _shuffleQueue[_shuffleQueueIndex];
-      return _queue.indexWhere((item) => (item.id ?? item.path) == nextId);
+      final targetIdx = _queue.indexWhere((item) => (item.id ?? item.path) == nextId);
+      return targetIdx != -1 ? targetIdx : 0;
     } else {
       int nextIndex = _currentIndex + 1;
       if (nextIndex >= _queue.length) {
@@ -115,7 +119,8 @@ class QueueService {
       if (_shuffleQueueIndex > 0) {
         _shuffleQueueIndex--;
         final prevId = _shuffleQueue[_shuffleQueueIndex];
-        return _queue.indexWhere((item) => (item.id ?? item.path) == prevId);
+        final targetIdx = _queue.indexWhere((item) => (item.id ?? item.path) == prevId);
+        return targetIdx != -1 ? targetIdx : _currentIndex;
       }
       return _currentIndex;
     } else {
@@ -157,6 +162,9 @@ class QueueService {
   /// Appends a single track without resetting the queue cursor.
   void appendTrack(MediaItem item) {
     _queue = [..._queue, item];
+    if (_isShuffleEnabled) {
+      _shuffleQueue.add(item.id ?? item.path);
+    }
   }
 
   /// Inserts a track to be played immediately next (after _currentIndex).
@@ -177,6 +185,10 @@ class QueueService {
   /// Appends multiple tracks without resetting the queue cursor.
   void appendTracks(List<MediaItem> items) {
     _queue = [..._queue, ...items];
+    if (_isShuffleEnabled) {
+      final newIds = items.map((e) => e.id ?? e.path).toList()..shuffle();
+      _shuffleQueue.addAll(newIds);
+    }
   }
 
   /// Reorders track at [oldIndex] to [newIndex].
@@ -308,10 +320,12 @@ class QueueService {
         peekQueue.first == lastPlayedId) {
       return _queue.firstWhere(
         (item) => (item.id ?? item.path) == peekQueue[1],
+        orElse: () => _queue.first,
       );
     }
     return _queue.firstWhere(
       (item) => (item.id ?? item.path) == peekQueue.first,
+      orElse: () => _queue.first,
     );
   }
 }

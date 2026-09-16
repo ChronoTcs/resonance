@@ -53,7 +53,6 @@ class WindowsStreamResolver implements IPlatformStreamResolver {
       'Accept': '*/*',
       'Accept-Language': 'en-US,en;q=0.9',
       'Connection': 'keep-alive',
-      if (!streamUrl.contains('c=ANDROID')) 'Range': 'bytes=0-',
       if (isWeb) ...{
         'Origin': origin,
         'Referer': '$origin/',

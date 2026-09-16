@@ -138,6 +138,11 @@ class _LyricsListViewState extends ConsumerState<LyricsListView> {
       });
     }
 
+    final effectivePhysics = widget.physics ??
+        (Theme.of(context).platform == TargetPlatform.android
+            ? const ClampingScrollPhysics(parent: AlwaysScrollableScrollPhysics())
+            : const BouncingScrollPhysics());
+
     Widget content;
     if (widget.compact) {
       content = ShaderMask(
@@ -161,7 +166,7 @@ class _LyricsListViewState extends ConsumerState<LyricsListView> {
           initialScrollIndex: activeIndex != -1 ? activeIndex + 3 : 0,
           initialAlignment: 0.45,
           itemCount: lyrics.length + 6,
-          physics: widget.physics ?? const BouncingScrollPhysics(),
+          physics: effectivePhysics,
           itemBuilder: (context, index) {
             if (index < 3 || index >= lyrics.length + 3) {
               return const SizedBox(height: 48);
@@ -197,7 +202,7 @@ class _LyricsListViewState extends ConsumerState<LyricsListView> {
               itemPositionsListener: _itemPositionsListener,
               initialScrollIndex: activeIndex != -1 ? activeIndex : 0,
               initialAlignment: 0.5,
-              physics: widget.physics ?? const BouncingScrollPhysics(),
+              physics: effectivePhysics,
               padding: EdgeInsets.only(
                 top: _listHeight / 2 - 30,
                 bottom: _listHeight / 2,

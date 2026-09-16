@@ -8,11 +8,18 @@ class SearchHistoryNotifier extends Notifier<List<String>> {
   @override
   List<String> build() {
     final prefs = ref.watch(sharedPreferencesProvider);
-    final rawJson = prefs.getString(_key);
-    if (rawJson != null && rawJson.isNotEmpty) {
-      try {
+    try {
+      final rawJson = prefs.getString(_key);
+      if (rawJson != null && rawJson.isNotEmpty) {
         final List<dynamic> list = jsonDecode(rawJson);
         return List<String>.from(list.map((e) => e.toString()));
+      }
+    } catch (_) {
+      try {
+        final rawList = prefs.getStringList(_key);
+        if (rawList != null) {
+          return List<String>.from(rawList);
+        }
       } catch (_) {}
     }
     return const [];

@@ -155,9 +155,30 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                   ? TextField(
                       controller: _searchController,
                       autofocus: true,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         hintText: 'Search in library...',
                         border: InputBorder.none,
+                        suffixIcon: _searchController.text.isNotEmpty
+                            ? SizedBox(
+                                width: 28,
+                                height: 28,
+                                child: Center(
+                                  child: ReusableHoverIconButton(
+                                    icon: UIcons.regular.cross_small,
+                                    tooltip: 'Clear text',
+                                    iconSize: 16,
+                                    padding: 2.0,
+                                    borderRadius: BorderRadius.circular(6),
+                                    onTap: () {
+                                      _searchController.clear();
+                                      setState(() {
+                                        _searchQuery = '';
+                                      });
+                                    },
+                                  ),
+                                ),
+                              )
+                            : null,
                       ),
                       onChanged: (value) {
                         setState(() {
@@ -171,82 +192,105 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-              right: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Badge(
-                    isLabelVisible: blockedCount > 0,
-                    label: Text(
-                      '$blockedCount',
-                      style: const TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    backgroundColor: theme.colorScheme.error,
-                    textColor: theme.colorScheme.onError,
-                    child: ReusableHoverIconButton(
-                      icon: UIcons.regular.ban,
-                      tooltip: blockedCount > 0
-                          ? 'Blocked music ($blockedCount)'
-                          : 'Blocked music',
-                      iconSize: 18,
-                      onTap: () => BlockedTracksSheet.show(context),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  ReusableHoverIconButton(
-                    icon: UIcons.regular.add,
-                    tooltip: 'Add audio',
-                    iconSize: 18,
-                    onTap: () => _showAddOptions(context),
-                  ),
-                  const SizedBox(width: 8),
-                  ReusableHoverIconButton(
-                    icon: _isSearching
-                        ? UIcons.regular.cross_small
-                        : UIcons.regular.search,
-                    tooltip: _isSearching ? 'Close search' : 'Search library',
-                    iconSize: 18,
-                    onTap: () {
-                      setState(() {
-                        if (_isSearching) {
+              right: (!isDesktop && _isSearching)
+                  ? TextButton(
+                      onPressed: () {
+                        setState(() {
                           _isSearching = false;
                           _searchQuery = '';
                           _searchController.clear();
-                        } else {
-                          _isSearching = true;
-                        }
-                      });
-                    },
-                  ),
-                  const SizedBox(width: 8),
-                  ReusableHoverIconButton(
-                    icon: libraryState.isLoading ? null : UIcons.regular.refresh,
-                    tooltip: 'Scan folders',
-                    iconSize: 18,
-                    onTap: () {
-                      final isMusicTab = isDesktop ||
-                          mobileNavMode == LibraryNavMode.music;
-                      if (isMusicTab) {
-                        ref.read(libraryProvider.notifier).scanLibrary();
-                      }
-                    },
-                    child: libraryState.isLoading
-                        ? SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                theme.primaryColor,
-                              ),
+                        });
+                      },
+                      style: TextButton.styleFrom(
+                        foregroundColor: theme.colorScheme.primary,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        minimumSize: const Size(0, 36),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: Text(
+                        'Cancel',
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          color: theme.colorScheme.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    )
+                  : Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Badge(
+                          isLabelVisible: blockedCount > 0,
+                          label: Text(
+                            '$blockedCount',
+                            style: const TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
                             ),
-                          )
-                        : null,
-                  ),
-                ],
-              ),
+                          ),
+                          backgroundColor: theme.colorScheme.error,
+                          textColor: theme.colorScheme.onError,
+                          child: ReusableHoverIconButton(
+                            icon: UIcons.regular.ban,
+                            tooltip: blockedCount > 0
+                                ? 'Blocked music ($blockedCount)'
+                                : 'Blocked music',
+                            iconSize: 18,
+                            onTap: () => BlockedTracksSheet.show(context),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ReusableHoverIconButton(
+                          icon: UIcons.regular.add,
+                          tooltip: 'Add audio',
+                          iconSize: 18,
+                          onTap: () => _showAddOptions(context),
+                        ),
+                        const SizedBox(width: 8),
+                        ReusableHoverIconButton(
+                          icon: _isSearching
+                              ? UIcons.regular.cross_small
+                              : UIcons.regular.search,
+                          tooltip: _isSearching ? 'Close search' : 'Search library',
+                          iconSize: 18,
+                          onTap: () {
+                            setState(() {
+                              if (_isSearching) {
+                                _isSearching = false;
+                                _searchQuery = '';
+                                _searchController.clear();
+                              } else {
+                                _isSearching = true;
+                              }
+                            });
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        ReusableHoverIconButton(
+                          icon: libraryState.isLoading ? null : UIcons.regular.refresh,
+                          tooltip: 'Scan folders',
+                          iconSize: 18,
+                          onTap: () {
+                            final isMusicTab = isDesktop ||
+                                mobileNavMode == LibraryNavMode.music;
+                            if (isMusicTab) {
+                              ref.read(libraryProvider.notifier).scanLibrary();
+                            }
+                          },
+                          child: libraryState.isLoading
+                              ? SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      theme.primaryColor,
+                                    ),
+                                  ),
+                                )
+                              : null,
+                        ),
+                      ],
+                    ),
             ),
             if (!isDesktop && !_isSearching)
               MorphingLibraryBar(

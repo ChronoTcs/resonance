@@ -92,13 +92,20 @@ def build():
         print(f"ERROR: {DOWNLOADER_SCRIPT} not found.")
         sys.exit(1)
 
-    generate_version_info()
+    is_win = sys.platform.startswith('win')
+    binary_name = "resonance_downloader.exe" if is_win else "resonance_downloader"
+    target_output = OUTPUT_DIR / binary_name
+
+    if is_win:
+        generate_version_info()
+    else:
+        print("  Linux host detected: Skipping Windows PE version_info.txt")
 
     print("=" * 60)
-    print("  Building resonance_downloader.exe with PyInstaller")
+    print(f"  Building {binary_name} with PyInstaller")
     print("=" * 60)
     print(f"Source : {DOWNLOADER_SCRIPT}")
-    print(f"Output : {OUTPUT_DIR / 'resonance_downloader.exe'}")
+    print(f"Output : {target_output}")
     print()
 
     # Use the .spec file so version_file and icon are always applied
@@ -115,21 +122,33 @@ def build():
     result = subprocess.run(cmd, cwd=SCRIPT_DIR)
 
     if result.returncode == 0:
-        exe_path = OUTPUT_DIR / "resonance_downloader.exe"
-        size_mb = exe_path.stat().st_size / 1_048_576 if exe_path.exists() else 0
+        exe_path = target_output
+        if exe_path.exists():
+            if not is_win:
+                try:
+                    os.chmod(exe_path, 0o755)
+                    print("  Applied executable permissions (+x)")
+                except Exception as e:
+                    print(f"  Warning: Failed to chmod +x {exe_path}: {e}")
+            size_mb = exe_path.stat().st_size / 1_048_576
+        else:
+            size_mb = 0
+
+        platform_cmd = "flutter build windows" if is_win else "flutter build linux"
         print()
         print("=" * 60)
-        print(f"  SUCCESS! resonance_downloader.exe ({size_mb:.1f} MB)")
+        print(f"  SUCCESS! {binary_name} ({size_mb:.1f} MB)")
         print(f"  Location: {exe_path}")
         print()
-        print("  Next step: run  flutter build windows  to bundle it.")
+        print(f"  Next step: run  {platform_cmd}  to bundle it.")
         print("=" * 60)
     else:
         print()
         print("ERROR: PyInstaller failed. Check output above.")
-        print("Install PyInstaller with:  pip install pyinstaller")
+        print("Install PyInstaller with:  pip install --upgrade pyinstaller yt-dlp requests mutagen")
         sys.exit(1)
 
 
 if __name__ == "__main__":
     build()
+

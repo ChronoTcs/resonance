@@ -10,6 +10,7 @@ import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/core/widgets/widgets.dart';
 import 'package:resonance/features/explore/data/repositories/youtube_playlist_repository.dart';
 import 'package:resonance/features/library/data/models/media_item.dart';
+import 'package:resonance/features/library/presentation/widgets/add_audio/mobile_media_import_card.dart';
 import 'package:resonance/features/playlist/application/playlist_provider.dart';
 import 'package:resonance/features/settings/application/notification_provider.dart';
 
@@ -145,15 +146,16 @@ class _ImportPlaylistSheetState extends ConsumerState<ImportPlaylistSheet> {
     }
   }
 
-  Future<void> _handleFileImport(String filePath) async {
+  Future<void> _handleFileImport(String filePath, [String? displayName]) async {
     try {
-      final file = File(filePath);
+      final name = displayName ?? p.basename(filePath);
       final ext = p.extension(filePath).toLowerCase();
-      if (ext != '.json') {
+      if (ext != '.json' && !name.toLowerCase().endsWith('.json')) {
         setState(() => _errorMessage = 'Only .json playlist files are supported.');
         return;
       }
 
+      final file = File(filePath);
       final content = await file.readAsString();
       await ref.read(playlistProvider.notifier).importPlaylist(content);
 
@@ -161,7 +163,7 @@ class _ImportPlaylistSheetState extends ConsumerState<ImportPlaylistSheet> {
         Navigator.pop(context);
         ref.read(notificationProvider.notifier).showNotification(
           'Playlist Imported',
-          'Playlist imported from ${p.basename(filePath)}!',
+          'Playlist imported from $name!',
           target: 'target:playlists',
           silentOsNotification: true,
         );
@@ -178,6 +180,7 @@ class _ImportPlaylistSheetState extends ConsumerState<ImportPlaylistSheet> {
       final FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['json'],
+        withData: true,
       );
       if (result == null || result.files.isEmpty) return;
 
@@ -191,13 +194,13 @@ class _ImportPlaylistSheetState extends ConsumerState<ImportPlaylistSheet> {
           Navigator.pop(context);
           ref.read(notificationProvider.notifier).showNotification(
             'Playlist Imported',
-            'Playlist imported successfully!',
+            'Playlist imported from ${file.name}!',
             target: 'target:playlists',
             silentOsNotification: true,
           );
         }
       } else if (filePath != null) {
-        await _handleFileImport(filePath);
+        await _handleFileImport(filePath, file.name);
       }
     } catch (e) {
       if (mounted) {
@@ -208,6 +211,10 @@ class _ImportPlaylistSheetState extends ConsumerState<ImportPlaylistSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final platform = Theme.of(context).platform;
+    final bool isMobile = platform == TargetPlatform.android ||
+        platform == TargetPlatform.iOS;
+
     return FloatingSheetShell(
       title: 'Import Playlist',
       icon: UIcons.regular.cloud_download,
@@ -222,17 +229,27 @@ class _ImportPlaylistSheetState extends ConsumerState<ImportPlaylistSheet> {
         const SizedBox(height: 16),
         const _SheetDivider(label: 'OR'),
         const SizedBox(height: 16),
-        _JsonFileDropCard(
-          isDragging: _isDragging,
-          isLoading: _isLoading,
-          onDragEntered: () => setState(() => _isDragging = true),
-          onDragExited: () => setState(() => _isDragging = false),
-          onFileDropped: (filePath) {
-            setState(() => _isDragging = false);
-            _handleFileImport(filePath);
-          },
-          onPickFile: _pickJsonFile,
-        ),
+        if (isMobile)
+          MobileMediaImportCard(
+            title: 'Browse Playlist File',
+            subtitle: 'Pick a .json playlist backup from device storage',
+            badge: 'JSON PLAYLIST FILE',
+            icon: UIcons.regular.document,
+            isLoading: _isLoading,
+            onTap: _isLoading ? null : _pickJsonFile,
+          )
+        else
+          _JsonFileDropCard(
+            isDragging: _isDragging,
+            isLoading: _isLoading,
+            onDragEntered: () => setState(() => _isDragging = true),
+            onDragExited: () => setState(() => _isDragging = false),
+            onFileDropped: (filePath) {
+              setState(() => _isDragging = false);
+              _handleFileImport(filePath);
+            },
+            onPickFile: _pickJsonFile,
+          ),
         if (_errorMessage != null) ...[
           const SizedBox(height: 14),
           _SheetErrorBanner(message: _errorMessage!),

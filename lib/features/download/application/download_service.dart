@@ -1285,7 +1285,7 @@ class DownloadService {
       });
       debugPrint('[DownloadService] resolveStreamUrl: sent via daemon bridge for $videoId (id=$reqId)');
       try {
-        return await completer.future.timeout(const Duration(seconds: 15));
+        return await completer.future.timeout(const Duration(seconds: 25));
       } on TimeoutException {
         _resolveCompleters.remove(reqId);
         debugPrint('[DownloadService] resolveStreamUrl TIMEOUT (daemon) for $videoId');

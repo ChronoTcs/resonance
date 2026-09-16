@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:resonance/core/widgets/buttons/reusable_hover_icon_button.dart';
-import 'package:resonance/features/player/presentation/widgets/queue/queue_buffer_selector.dart';
 import 'package:resonance/features/player/presentation/widgets/queue/queue_header_bar.dart';
 
 void main() {
@@ -39,7 +38,7 @@ void main() {
       expect(renderParagraph.size.width, greaterThan(40.0));
     });
 
-    testWidgets('Wide desktop width (890px): verify positions of right controls', (tester) async {
+    testWidgets('Wide desktop width (890px): verify positions of right controls and absence of buffer selector', (tester) async {
       tester.view.physicalSize = const Size(890, 600);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {
@@ -61,8 +60,8 @@ void main() {
         ),
       );
 
-      final selectorFinder = find.byType(QueueBufferSelector);
-      expect(selectorFinder, findsOneWidget);
+      // Verify no buffer selector or N+ text is present in header
+      expect(find.textContaining('N+'), findsNothing);
 
       final trashFinder = find.descendant(
         of: find.byType(QueueHeaderBar),

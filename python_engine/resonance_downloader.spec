@@ -25,6 +25,9 @@ a = Analysis(
 )
 pyz = PYZ(a.pure)
 
+import sys
+is_win = sys.platform.startswith('win')
+
 exe = EXE(
     pyz,
     a.scripts,
@@ -44,7 +47,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    # PE resource metadata — reduces AV false positives by giving the binary a known identity
-    version='version_info.txt',
-    icon='../windows/runner/resources/app_icon.ico',
+    # PE resource metadata for Windows — omitted on Linux
+    version='version_info.txt' if is_win else None,
+    icon='../windows/runner/resources/app_icon.ico' if is_win else None,
 )

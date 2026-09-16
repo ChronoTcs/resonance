@@ -12,6 +12,7 @@ import 'package:resonance/features/explore/presentation/widgets/explore_playlist
 import 'package:resonance/features/explore/presentation/widgets/mood_genre_section.dart';
 import 'package:resonance/features/explore/presentation/widgets/recent_searches_carousel_section.dart';
 import 'package:resonance/features/explore/presentation/widgets/search_suggestions_section.dart';
+import 'package:resonance/features/explore/presentation/widgets/mobile_search_history_section.dart';
 import 'package:resonance/features/player/application/providers/audio_provider.dart';
 
 /// Dedicated Explore & Discovery Screen for both Windows and Android.
@@ -34,12 +35,29 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen>
     with SingleTickerProviderStateMixin {
   TabController? _tabController;
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
   bool _isSearchOpen = false;
 
   @override
   void initState() {
     super.initState();
     _initTabController();
+    _searchController.addListener(_onSearchChanged);
+    _searchFocusNode.addListener(_onFocusChanged);
+    final initialQuery = ref.read(searchQueryProvider);
+    if (initialQuery.isNotEmpty) {
+      _searchController.text = initialQuery;
+      _searchController.selection = TextSelection.collapsed(offset: initialQuery.length);
+      _isSearchOpen = true;
+    }
+  }
+
+  void _onSearchChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _onFocusChanged() {
+    if (mounted) setState(() {});
   }
 
   void _initTabController() {
@@ -54,8 +72,11 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen>
 
   @override
   void dispose() {
+    _searchFocusNode.removeListener(_onFocusChanged);
+    _searchController.removeListener(_onSearchChanged);
     _tabController?.dispose();
     _searchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
   }
 
@@ -82,12 +103,25 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen>
       _tabController!.animateTo(activeTab);
     }
 
+    ref.listen<String>(searchQueryProvider, (previous, next) {
+      if (next != _searchController.text) {
+        _searchController.text = next;
+        _searchController.selection = TextSelection.collapsed(offset: next.length);
+      }
+      if (next.isNotEmpty && !_isSearchOpen) {
+        setState(() {
+          _isSearchOpen = true;
+        });
+      }
+    });
+
     final hasQuery = currentQuery.isNotEmpty;
+    if (hasQuery && !_isSearchOpen) {
+      _isSearchOpen = true;
+    }
     final showMobileSearch = isCompact && (_isSearchOpen || hasQuery);
 
-    if (currentQuery.isNotEmpty && _searchController.text != currentQuery) {
-      _searchController.text = currentQuery;
-    } else if (currentQuery.isEmpty && _searchController.text.isNotEmpty && !_isSearchOpen) {
+    if (currentQuery.isEmpty && _searchController.text.isNotEmpty && !_isSearchOpen && !_searchFocusNode.hasFocus) {
       _searchController.clear();
     }
 
@@ -95,6 +129,10 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen>
       canPop: !hasQuery && !_isSearchOpen,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) {
+          if (_searchFocusNode.hasFocus) {
+            _searchFocusNode.unfocus();
+            return;
+          }
           setState(() {
             _isSearchOpen = false;
             _searchController.clear();
@@ -135,7 +173,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen>
                 left: showMobileSearch
                     ? TextField(
                         controller: _searchController,
-                        autofocus: _isSearchOpen && !hasQuery,
+                        focusNode: _searchFocusNode,
                         textInputAction: TextInputAction.search,
                         onSubmitted: (query) {
                           final trimmed = query.trim();
@@ -143,10 +181,34 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen>
                             ref.read(searchHistoryProvider.notifier).addQuery(trimmed);
                             ref.read(searchQueryProvider.notifier).setQuery(trimmed);
                           }
+                          _searchFocusNode.unfocus();
                         },
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           hintText: 'Search songs, artists, albums...',
                           border: InputBorder.none,
+                          suffixIcon: _searchController.text.isNotEmpty
+                              ? SizedBox(
+                                  width: 28,
+                                  height: 28,
+                                  child: Center(
+                                    child: ReusableHoverIconButton(
+                                      icon: UIcons.regular.cross_small,
+                                      tooltip: 'Clear text',
+                                      iconSize: 16,
+                                      padding: 2.0,
+                                      borderRadius: BorderRadius.circular(6),
+                                      onTap: () {
+                                        _searchController.clear();
+                                        _clearSearch();
+                                        setState(() {
+                                          _isSearchOpen = true;
+                                        });
+                                        _searchFocusNode.requestFocus();
+                                      },
+                                    ),
+                                  ),
+                                )
+                              : null,
                         ),
                       )
                     : Text(
@@ -156,42 +218,57 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen>
                           letterSpacing: -0.2,
                         ),
                       ),
-                right: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    ReusableHoverIconButton(
-                      icon: showMobileSearch
-                          ? UIcons.regular.cross_small
-                          : UIcons.regular.search,
-                      tooltip: showMobileSearch ? 'Clear search' : 'Search',
-                      iconSize: 18,
-                      onTap: () {
-                        if (showMobileSearch) {
+                right: showMobileSearch
+                    ? TextButton(
+                        onPressed: () {
+                          _searchFocusNode.unfocus();
                           setState(() {
                             _isSearchOpen = false;
                             _searchController.clear();
                           });
                           _clearSearch();
-                        } else {
-                          setState(() {
-                            _isSearchOpen = true;
-                          });
-                        }
-                      },
-                    ),
-                    const SizedBox(width: 6),
-                    ReusableHoverIconButton(
-                      icon: UIcons.regular.refresh,
-                      tooltip: 'Refresh',
-                      iconSize: 18,
-                      onTap: _refreshExplore,
-                    ),
-                  ],
-                ),
+                        },
+                        style: TextButton.styleFrom(
+                          foregroundColor: theme.colorScheme.primary,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          minimumSize: const Size(0, 36),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: Text(
+                          'Cancel',
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            color: theme.colorScheme.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      )
+                    : Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ReusableHoverIconButton(
+                            icon: UIcons.regular.search,
+                            tooltip: 'Search',
+                            iconSize: 18,
+                            onTap: () {
+                              setState(() {
+                                _isSearchOpen = true;
+                              });
+                              _searchFocusNode.requestFocus();
+                            },
+                          ),
+                          const SizedBox(width: 6),
+                          ReusableHoverIconButton(
+                            icon: UIcons.regular.refresh,
+                            tooltip: 'Refresh',
+                            iconSize: 18,
+                            onTap: _refreshExplore,
+                          ),
+                        ],
+                      ),
               ),
 
-            // Mobile Filter Tabs when search query is active (50/50 split on mobile)
-            if (isCompact && hasQuery)
+            // Mobile Filter Tabs when search query is active and not actively typing
+            if (isCompact && hasQuery && !_searchFocusNode.hasFocus)
               ResonanceSegmentedBar(
                 items: [
                   ResonanceSegmentItem(
@@ -209,18 +286,33 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen>
                 },
               ),
 
-
-
-            // Body: Discovery Mode vs Live Search Mode
+            // Body: Live Search Results vs Mobile Search History vs Discovery Feed
             Expanded(
-              child: hasQuery
-                  ? _ExploreSearchResultsView(
-                      isSearching: isSearching,
-                      activeTab: activeTab,
-                      searchResultsAsync: searchResultsAsync,
-                      searchPlaylistsAsync: searchPlaylistsAsync,
+              child: (isCompact && (_searchFocusNode.hasFocus || (_isSearchOpen && !hasQuery)))
+                  ? MobileSearchHistorySection(
+                      filterText: _searchController.text,
+                      onSelect: (query) {
+                        _searchFocusNode.unfocus();
+                        _searchController.text = query;
+                        _searchController.selection = TextSelection.collapsed(offset: query.length);
+                        ref.read(searchHistoryProvider.notifier).addQuery(query);
+                        ref.read(searchQueryProvider.notifier).setQuery(query);
+                      },
+                      onInsert: (query) {
+                        _searchController.text = query;
+                        _searchController.selection = TextSelection.collapsed(offset: query.length);
+                        _searchFocusNode.requestFocus();
+                        if (mounted) setState(() {});
+                      },
                     )
-                  : _buildDiscoveryFeed(),
+                  : hasQuery
+                      ? _ExploreSearchResultsView(
+                          isSearching: isSearching,
+                          activeTab: activeTab,
+                          searchResultsAsync: searchResultsAsync,
+                          searchPlaylistsAsync: searchPlaylistsAsync,
+                        )
+                      : _buildDiscoveryFeed(),
             ),
           ],
         ),

@@ -63,5 +63,64 @@ void main() {
        final peeked = queueService.peekNextTrack(LoopMode.off, true);
        expect(peeked, isNull, reason: 'Peek should return null at the end of shuffle queue if LoopMode.off');
     });
+
+    test('appendTracks integrates newly appended stream radio tracks into active shuffle queue', () {
+      // Simulate user playing a single track from Home or Explore with Shuffle ON
+      final singleTrackService = QueueService();
+      final initialSong = MediaItem(id: 'seed1', title: 'Seed Song', path: 'seed1', type: 'audio');
+      singleTrackService.setQueue([initialSong], initialIndex: 0);
+      singleTrackService.setShuffle(true);
+      singleTrackService.setLoopMode(LoopMode.off);
+
+      // Before radio tracks arrive, peekNextTrack is null
+      expect(singleTrackService.peekNextTrack(LoopMode.off, true), isNull);
+
+      // AudioOrchestrator fetches radio and appends 4 new tracks
+      final radioTracks = [
+        MediaItem(id: 'rec1', title: 'Rec 1', path: 'rec1', type: 'audio'),
+        MediaItem(id: 'rec2', title: 'Rec 2', path: 'rec2', type: 'audio'),
+        MediaItem(id: 'rec3', title: 'Rec 3', path: 'rec3', type: 'audio'),
+        MediaItem(id: 'rec4', title: 'Rec 4', path: 'rec4', type: 'audio'),
+      ];
+      singleTrackService.appendTracks(radioTracks);
+
+      // Verify queue length is now 5
+      expect(singleTrackService.queue.length, equals(5));
+
+      // After appendTracks, peekNextTrack MUST NOT be null!
+      final upcoming = singleTrackService.peekNextTrack(LoopMode.off, true);
+      expect(upcoming, isNotNull);
+      expect(['rec1', 'rec2', 'rec3', 'rec4'].contains(upcoming?.id), isTrue);
+
+      // Advance through all 4 radio tracks
+      final playedIds = <String>{initialSong.id!};
+      for (int i = 0; i < 4; i++) {
+        final next = singleTrackService.getNextTrack(LoopMode.off, true, fromCompletion: true);
+        expect(next, isNotNull);
+        playedIds.add(next!.id!);
+      }
+
+      // All 5 unique tracks must have been played in shuffle
+      expect(playedIds.length, equals(5));
+
+      // Reached the end with LoopMode.off
+      expect(singleTrackService.getNextTrack(LoopMode.off, true, fromCompletion: true), isNull);
+    });
+
+    test('appendTrack integrates single incoming track into active shuffle queue', () {
+      final singleService = QueueService();
+      final songA = MediaItem(id: 'a', title: 'A', path: 'a', type: 'audio');
+      singleService.setQueue([songA], initialIndex: 0);
+      singleService.setShuffle(true);
+
+      expect(singleService.peekNextTrack(LoopMode.off, true), isNull);
+
+      final songB = MediaItem(id: 'b', title: 'B', path: 'b', type: 'audio');
+      singleService.appendTrack(songB);
+
+      expect(singleService.queue.length, equals(2));
+      final next = singleService.getNextTrack(LoopMode.off, true);
+      expect(next?.id, equals('b'));
+    });
   });
 }
