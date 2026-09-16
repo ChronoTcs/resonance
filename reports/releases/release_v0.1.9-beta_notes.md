@@ -42,6 +42,10 @@
   - **Unified Build Runner**: Enhanced `scripts/package_all.ps1` with `-Platform`, `-SkipPythonEngine`, `-SkipInstaller`, and `-BuildAppBundle` switches for fast local testing.
   - **Windows Installer Elevation Fix**: Added `PrivilegesRequiredOverridesAllowed=dialog` to `windows/resonance_installer.iss`, allowing users to install cleanly into `Program Files` without permission failures or version collisions with `%LOCALAPPDATA%`.
 
+- **🛠️ Bug Fixes & System Stability**:
+  - **Android In-App Update PackageInstaller Resolution**: Fixed an issue where clicking "Install Version" failed silently on Android 10+ due to internal storage sandboxing. APKs are now saved to and resolved from app-specific external cache (`getExternalCacheDirectories()`), which is whitelisted by FileProvider and accessible by the system PackageInstaller without extra permissions. Added backward-compatible automatic migration for previously downloaded APKs and explicit MIME type specification.
+  - **Desktop Search History Dropdown Dismissal**: Resolved premature dropdown closure when attempting to click individual item trash icons or "Clear Search History" on Windows. Configured shared `TapRegion` group and decoupled `EditableText` pointer-down unfocusing so click events dispatch cleanly to button handlers.
+
 - **🔢 Version Bump**:
   - Bumped version to `0.1.9-beta+14` across `pubspec.yaml`, `python_engine/version_info.txt` (numeric `0.1.9.14`), `windows/resonance_installer.iss`, and local packaging scripts.
   - Build number incremented monotonically from `+13` → `+14`.

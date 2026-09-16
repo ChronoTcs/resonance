@@ -87,11 +87,21 @@ class PermissionService {
     if (!context.mounted) return false;
 
     if (proceed) {
-      final result = await Permission.requestInstallPackages.request();
-      return result.isGranted;
+      await Permission.requestInstallPackages.request();
+      // Re-read fresh status after returning from system settings
+      final fresh = await Permission.requestInstallPackages.status;
+      return fresh.isGranted;
     }
 
     return false;
+  }
+
+  /// Returns current install-packages permission status without showing any UI.
+  /// Use this to re-verify after returning from Android Settings.
+  static Future<bool> checkInstallPermissionStatus() async {
+    if (!Platform.isAndroid) return true;
+    final status = await Permission.requestInstallPackages.status;
+    return status.isGranted;
   }
 
   /// Scoped storage / SAF are used for downloads and caching. No legacy storage permission required.

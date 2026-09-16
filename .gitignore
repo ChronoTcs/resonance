@@ -95,6 +95,8 @@ graphify-out/
 reports/*
 !reports/releases/
 !reports/releases/**
+!reports/commits/
+!reports/commits/**
 scratch/
 linux/info/
 

@@ -1,0 +1,6 @@
+Fix: Android APK in-app update installer path resolution and desktop search bar history dropdown dismissal
+
+• Android In-App APK Installer Sandbox Fix: download and resolve APK installers within app-specific external cache directory (getExternalCacheDirectories()) whitelisted by FileProvider, bypassing Android 10+ UID 1000 PackageInstaller sandbox restrictions with zero runtime permission requirements; add backward-compatible auto-migration from legacy internal app support storage
+• Android APK MIME Type & Launch Error Surfacing: supply explicit application/vnd.android.package-archive MIME type to OpenFilex.open() and check OpenResult to capture and surface native intent launch failures in UpdateNotifier state
+• Search Bar History Dropdown Pointer Dismissal Fix: assign common groupId and empty onTapOutside handler to TextField in UnifiedSearchBar to prevent EditableText from prematurely stealing focus on pointer-down before dropdown delete and clear history buttons can receive pointer-up tap events; wrap SearchHistoryDropdown in TextFieldTapRegion while retaining outer TapRegion outside-click dismissal
+• System Stability & Permission Freshness: add checkInstallPermissionStatus() static method in PermissionService to enable non-intrusive status verification after returning from system settings dialog

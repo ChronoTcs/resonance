@@ -156,15 +156,17 @@ class _UnifiedSearchBarState extends ConsumerState<UnifiedSearchBar> {
       link: _layerLink,
       child: OverlayPortal(
         controller: _overlayController,
-        overlayChildBuilder: (context) => SearchHistoryDropdown(
-          link: _layerLink,
-          searchWidth: searchWidth,
-          groupId: _searchTapRegionGroupId,
-          onSelect: (item) {
-            _searchController.text = item;
-            _submitSearch(item);
-          },
-          onClose: _closeOverlay,
+        overlayChildBuilder: (context) => TextFieldTapRegion(
+          child: SearchHistoryDropdown(
+            link: _layerLink,
+            searchWidth: searchWidth,
+            groupId: _searchTapRegionGroupId,
+            onSelect: (item) {
+              _searchController.text = item;
+              _submitSearch(item);
+            },
+            onClose: _closeOverlay,
+          ),
         ),
         child: TapRegion(
           groupId: _searchTapRegionGroupId,
@@ -176,6 +178,13 @@ class _UnifiedSearchBarState extends ConsumerState<UnifiedSearchBar> {
               controller: _searchController,
               focusNode: _searchFocusNode,
               onSubmitted: _submitSearch,
+              groupId: _searchTapRegionGroupId,
+              onTapOutside: (_) {
+                // Intentionally empty: let the outer TapRegion(groupId) exclusively
+                // handle dismiss. Without this, EditableText fires _defaultOnTapOutside
+                // on pointer-DOWN, unmounting the dropdown before InkWell/button
+                // can receive the pointer-UP (tap) event.
+              },
               style: theme.textTheme.bodyMedium?.copyWith(
                 fontSize: 13,
               ),

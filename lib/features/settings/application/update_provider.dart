@@ -277,9 +277,7 @@ class UpdateNotifier extends Notifier<UpdateState> {
         return;
       }
 
-      final directory = Platform.isAndroid
-          ? await getApplicationSupportDirectory()
-          : await getDownloadsDirectory() ?? await getTemporaryDirectory();
+      final directory = await _getInstallerDirectory();
 
       final filePath = '${directory.path}/$fileName';
 
@@ -317,30 +315,47 @@ class UpdateNotifier extends Notifier<UpdateState> {
     _cancelToken?.cancel('User cancelled download');
   }
 
+  /// Returns the platform-appropriate directory for storing installer files.
+  ///
+  /// Android: app-specific external cache (`/Android/data/<pkg>/cache`) —
+  /// readable by system PackageInstaller, zero runtime permissions (API 19+).
+  /// Desktop: user Downloads folder.
+  Future<Directory> _getInstallerDirectory() async {
+    if (Platform.isAndroid) {
+      final dirs = await getExternalCacheDirectories();
+      if (dirs != null && dirs.isNotEmpty) return dirs.first;
+      // Fallback: app support dir. Still inside FileProvider scope.
+      return getApplicationSupportDirectory();
+    }
+    return await getDownloadsDirectory() ?? await getTemporaryDirectory();
+  }
+
   /// Deletes the downloaded installer/staged files from disk and resets download state.
   Future<void> deleteDownloadedRelease(AppRelease release) async {
     final prefs = await SharedPreferences.getInstance();
     final savedPath = prefs.getString(_kDownloadedPath);
 
+    // Delete from saved path
     if (savedPath != null && File(savedPath).existsSync()) {
       try {
         await File(savedPath).delete();
       } catch (e) {
         debugPrint('[UpdateNotifier] Failed to delete installer: $e');
       }
-    } else {
-      final compatibleAsset = release.getCompatibleInstallerAsset();
-      final fileName = compatibleAsset?['name'] as String?;
-      if (fileName != null) {
-        final directory = Platform.isAndroid
-            ? await getApplicationSupportDirectory()
-            : await getDownloadsDirectory() ?? await getTemporaryDirectory();
-        final filePath = '${directory.path}/$fileName';
-        if (File(filePath).existsSync()) {
-          try {
-            await File(filePath).delete();
-          } catch (_) {}
-        }
+    }
+
+    // Also clean up legacy internal storage path (pre-fix downloads)
+    final compatibleAsset = release.getCompatibleInstallerAsset();
+    final fileName = compatibleAsset?['name'] as String?;
+    if (fileName != null) {
+      final legacyDir = Platform.isAndroid
+          ? await getApplicationSupportDirectory()
+          : await getDownloadsDirectory() ?? await getTemporaryDirectory();
+      final legacyPath = '${legacyDir.path}/$fileName';
+      if (File(legacyPath).existsSync()) {
+        try {
+          await File(legacyPath).delete();
+        } catch (_) {}
       }
     }
 
@@ -430,14 +445,34 @@ class UpdateNotifier extends Notifier<UpdateState> {
 
     if (fileName == null) return;
 
-    final directory = Platform.isAndroid
-        ? await getApplicationSupportDirectory()
-        : await getDownloadsDirectory() ?? await getTemporaryDirectory();
-    final filePath = '${directory.path}/$fileName';
+    // Resolve installer path: prefer new external cache; fall back to legacy internal path.
+    final newDir = await _getInstallerDirectory();
+    String filePath = '${newDir.path}/$fileName';
 
     if (!await File(filePath).exists()) {
-      state = state.copyWith(error: 'Installation file not found. Please download again.');
-      return;
+      // Backward-compat: check legacy internal storage from before this fix
+      if (Platform.isAndroid) {
+        final legacyDir = await getApplicationSupportDirectory();
+        final legacyPath = '${legacyDir.path}/$fileName';
+        if (await File(legacyPath).exists()) {
+          // Migrate legacy file to external cache so PackageInstaller can read it
+          try {
+            final legacyFile = File(legacyPath);
+            await legacyFile.copy(filePath);
+            await legacyFile.delete();
+            debugPrint('[UpdateNotifier] Migrated APK from internal to external cache.');
+          } catch (e) {
+            debugPrint('[UpdateNotifier] Migration failed, using legacy path: $e');
+            filePath = legacyPath;
+          }
+        } else {
+          state = state.copyWith(error: 'Installation file not found. Please download again.');
+          return;
+        }
+      } else {
+        state = state.copyWith(error: 'Installation file not found. Please download again.');
+        return;
+      }
     }
 
     try {
@@ -449,7 +484,17 @@ class UpdateNotifier extends Notifier<UpdateState> {
           return;
         }
 
-        await OpenFilex.open(filePath);
+        if (!context.mounted) return;
+
+        final openResult = await OpenFilex.open(
+          filePath,
+          type: 'application/vnd.android.package-archive',
+        );
+        if (openResult.type != ResultType.done) {
+          state = state.copyWith(
+            error: 'Failed to open installer: ${openResult.message}',
+          );
+        }
       } else if (Platform.isWindows) {
         await Process.start(
           filePath,
