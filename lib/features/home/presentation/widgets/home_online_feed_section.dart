@@ -92,17 +92,11 @@ class _HomeOnlineFeedSectionState extends ConsumerState<HomeOnlineFeedSection> {
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
-                  child: Row(
-                    children: [
-                      Icon(UIcons.regular.sparkles, size: 18, color: theme.primaryColor),
-                      const SizedBox(width: 8),
-                      Text(
-                        section.title,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    section.title,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
                 SizedBox(
@@ -211,83 +205,88 @@ class _OnlineFeedCard extends ConsumerWidget {
       type: item.isPlaylist ? 'playlist' : 'audio',
     );
 
-    return Container(
-      width: 140,
-      margin: const EdgeInsets.symmetric(horizontal: 4),
-      child: InkWell(
-        mouseCursor: SystemMouseCursors.click,
-        onTap: onTap,
-        onLongPress: onLongPress,
-        onSecondaryTapDown: (details) => MediaActionUtils.showTrackContextMenu(
-          context: context,
-          ref: ref,
-          item: mediaItem,
-          position: details.globalPosition,
-        ),
-        borderRadius: BorderRadius.circular(8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Stack(
+    return RepaintBoundary(
+      child: Container(
+        width: 140,
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            mouseCursor: SystemMouseCursors.click,
+            splashFactory: NoSplash.splashFactory,
+            onTap: onTap,
+            onLongPress: onLongPress,
+            onSecondaryTapDown: (details) => MediaActionUtils.showTrackContextMenu(
+              context: context,
+              ref: ref,
+              item: mediaItem,
+              position: details.globalPosition,
+            ),
+            borderRadius: BorderRadius.circular(8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: CachedNetworkImage(
-                    imageUrl: ThumbnailUtils.toCardResolution(item.thumbnailUrl),
-                    width: 140,
-                    height: 140,
-                    memCacheWidth: 400,
-                    memCacheHeight: 400,
-                    fit: BoxFit.cover,
-                    placeholder: (context, url) => Container(
-                      color: theme.colorScheme.surfaceContainerHighest,
-                      child: Icon(AppIcons.music, color: Colors.grey),
+                Stack(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: CachedNetworkImage(
+                        imageUrl: ThumbnailUtils.toCardResolution(item.thumbnailUrl),
+                        width: 140,
+                        height: 140,
+                        memCacheWidth: 400,
+                        fit: BoxFit.cover,
+                        placeholder: (context, url) => Container(
+                          color: theme.colorScheme.surfaceContainerHighest,
+                          child: Icon(AppIcons.music, color: Colors.grey),
+                        ),
+                        errorWidget: (context, url, error) => Container(
+                          color: theme.colorScheme.surfaceContainerHighest,
+                          child: Icon(UIcons.regular.music, color: Colors.grey),
+                        ),
+                      ),
                     ),
-                    errorWidget: (context, url, error) => Container(
-                      color: theme.colorScheme.surfaceContainerHighest,
-                      child: Icon(UIcons.regular.music, color: Colors.grey),
-                    ),
+                    if (item.isPlaylist)
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: ReusableHoverIconButton(
+                          icon: UIcons.regular.add_folder,
+                          tooltip: 'Save to Playlists',
+                          iconSize: 16,
+                          padding: 6.0,
+                          backgroundColor: Colors.black.withValues(alpha: 0.6),
+                          borderRadius: BorderRadius.circular(16),
+                          onTap: onImportPlaylist,
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  item.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12.5,
                   ),
                 ),
-                if (item.isPlaylist)
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: ReusableHoverIconButton(
-                      icon: UIcons.regular.add_folder,
-                      tooltip: 'Save to Playlists',
-                      iconSize: 16,
-                      padding: 6.0,
-                      backgroundColor: Colors.black.withValues(alpha: 0.6),
-                      borderRadius: BorderRadius.circular(16),
-                      onTap: onImportPlaylist,
+                if (item.subtitle.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    item.subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      fontSize: 11,
                     ),
                   ),
+                ],
               ],
             ),
-            const SizedBox(height: 6),
-            Text(
-              item.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-                fontSize: 12.5,
-              ),
-            ),
-            if (item.subtitle.isNotEmpty) ...[
-              const SizedBox(height: 2),
-              Text(
-                item.subtitle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                  fontSize: 11,
-                ),
-              ),
-            ],
-          ],
+          ),
         ),
       ),
     );

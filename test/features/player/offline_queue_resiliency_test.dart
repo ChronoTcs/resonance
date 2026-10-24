@@ -16,7 +16,7 @@ import 'package:resonance/features/explore/data/repositories/youtube_stream_repo
 
 class ThrowingOfflineStreamRepo implements YoutubeStreamRepository {
   @override
-  Future<String?> getStreamUrl(String videoId) async {
+  Future<String?> getStreamUrl(String videoId, {bool forceRefresh = false}) async {
     throw const OfflinePlaybackException('Device is offline and no cached audio is available.');
   }
 

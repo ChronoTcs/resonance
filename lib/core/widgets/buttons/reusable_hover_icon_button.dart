@@ -48,76 +48,15 @@ class ReusableHoverIconButton extends StatefulWidget {
   State<ReusableHoverIconButton> createState() => _ReusableHoverIconButtonState();
 }
 
-class _ReusableHoverIconButtonState extends State<ReusableHoverIconButton> with SingleTickerProviderStateMixin {
+class _ReusableHoverIconButtonState extends State<ReusableHoverIconButton> {
   bool _isHovered = false;
-  AnimationController? _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.isSelected) {
-      _initController();
-    }
-  }
-
-  void _initController() {
-    _controller ??= AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 3),
-    );
-    _controller!.repeat();
-  }
-
-  @override
-  void didUpdateWidget(ReusableHoverIconButton oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.isSelected) {
-      _initController();
-    } else {
-      _controller?.stop();
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller?.dispose();
-    super.dispose();
-  }
 
   Widget _buildIcon(Color finalIconColor, Color activeColor) {
-    final iconWidget = Icon(
+    return Icon(
       widget.icon,
       size: widget.iconSize,
-      color: widget.isSelected ? Colors.white : finalIconColor,
+      color: widget.isSelected ? activeColor : finalIconColor,
     );
-
-    if (widget.isSelected && _controller != null) {
-      return AnimatedBuilder(
-        animation: _controller!,
-        builder: (context, child) {
-          return ShaderMask(
-            shaderCallback: (bounds) {
-              final double offset = 2.0 - (_controller!.value * 4.0);
-              return LinearGradient(
-                colors: [
-                  activeColor,
-                  Colors.white.withValues(alpha: 0.85),
-                  activeColor,
-                ],
-                stops: const [0.0, 0.5, 1.0],
-                begin: Alignment(1.5 + offset, 1.5 + offset),
-                end: Alignment(-1.5 + offset, -1.5 + offset),
-              ).createShader(bounds);
-            },
-            blendMode: BlendMode.srcIn,
-            child: child,
-          );
-        },
-        child: iconWidget,
-      );
-    }
-
-    return iconWidget;
   }
 
   @override
@@ -198,26 +137,22 @@ class _ReusableHoverIconButtonState extends State<ReusableHoverIconButton> with 
 
     // Bentuk standar Resonance: Rounded Rectangle
     final borderRadius = widget.borderRadius ?? BorderRadius.circular(8);
+    final isActiveHover = _isHovered && !widget.isDisabled;
 
-    Widget buttonContent = AnimatedScale(
-      duration: const Duration(milliseconds: 200),
-      scale: _isHovered && !widget.isDisabled ? widget.scaleOnHover : 1.0,
-      curve: Curves.easeOutBack,
+    final Widget buttonContent = Transform.scale(
+      scale: isActiveHover ? widget.scaleOnHover : 1.0,
       child: ClipRect(
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
+        child: Container(
           decoration: BoxDecoration(
-            color: _isHovered && !widget.isDisabled
-                ? (widget.backgroundColor != null 
-                    ? Color.lerp(widget.backgroundColor, Colors.white, 0.2) // Lighter on hover
+            color: isActiveHover
+                ? (widget.backgroundColor != null
+                    ? Color.lerp(widget.backgroundColor, Colors.white, 0.2)
                     : activeColor.withValues(alpha: 0.12))
-                : (widget.isSelected 
-                    ? (widget.backgroundColor ?? Colors.transparent) 
-                    : (widget.backgroundColor ?? Colors.transparent)),
+                : (widget.backgroundColor ?? Colors.transparent),
             borderRadius: borderRadius,
             shape: BoxShape.rectangle,
-            border: widget.backgroundColor != null && _isHovered && !widget.isDisabled
-                ? Border.all(color: Colors.white.withValues(alpha: 0.3), width: 1) 
+            border: widget.backgroundColor != null && isActiveHover
+                ? Border.all(color: Colors.white.withValues(alpha: 0.3), width: 1)
                 : null,
           ),
           child: Material(
@@ -227,7 +162,7 @@ class _ReusableHoverIconButtonState extends State<ReusableHoverIconButton> with 
               borderRadius: borderRadius,
               hoverColor: Colors.transparent,
               highlightColor: Colors.transparent,
-              splashColor: (widget.backgroundColor ?? activeColor).withValues(alpha: 0.12),
+              splashFactory: NoSplash.splashFactory,
               child: Padding(
                 padding: EdgeInsets.all(widget.padding),
                 child: content,
@@ -238,34 +173,38 @@ class _ReusableHoverIconButtonState extends State<ReusableHoverIconButton> with 
       ),
     );
 
-    Widget result = Padding(
-      padding: widget.margin ?? EdgeInsets.zero,
-      child: MouseRegion(
-        cursor: widget.isDisabled ? SystemMouseCursors.basic : SystemMouseCursors.click,
-        onEnter: (event) {
-          if (event.kind == PointerDeviceKind.touch) return;
-          if (!widget.isDisabled) {
-            setState(() => _isHovered = true);
-          }
-        },
-        onExit: (_) {
-          if (_isHovered) {
-            setState(() => _isHovered = false);
-          }
-        },
-        child: _isHovered && !widget.isDisabled
-            ? Tooltip(
-                message: widget.tooltip,
-                preferBelow: false,
-                verticalOffset: 28, // Adjusted for clarity
-                triggerMode: TooltipTriggerMode.manual,
-                ignorePointer: true,
-                child: buttonContent,
-              )
-            : buttonContent,
-      ),
+    Widget interactiveChild = MouseRegion(
+      cursor: widget.isDisabled ? SystemMouseCursors.basic : SystemMouseCursors.click,
+      onEnter: (event) {
+        if (event.kind == PointerDeviceKind.touch) return;
+        if (!widget.isDisabled && !_isHovered) {
+          setState(() => _isHovered = true);
+        }
+      },
+      onExit: (_) {
+        if (_isHovered) {
+          setState(() => _isHovered = false);
+        }
+      },
+      child: buttonContent,
     );
 
-    return result;
+    if (widget.tooltip.isNotEmpty && !widget.isDisabled) {
+      interactiveChild = Tooltip(
+        message: widget.tooltip,
+        preferBelow: false,
+        verticalOffset: 28,
+        triggerMode: TooltipTriggerMode.manual,
+        ignorePointer: true,
+        child: interactiveChild,
+      );
+    }
+
+    return RepaintBoundary(
+      child: Padding(
+        padding: widget.margin ?? EdgeInsets.zero,
+        child: interactiveChild,
+      ),
+    );
   }
 }

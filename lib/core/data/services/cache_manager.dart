@@ -156,6 +156,11 @@ class CacheManager {
     return dir;
   }
 
+  Future<Directory> getSystemImagesCacheDir() async {
+    final path = await PathUtils.getSystemImagesCacheDefault();
+    return Directory(path);
+  }
+
   Future<void> updateLastAccessed(File file) async {
     if (await file.exists()) {
       try {
@@ -214,53 +219,66 @@ class CacheManager {
 
   // ---------------- Enforce Bounds (Limit/Cleanup) ---------------- 
 
-  /// Enforce MB limit strictly on stream/audio.
+  /// Enforce MB limit strictly on stream/audio and returns evicted track stem IDs
+  /// so their secondary assets (images, lyrics, metadata, translations) can be co-deleted.
   /// [pinnedIds] — safe filename stems (no extension) of tracks that are in a
   /// user playlist and must never be evicted by the dynamic eraser.
-  Future<void> enforceStreamAudioLimit(int limitMb, {Set<String> pinnedIds = const {}}) async {
+  Future<List<String>> enforceStreamAudioLimit(int limitMb, {Set<String> pinnedIds = const {}}) async {
     try {
       final dir = await getStreamAudioDir();
-      if (!dir.existsSync()) return;
+      if (!dir.existsSync()) return const [];
 
       final result = await Isolate.run(
         () => _scanAndSortFiles(dir.path, limitMb, pinnedIds),
       );
       final List<File> filesToDelete = result.pathsToDelete.map((p) => File(p)).toList();
-      if (filesToDelete.isEmpty) return;
+      if (filesToDelete.isEmpty) return const [];
 
       debugPrint(
         'Stream audio limit exceeded: ${result.currentSizeMb.toStringAsFixed(2)}MB > ${limitMb}MB. '
         'Cleaning up ${filesToDelete.length} file(s) (${pinnedIds.length} pinned, protected)...',
       );
+      final List<String> evictedIds = [];
       for (var file in filesToDelete) {
+        final stemId = p.basenameWithoutExtension(file.path);
+        evictedIds.add(stemId);
         try {
           await file.delete();
         } catch (e) {
           debugPrint('Failed to delete ${file.path}');
         }
       }
+      return evictedIds;
     } catch (e) {
       debugPrint('Enforce cache limit error: $e');
+      return const [];
     }
   }
 
-  /// Cleans up temporary stream images and lyrics to prevent piling up.
-  /// Only deletes orphaned files (where corresponding audio stream was already deleted/erased)
-  /// AND the secondary file age exceeds [maxAgeDays].
-  Future<void> cleanupTemporaryStreams({int maxAgeDays = 7}) async {
+  /// Cleans up temporary stream images and lyrics whose corresponding audio stream
+  /// does not exist (e.g. skipped before caching completed or audio was erased).
+  Future<void> cleanupTemporaryStreams({
+    int maxAgeDays = 30,
+    Set<String> pinnedIds = const {},
+    Set<String> activeIds = const {},
+  }) async {
     try {
       final audioDir = await getStreamAudioDir();
       final imgsDir = await getStreamImagesDir();
       final lrcDir = await getStreamLyricsDir();
       
-      final maxAge = Duration(days: maxAgeDays);
+      // Grace window of 15 minutes so active/just-browsed tracks aren't deleted mid-playback,
+      // bounded by maxAgeDays if set to 0 in tests.
+      final orphanGrace = maxAgeDays <= 0
+          ? Duration.zero
+          : const Duration(minutes: 15);
       final now = DateTime.now();
 
       // Collect existing audio song IDs (without extension)
       final Set<String> existingAudioIds = {};
       if (await audioDir.exists()) {
         await for (var entity in audioDir.list(recursive: false)) {
-          if (entity is File) {
+          if (entity is File && entity.path.endsWith('.m4a')) {
             existingAudioIds.add(p.basenameWithoutExtension(entity.path));
           }
         }
@@ -275,10 +293,14 @@ class CacheManager {
               // Art files are named 'art_{id}' — strip prefix if present
               final songId = basename.startsWith('art_') ? basename.substring(4) : basename;
 
-              // Orphan guard: Only delete if the audio file was already erased
+              if (pinnedIds.contains(songId) || activeIds.contains(songId)) {
+                continue;
+              }
+
+              // Co-delete secondary file if its parent audio stream is gone
               if (!existingAudioIds.contains(songId)) {
                 final stat = await entity.stat();
-                if (now.difference(stat.modified) > maxAge) {
+                if (now.difference(stat.modified) > orphanGrace) {
                   await entity.delete();
                   debugPrint('CacheManager: Cleaned up orphaned secondary stream file ${entity.path}');
                 }
@@ -292,50 +314,65 @@ class CacheManager {
     }
   }
 
-  static _CacheScanResult _scanAndSortFiles(
+  @visibleForTesting
+  static CacheScanResult scanAndSortFilesForTesting(
+    String dirPath,
+    int limitMb,
+    Set<String> pinnedIds,
+  ) => _scanAndSortFiles(dirPath, limitMb, pinnedIds);
+
+  static CacheScanResult _scanAndSortFiles(
     String dirPath,
     int limitMb,
     Set<String> pinnedIds,
   ) {
     final dir = Directory(dirPath);
     final allEntities = dir.listSync(recursive: false);
-    final List<File> allFiles = [];
+    final List<({File file, int length, DateTime modified})> validFiles = [];
     int currentTotal = 0;
 
     for (var entity in allEntities) {
-      if (entity is File) {
-        allFiles.add(entity);
-        currentTotal += entity.lengthSync();
+      // Exclude in-flight .tmp files to avoid I/O races with concurrent downloads
+      if (entity is File && !entity.path.endsWith('.tmp')) {
+        try {
+          final stat = entity.statSync();
+          if (stat.type == FileSystemEntityType.file) {
+            validFiles.add((file: entity, length: stat.size, modified: stat.modified));
+            currentTotal += stat.size;
+          }
+        } catch (_) {
+          // File vanished or renamed concurrently — ignore safely
+        }
       }
     }
 
     final int limitBytes = limitMb * 1024 * 1024;
     if (currentTotal <= limitBytes) {
-      return _CacheScanResult(currentSizeMb: currentTotal / 1024 / 1024, pathsToDelete: []);
+      return CacheScanResult(currentSizeMb: currentTotal / 1024 / 1024, pathsToDelete: []);
     }
 
-    // Sort oldest first (LRU eviction order)
-    allFiles.sort((a, b) => a.lastModifiedSync().compareTo(b.lastModifiedSync()));
+    // Sort oldest first using in-memory timestamp (zero disk I/O during sort)
+    validFiles.sort((a, b) => a.modified.compareTo(b.modified));
 
     final List<String> pathsToDelete = [];
     int bytesToRemove = currentTotal - limitBytes;
     int removedSoFar = 0;
 
-    for (var file in allFiles) {
+    for (var item in validFiles) {
       if (removedSoFar >= bytesToRemove) break;
       // Skip playlist-pinned files — they are protected from eviction
-      final stemId = p.basenameWithoutExtension(file.path);
+      final stemId = p.basenameWithoutExtension(item.file.path);
       if (pinnedIds.contains(stemId)) continue;
-      pathsToDelete.add(file.path);
-      removedSoFar += file.lengthSync();
+      pathsToDelete.add(item.file.path);
+      removedSoFar += item.length;
     }
 
-    return _CacheScanResult(currentSizeMb: currentTotal / 1024 / 1024, pathsToDelete: pathsToDelete);
+    return CacheScanResult(currentSizeMb: currentTotal / 1024 / 1024, pathsToDelete: pathsToDelete);
   }
 }
 
-class _CacheScanResult {
+class CacheScanResult {
   final double currentSizeMb;
   final List<String> pathsToDelete;
-  _CacheScanResult({required this.currentSizeMb, required this.pathsToDelete});
+  CacheScanResult({required this.currentSizeMb, required this.pathsToDelete});
 }

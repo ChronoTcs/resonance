@@ -85,6 +85,50 @@ class RecentlyPlayedNotifier extends AsyncNotifier<List<MediaItem>> {
     }
   }
 
+  Future<void> sanitizeAfterCacheClear({required bool removeDeletedLocalFiles}) async {
+    final currentList = List<MediaItem>.from(state.value ?? []);
+    if (currentList.isEmpty) return;
+
+    final List<MediaItem> sanitized = [];
+    bool changed = false;
+
+    for (final item in currentList) {
+      if (removeDeletedLocalFiles && !item.isStreaming && item.path.isNotEmpty) {
+        try {
+          if (!await File(item.path).exists()) {
+            changed = true;
+            continue;
+          }
+        } catch (_) {
+          changed = true;
+          continue;
+        }
+      }
+
+      MediaItem updatedItem = item;
+      final thumb = item.thumbnailUrl;
+      if (thumb != null && !thumb.startsWith('http')) {
+        bool thumbExists = false;
+        try {
+          thumbExists = await File(thumb).exists();
+        } catch (_) {
+          thumbExists = false;
+        }
+        if (!thumbExists) {
+          updatedItem = item.copyWith(clearThumbnailUrl: true);
+          changed = true;
+        }
+      }
+      sanitized.add(updatedItem);
+    }
+
+    if (changed) {
+      state = AsyncValue.data(sanitized);
+      final listForStorage = sanitized.map((i) => i.copyWith(clearAlbumArt: true)).toList();
+      await _saveState(listForStorage);
+    }
+  }
+
   Future<void> _saveState(List<MediaItem> listToSave) async {
     try {
       final file = await _getHistoryFile();

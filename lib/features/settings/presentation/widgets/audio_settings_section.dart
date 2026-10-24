@@ -11,7 +11,9 @@ class AudioSettingsSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final audioState = ref.watch(audioProvider);
+    final (volume, speed, pitch) = ref.watch(
+      audioProvider.select((s) => (s.volume, s.speed, s.pitch)),
+    );
     final audioNotifier = ref.read(audioProvider.notifier);
     final theme = Theme.of(context);
 
@@ -70,8 +72,8 @@ class AudioSettingsSection extends ConsumerWidget {
               children: [
                 // Volume
                 ResonanceSlider(
-                  title: 'Volume (${audioState.volume.toInt()}%)',
-                  value: audioState.volume,
+                  title: 'Volume (${volume.toInt()}%)',
+                  value: volume,
                   min: 0,
                   max: 100,
                   iconLeft: UIcons.regular.volume_mute,
@@ -83,8 +85,8 @@ class AudioSettingsSection extends ConsumerWidget {
                 
                 // Speed
                 ResonanceSlider(
-                  title: 'Playback Speed (${audioState.speed.toStringAsFixed(1)}x)',
-                  value: audioState.speed,
+                  title: 'Playback Speed (${speed.toStringAsFixed(1)}x)',
+                  value: speed,
                   min: 0.5,
                   max: 2.0,
                   divisions: 15,
@@ -98,8 +100,8 @@ class AudioSettingsSection extends ConsumerWidget {
                 
                 // Pitch
                 ResonanceSlider(
-                  title: 'Pitch (${audioState.pitch > 0 ? '+' : ''}${audioState.pitch.toStringAsFixed(1)})',
-                  value: audioState.pitch,
+                  title: 'Pitch (${pitch > 0 ? '+' : ''}${pitch.toStringAsFixed(1)})',
+                  value: pitch,
                   min: -12.0,
                   max: 12.0,
                   divisions: 24,

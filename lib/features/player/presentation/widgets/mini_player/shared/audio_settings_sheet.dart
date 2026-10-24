@@ -58,6 +58,13 @@ class _AudioSlidersBento extends StatelessWidget {
       ),
       child: Column(
         children: [
+          const _VolumeSlider(),
+          const SizedBox(height: 12),
+          Divider(
+            height: 1,
+            color: colorScheme.outline.withValues(alpha: isDark ? 0.1 : 0.06),
+          ),
+          const SizedBox(height: 12),
           const _PlaybackSpeedSlider(),
           const SizedBox(height: 12),
           Divider(
@@ -72,13 +79,147 @@ class _AudioSlidersBento extends StatelessWidget {
   }
 }
 
+class _VolumeSlider extends ConsumerStatefulWidget {
+  const _VolumeSlider();
+
+  @override
+  ConsumerState<_VolumeSlider> createState() => _VolumeSliderState();
+}
+
+class _VolumeSliderState extends ConsumerState<_VolumeSlider> {
+  double _prevVolume = 100.0;
+
+  void _toggleMute(double currentVolume) {
+    if (currentVolume > 0) {
+      _prevVolume = currentVolume;
+      ref.read(audioProvider.notifier).setVolume(0);
+    } else {
+      ref.read(audioProvider.notifier).setVolume(_prevVolume > 0 ? _prevVolume : 100);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final volume = ref.watch(audioProvider.select((s) => s.volume));
+
+    final IconData volumeIcon = volume == 0
+        ? UIcons.regular.volume_off
+        : volume < 50
+            ? UIcons.regular.volume_down
+            : UIcons.regular.volume;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            InkWell(
+              onTap: () => _toggleMute(volume),
+              borderRadius: BorderRadius.circular(6),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 2),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      volumeIcon,
+                      size: 15,
+                      color: volume == 0
+                          ? colorScheme.error.withValues(alpha: 0.8)
+                          : colorScheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Volume',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            InkWell(
+              onTap: () => _toggleMute(volume),
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: volume == 0
+                      ? colorScheme.error.withValues(alpha: 0.12)
+                      : colorScheme.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '${volume.round()}%',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: volume == 0 ? colorScheme.error : colorScheme.primary,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Row(
+          children: [
+            Text(
+              '0%',
+              style: TextStyle(
+                fontSize: 11,
+                color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+              ),
+            ),
+            Expanded(
+              child: SliderTheme(
+                data: SliderTheme.of(context).copyWith(
+                  trackHeight: 4,
+                  thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+                  overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+                  tickMarkShape: SliderTickMarkShape.noTickMark,
+                ),
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: Slider(
+                    value: volume.clamp(0.0, 100.0),
+                    min: 0.0,
+                    max: 100.0,
+                    activeColor: colorScheme.primary,
+                    onChanged: (val) {
+                      if (val > 0) _prevVolume = val;
+                      ref.read(audioProvider.notifier).setVolume(val);
+                    },
+                  ),
+                ),
+              ),
+            ),
+            Text(
+              '100%',
+              style: TextStyle(
+                fontSize: 11,
+                color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
 class _PlaybackSpeedSlider extends ConsumerWidget {
   const _PlaybackSpeedSlider();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colorScheme = Theme.of(context).colorScheme;
-    final state = ref.watch(audioProvider);
+    final speed = ref.watch(audioProvider.select((s) => s.speed));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -101,7 +242,7 @@ class _PlaybackSpeedSlider extends ConsumerWidget {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
-                '${state.speed.toStringAsFixed(1)}x',
+                '${speed.toStringAsFixed(1)}x',
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
@@ -131,7 +272,7 @@ class _PlaybackSpeedSlider extends ConsumerWidget {
                 child: MouseRegion(
                   cursor: SystemMouseCursors.click,
                   child: Slider(
-                    value: state.speed,
+                    value: speed,
                     min: 0.5,
                     max: 2.0,
                     divisions: 15,
@@ -163,7 +304,7 @@ class _PitchSlider extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colorScheme = Theme.of(context).colorScheme;
-    final state = ref.watch(audioProvider);
+    final pitch = ref.watch(audioProvider.select((s) => s.pitch));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -186,7 +327,7 @@ class _PitchSlider extends ConsumerWidget {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
-                '${state.pitch > 0 ? '+' : ''}${state.pitch.toStringAsFixed(1)}',
+                '${pitch > 0 ? '+' : ''}${pitch.toStringAsFixed(1)}',
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
@@ -216,7 +357,7 @@ class _PitchSlider extends ConsumerWidget {
                 child: MouseRegion(
                   cursor: SystemMouseCursors.click,
                   child: Slider(
-                    value: state.pitch,
+                    value: pitch,
                     min: -12.0,
                     max: 12.0,
                     divisions: 24,

@@ -756,3 +756,80 @@ class TrackTileSkeleton extends StatelessWidget {
     );
   }
 }
+
+/// Skeleton for Right Sidebar cards supporting both expanded (310px) and collapsed (70px rail) modes.
+class RightSidebarCardSkeleton extends StatelessWidget {
+  final bool isExpanded;
+
+  const RightSidebarCardSkeleton({
+    super.key,
+    this.isExpanded = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      child: Row(
+        children: [
+          ShimmerSkeleton(
+            width: 38,
+            height: 38,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          if (isExpanded) ...[
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  ShimmerSkeleton(
+                    width: 120,
+                    height: 12,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  const SizedBox(height: 6),
+                  ShimmerSkeleton(
+                    width: 75,
+                    height: 10,
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Skeleton for a full list of items in right sidebar sections.
+class RightSidebarListSkeleton extends StatelessWidget {
+  final bool isExpanded;
+  final int itemCount;
+
+  const RightSidebarListSkeleton({
+    super.key,
+    required this.isExpanded,
+    this.itemCount = 6,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 8,
+        vertical: 2,
+      ),
+      itemCount: itemCount,
+      itemExtent: 62.0,
+      physics: const NeverScrollableScrollPhysics(),
+      itemBuilder: (context, index) => RightSidebarCardSkeleton(
+        isExpanded: isExpanded,
+      ),
+    );
+  }
+}
+

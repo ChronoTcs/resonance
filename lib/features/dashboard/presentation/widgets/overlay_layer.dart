@@ -24,13 +24,15 @@ class OverlayLayer extends StatelessWidget {
           Consumer(
             builder: (context, ref, _) {
               final isPopped = ref.watch(miniPlayerPopProvider).isPopped;
+              final isMiniWindow = Platform.isWindows && MediaQuery.sizeOf(context).width < 500;
+              final shouldHideMain = isPopped || isMiniWindow;
               return Offstage(
-                offstage: isPopped,
+                offstage: shouldHideMain,
                 child: OverflowBox(
                   minWidth: 0,
-                  maxWidth: isPopped ? 4000 : null,
+                  maxWidth: shouldHideMain ? 4000 : null,
                   minHeight: 0,
-                  maxHeight: isPopped ? 4000 : null,
+                  maxHeight: shouldHideMain ? 4000 : null,
                   alignment: Alignment.topLeft,
                   child: child,
                 ),
@@ -46,11 +48,13 @@ class OverlayLayer extends StatelessWidget {
                   builder: (context) => Consumer(
                     builder: (context, ref, _) {
                       final isPopped = ref.watch(miniPlayerPopProvider).isPopped;
+                      final isMiniWindow = Platform.isWindows && MediaQuery.sizeOf(context).width < 500;
+                      final showFloating = (isPopped || isMiniWindow) && Platform.isWindows;
                       return Material(
                         type: MaterialType.transparency,
                         child: Stack(
                           children: [
-                            if (isPopped && Platform.isWindows)
+                            if (showFloating)
                               const FloatingWindow(),
                           ],
                         ),

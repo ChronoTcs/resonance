@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:resonance/core/application/providers/window_lifecycle_provider.dart';
 import '../data/models/lyric_line.dart';
 import '../../player/application/providers/audio_provider.dart';
 import '../../library/application/library_provider.dart';
@@ -114,17 +115,20 @@ final lyricsProvider = NotifierProvider<LyricsNotifier, LyricsState>(() {
 });
 
 final adjustedLyricsPositionProvider = Provider.autoDispose<Duration>((ref) {
-  final audioState = ref.watch(audioProvider);
-  final lyricsState = ref.watch(lyricsProvider);
-  final lyrics = lyricsState.lyrics;
+  final position = ref.watch(audioProvider.select((s) => s.position));
+  final offset = ref.watch(
+    audioProvider.select((s) => s.currentTrack?.lyricsOffset ?? Duration.zero),
+  );
+  final hasLyrics = ref.watch(lyricsProvider.select((s) => s.lyrics.isNotEmpty));
 
-  if (lyrics.isEmpty) return audioState.position;
-
-  final offset = audioState.currentTrack?.lyricsOffset ?? Duration.zero;
-  return audioState.position + offset;
+  if (!hasLyrics) return position;
+  return position + offset;
 });
 
 final activeLyricIndexProvider = Provider.autoDispose<int>((ref) {
+  final isRenderActive = ref.watch(isWindowRenderActiveProvider);
+  if (!isRenderActive) return -1;
+
   final lyricsState = ref.watch(lyricsProvider);
   final lyrics = lyricsState.lyrics;
 

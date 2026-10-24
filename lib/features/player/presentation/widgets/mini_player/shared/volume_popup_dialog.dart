@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance/core/utils/uicons.dart';
@@ -55,24 +54,21 @@ class VolumePopupDialog extends ConsumerWidget {
             color: Colors.transparent,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(12),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                child: Container(
-                  width: dialogWidth,
-                  height: dialogHeight,
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surface.withValues(alpha: 0.8),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.1),
-                    ),
+              child: Container(
+                width: dialogWidth,
+                height: dialogHeight,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surface.withValues(alpha: 0.95),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.1),
                   ),
-                  child: _VolumePopupSliderRow(
-                    currentVolume: currentVolume,
-                    onVolumeChanged: (val) {
-                      ref.read(audioProvider.notifier).setVolume(val);
-                    },
-                  ),
+                ),
+                child: _VolumePopupSliderRow(
+                  currentVolume: currentVolume,
+                  onVolumeChanged: (val) {
+                    ref.read(audioProvider.notifier).setVolume(val);
+                  },
                 ),
               ),
             ),

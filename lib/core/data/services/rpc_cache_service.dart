@@ -40,6 +40,15 @@ class RpcCacheService {
     }
   }
 
+  /// Synchronous cache lookup — SharedPreferences is already loaded in RAM at startup,
+  /// so this never blocks. Use this for immediate first-frame art key resolution.
+  String? getCachedAlbumArtUrlSync(String artist, String title) {
+    final prefs = _ref.read(sharedPreferencesProvider);
+    final key = '$_artCachePrefix${artist.toLowerCase()}_${title.toLowerCase()}';
+    final cached = prefs.getString(key);
+    return (cached != null && cached.isNotEmpty) ? cached : null;
+  }
+
   Future<void> clearRpcCache() async {
     final prefs = _ref.read(sharedPreferencesProvider);
     final keys = prefs.getKeys().where((k) => k.startsWith(_artCachePrefix));

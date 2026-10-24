@@ -40,4 +40,16 @@ abstract class AppBreakpoints {
 
   /// Returns `true` if raw width is >= [medium] (840dp).
   static bool isExpandedWidth(double width) => width >= medium;
+
+  /// Threshold below which expanding both left (180px) and right (310px) sidebars
+  /// starves the center canvas. When window width is below this, sidebars are mutually exclusive.
+  static const double dualSidebarThreshold = 1050.0;
+
+  /// Returns `true` if viewport width can comfortably fit both sidebars expanded simultaneously.
+  static bool canExpandDualSidebars(BuildContext context) =>
+      MediaQuery.sizeOf(context).width >= dualSidebarThreshold;
+
+  /// Returns `true` if raw width can comfortably fit both sidebars expanded simultaneously.
+  static bool canExpandDualSidebarsWidth(double width) =>
+      width >= dualSidebarThreshold;
 }

@@ -5,7 +5,6 @@ enum AppThemeMode {
   system,
   light, // Modern Glass
   dark,  // Deep Opulence
-  onyx,  // Onyx (Pure Dark)
 }
 
 class ThemeProvider extends Notifier<AppThemeMode> {
@@ -23,10 +22,12 @@ class ThemeProvider extends Notifier<AppThemeMode> {
 
     if (themeString == 'light') {
       state = AppThemeMode.light;
-    } else if (themeString == 'dark') {
+    } else if (themeString == 'dark' || themeString == 'onyx') {
+      // Migrate legacy 'onyx' preference to unified 'dark'
       state = AppThemeMode.dark;
-    } else if (themeString == 'onyx') {
-      state = AppThemeMode.onyx;
+      if (themeString == 'onyx') {
+        await prefs.setString(_themeKey, 'dark');
+      }
     } else {
       state = AppThemeMode.system;
     }
@@ -39,7 +40,6 @@ class ThemeProvider extends Notifier<AppThemeMode> {
     String themeString = 'system';
     if (mode == AppThemeMode.light) themeString = 'light';
     if (mode == AppThemeMode.dark) themeString = 'dark';
-    if (mode == AppThemeMode.onyx) themeString = 'onyx';
 
     await prefs.setString(_themeKey, themeString);
   }

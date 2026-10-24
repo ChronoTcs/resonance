@@ -183,19 +183,18 @@ class _EqualizerSheetState extends ConsumerState<EqualizerSheet> {
                   SizedBox(
                     width: 20,
                     height: 20,
-                    child: Checkbox(
-                      value: eqState.linkSliders,
-                      activeColor: colorScheme.primary,
-                      checkColor: colorScheme.onPrimary,
-                      side: BorderSide(color: onSurfaceVariant.withValues(alpha: 0.6)),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(4),
+                    child: IgnorePointer(
+                      ignoring: true,
+                      child: Checkbox(
+                        value: eqState.linkSliders,
+                        activeColor: colorScheme.primary,
+                        checkColor: colorScheme.onPrimary,
+                        side: BorderSide(color: onSurfaceVariant.withValues(alpha: 0.6)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        onChanged: null,
                       ),
-                      onChanged: (val) {
-                        if (val != null) {
-                          eqNotifier.toggleLinkSliders(val);
-                        }
-                      },
                     ),
                   ),
                   const SizedBox(width: 10),

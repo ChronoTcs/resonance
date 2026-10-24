@@ -8,6 +8,7 @@ import 'package:resonance/core/utils/thumbnail_utils.dart';
 import 'package:resonance/features/library/data/models/media_item.dart';
 import 'package:resonance/features/player/application/providers/audio_provider.dart';
 import 'package:resonance/features/player/utils/media_action_utils.dart';
+import 'package:resonance/core/widgets/buttons/card_hover_play_button.dart';
 
 /// Standalone full-bleed Speed Dial card matching YouTube Music design with responsive hover.
 ///
@@ -59,6 +60,7 @@ class _SpeedDialCardState extends ConsumerState<SpeedDialCard> {
         File(localArtPath),
         width: widget.size,
         height: widget.size,
+        cacheWidth: 200,
         fit: BoxFit.cover,
         errorBuilder: (_, _, _) => _buildPlaceholder(theme),
       );
@@ -70,7 +72,6 @@ class _SpeedDialCardState extends ConsumerState<SpeedDialCard> {
         width: widget.size,
         height: widget.size,
         memCacheWidth: 400,
-        memCacheHeight: 400,
         fit: BoxFit.cover,
         placeholder: (_, _) => _buildPlaceholder(theme),
         errorWidget: (_, _, _) => _buildPlaceholder(theme),
@@ -94,69 +95,48 @@ class _SpeedDialCardState extends ConsumerState<SpeedDialCard> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final currentTrack = ref.watch(audioProvider.select((s) => s.currentTrack));
+    final isCurrent = ref.watch(audioProvider.select((s) {
+      final currentTrack = s.currentTrack;
+      if (currentTrack == null) return false;
+      return (widget.item.id != null && widget.item.id!.isNotEmpty && widget.item.id == currentTrack.id) ||
+          (widget.item.path.isNotEmpty && widget.item.path == currentTrack.path);
+    }));
+    final isPlaying = isCurrent && ref.watch(audioProvider.select((s) => s.isPlaying));
+    final isLoading = isCurrent && ref.watch(audioProvider.select((s) => s.isLoading));
 
-    final isCurrent = currentTrack != null &&
-        ((widget.item.id != null && widget.item.id!.isNotEmpty && widget.item.id == currentTrack.id) ||
-            (widget.item.path.isNotEmpty && widget.item.path == currentTrack.path));
-
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (event) {
-        if (event.kind == PointerDeviceKind.touch) return;
-        setState(() => _isHovered = true);
-      },
-      onExit: (_) {
-        if (_isHovered) {
-          setState(() => _isHovered = false);
-        }
-      },
-      child: InkWell(
-        mouseCursor: SystemMouseCursors.click,
-        onTap: _handleTap,
-        onSecondaryTapDown: (details) => MediaActionUtils.showTrackContextMenu(
-          context: context,
-          ref: ref,
-          item: widget.item,
-          position: details.globalPosition,
-        ),
-        onLongPress: () => MediaActionUtils.showMediaActions(context: context, ref: ref, item: widget.item),
-        borderRadius: BorderRadius.circular(12),
-        child: AnimatedScale(
-          scale: _isHovered ? 1.04 : 1.0,
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOutCubic,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
+    return RepaintBoundary(
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (event) {
+          if (event.kind == PointerDeviceKind.touch) return;
+          if (!_isHovered) {
+            setState(() => _isHovered = true);
+          }
+        },
+        onExit: (_) {
+          if (_isHovered) {
+            setState(() => _isHovered = false);
+          }
+        },
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: _handleTap,
+          onSecondaryTapDown: (details) => MediaActionUtils.showTrackContextMenu(
+            context: context,
+            ref: ref,
+            item: widget.item,
+            position: details.globalPosition,
+          ),
+          onLongPress: () => MediaActionUtils.showMediaActions(context: context, ref: ref, item: widget.item),
+          child: Container(
             width: widget.size,
             height: widget.size,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: isCurrent
-                  ? [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.4),
-                        blurRadius: 8,
-                        spreadRadius: 1,
-                      )
-                    ]
-                  : (_isHovered
-                      ? [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.5),
-                            blurRadius: 10,
-                            spreadRadius: 1,
-                            offset: const Offset(0, 4),
-                          )
-                        ]
-                      : null),
-            ),
             foregroundDecoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
               border: isCurrent
                   ? Border.all(color: theme.colorScheme.primary, width: 2.5)
                   : (_isHovered
-                      ? Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.6), width: 1.5)
+                      ? Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.65), width: 1.5)
                       : Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.15), width: 1)),
             ),
             child: ClipRRect(
@@ -170,8 +150,28 @@ class _SpeedDialCardState extends ConsumerState<SpeedDialCard> {
                   // 2. Bottom Dark Gradient Overlay
                   const _SpeedDialGradientOverlay(),
 
-                  // 3. Center Hover Play Action Button
-                  if (_isHovered) const _SpeedDialHoverPlayOverlay(),
+                  // 3. Center Hover Play Action Button with subtle artwork scrim
+                  if (_isHovered) ...[
+                    Positioned.fill(
+                      child: Container(
+                        color: Colors.black.withValues(alpha: 0.25),
+                      ),
+                    ),
+                    Center(
+                      child: CardHoverPlayButton(
+                        isPlaying: isPlaying,
+                        isLoading: isLoading,
+                        iconSize: 32.0,
+                        onTap: () {
+                          if (isCurrent) {
+                            ref.read(audioProvider.notifier).togglePlayPause();
+                          } else {
+                            _handleTap();
+                          }
+                        },
+                      ),
+                    ),
+                  ],
 
                   // 4. Bottom Text & Chevron Arrow
                   _SpeedDialBottomTitleRow(title: widget.item.title),
@@ -210,39 +210,6 @@ class _SpeedDialGradientOverlay extends StatelessWidget {
   }
 }
 
-class _SpeedDialHoverPlayOverlay extends StatelessWidget {
-  const _SpeedDialHoverPlayOverlay();
-
-  @override
-  Widget build(BuildContext context) {
-    return Positioned.fill(
-      child: Container(
-        color: Colors.black.withValues(alpha: 0.25),
-        child: Center(
-          child: Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.black.withValues(alpha: 0.75),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.4),
-                  blurRadius: 6,
-                ),
-              ],
-            ),
-            child: const Icon(
-              Icons.play_arrow_rounded,
-              color: Colors.white,
-              size: 22,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 class _SpeedDialBottomTitleRow extends StatelessWidget {
   final String title;

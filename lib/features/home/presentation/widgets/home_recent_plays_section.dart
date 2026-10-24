@@ -106,18 +106,11 @@ class _RecentPlaysHeader extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(UIcons.regular.clock, size: 18, color: theme.primaryColor),
-              const SizedBox(width: 8),
-              Text(
-                'Recently Played',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
+          Text(
+            'Recently Played',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
           ),
           ReusableHoverIconButton(
             icon: UIcons.regular.trash,
@@ -153,6 +146,7 @@ class _RecentPlayCard extends ConsumerWidget {
         File(localArtPath),
         width: size,
         height: size,
+        cacheWidth: 200,
         fit: BoxFit.cover,
         errorBuilder: (context, error, stackTrace) => Container(
           width: size,
@@ -167,7 +161,6 @@ class _RecentPlayCard extends ConsumerWidget {
         width: size,
         height: size,
         memCacheWidth: 400,
-        memCacheHeight: 400,
         fit: BoxFit.cover,
         placeholder: (context, url) => Container(
           width: size,
@@ -200,45 +193,51 @@ class _RecentPlayCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    return Container(
-      width: 140,
-      margin: const EdgeInsets.symmetric(horizontal: 4),
-      child: InkWell(
-        mouseCursor: SystemMouseCursors.click,
-        onTap: onTap,
-        onSecondaryTapDown: (details) => MediaActionUtils.showTrackContextMenu(
-          context: context,
-          ref: ref,
-          item: item,
-          position: details.globalPosition,
-        ),
-        onLongPress: () => MediaActionUtils.showMediaActions(context: context, ref: ref, item: item),
-        borderRadius: BorderRadius.circular(8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildArtwork(item, 140, theme),
-            const SizedBox(height: 6),
-            Text(
-              item.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-                fontSize: 12.5,
-              ),
+    return RepaintBoundary(
+      child: Container(
+        width: 140,
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            mouseCursor: SystemMouseCursors.click,
+            splashFactory: NoSplash.splashFactory,
+            onTap: onTap,
+            onSecondaryTapDown: (details) => MediaActionUtils.showTrackContextMenu(
+              context: context,
+              ref: ref,
+              item: item,
+              position: details.globalPosition,
             ),
-            const SizedBox(height: 2),
-            Text(
-              item.artist ?? '',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-                fontSize: 11,
-              ),
+            onLongPress: () => MediaActionUtils.showMediaActions(context: context, ref: ref, item: item),
+            borderRadius: BorderRadius.circular(8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildArtwork(item, 140, theme),
+                const SizedBox(height: 6),
+                Text(
+                  item.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12.5,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  item.artist ?? '',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

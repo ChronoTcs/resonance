@@ -1,5 +1,3 @@
-import 'package:resonance/core/widgets/widgets.dart';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance/core/configs/app_breakpoints.dart';
@@ -8,57 +6,63 @@ import 'package:resonance/features/player/application/providers/audio_provider.d
 import 'package:resonance/features/player/presentation/widgets/mini_player/docked/components/audio_track_info.dart';
 import 'package:resonance/features/player/presentation/widgets/mini_player/docked/components/audio_core_controls.dart';
 import 'package:resonance/features/player/presentation/widgets/mini_player/docked/components/audio_extra_actions.dart';
+import 'package:resonance/features/player/presentation/widgets/mini_player/docked/components/audio_progress_bar.dart';
 
 // Import NowPlayingScreen notifier (this is typically in the same or separate provider file depending on architecture)
 // Since we isolated things, I'll rely on the global navigation or a similar provider.
 import 'package:resonance/core/domain/models/media_item.dart';
 import 'package:resonance/core/providers/overlay_provider.dart';
 
-class AudioDockedPlayer extends ConsumerStatefulWidget {
+class AudioDockedPlayer extends ConsumerWidget {
   const AudioDockedPlayer({super.key});
 
   @override
-  ConsumerState<AudioDockedPlayer> createState() => _AudioDockedPlayerState();
-}
-
-class _AudioDockedPlayerState extends ConsumerState<AudioDockedPlayer> {
-  bool _isHovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final audioState = ref.watch(audioProvider);
-    final displayTrack = audioState.currentTrack;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final displayTrack = ref.watch(audioProvider.select((s) => s.currentTrack));
 
     if (displayTrack == null) return const SizedBox.shrink();
 
     final theme = Theme.of(context);
-    final accent = theme.colorScheme.primary;
+    final isWide = AppBreakpoints.isWide(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final accent = theme.primaryColor;
 
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      child: GestureDetector(
-        onTap: () {
-          ref.read(nowPlayingOverlayProvider.notifier).toggle();
-        },
-        child: SizedBox(
-          height: 72,
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              _DockedControlsBar(
-                track: displayTrack,
-                isHovered: _isHovered,
-                accent: accent,
-                surfaceColor: theme.colorScheme.surface,
-              ),
-              _DockedAmbientGlow(
-                isHovered: _isHovered,
-                accent: accent,
-              ),
-              const _DockedProgressSlider(),
-            ],
+    return Padding(
+      padding: isWide
+          ? const EdgeInsets.fromLTRB(16, 0, 16, 16)
+          : EdgeInsets.zero,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          onTap: () {
+            ref.read(nowPlayingOverlayProvider.notifier).toggle();
+          },
+          child: Container(
+            height: 72,
+            decoration: BoxDecoration(
+              borderRadius: isWide ? BorderRadius.circular(22) : BorderRadius.zero,
+              boxShadow: isWide
+                  ? [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.12),
+                        blurRadius: 16,
+                        offset: const Offset(0, 6),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                _DockedControlsBar(
+                  track: displayTrack,
+                  accent: accent,
+                  surfaceColor: theme.colorScheme.surface,
+                  isFloating: isWide,
+                ),
+                const AudioProgressBar(),
+              ],
+            ),
           ),
         ),
       ),
@@ -68,135 +72,97 @@ class _AudioDockedPlayerState extends ConsumerState<AudioDockedPlayer> {
 
 class _DockedControlsBar extends StatelessWidget {
   final MediaItem track;
-  final bool isHovered;
   final Color accent;
   final Color surfaceColor;
+  final bool isFloating;
 
   const _DockedControlsBar({
     required this.track,
-    required this.isHovered,
     required this.accent,
     required this.surfaceColor,
+    this.isFloating = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    final radius = isFloating ? BorderRadius.circular(22) : BorderRadius.zero;
+
     return Positioned.fill(
       child: ClipRRect(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 240),
-            curve: Curves.easeOutCubic,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: surfaceColor.withValues(alpha: 0.82),
-              border: Border(
-                top: BorderSide(
-                  color: isHovered
-                      ? accent.withValues(alpha: 0.55)
-                      : Colors.white.withValues(alpha: 0.05),
-                  width: 1.0,
-                ),
-              ),
-              gradient: isHovered
-                  ? LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        accent.withValues(alpha: 0.14),
-                        accent.withValues(alpha: 0.02),
-                        Colors.transparent,
-                      ],
-                      stops: const [0.0, 0.45, 1.0],
-                    )
-                  : null,
-            ),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final bool isDesktop = AppBreakpoints.isWideWidth(constraints.maxWidth);
+        borderRadius: radius,
+        child: Container(
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: surfaceColor.withValues(alpha: isFloating ? 0.94 : 0.98),
+            borderRadius: radius,
+            border: isFloating
+                ? Border.all(
+                    color: Colors.white.withValues(alpha: 0.08),
+                    width: 1.0,
+                  )
+                : Border(
+                    top: BorderSide(
+                      color: Colors.white.withValues(alpha: 0.05),
+                      width: 1.0,
+                    ),
+                  ),
+          ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final bool isDesktop = AppBreakpoints.isWideWidth(constraints.maxWidth);
 
-                return Row(
-                  children: [
-                    // 1. Track Info (Album Art, Artist, Title, Hero Tag)
-                    Expanded(
-                      flex: 1,
+              return Row(
+                children: [
+                  // 1. Track Info (Album Art, Artist, Title, Hero Tag)
+                  Expanded(
+                    flex: 1,
+                    child: RepaintBoundary(
                       child: AudioTrackInfo(
                         track: track,
                         isDesktop: isDesktop,
                       ),
                     ),
+                  ),
 
-                    // 2. Core Controls & Actions
-                    if (isDesktop) ...[
-                      Expanded(
-                        flex: 1,
+                  // 2. Core Controls & Actions
+                  if (isDesktop) ...[
+                    Expanded(
+                      flex: 1,
+                      child: RepaintBoundary(
                         child: AudioCoreControls(isDesktop: isDesktop),
                       ),
-                      Expanded(
-                        flex: 1,
+                    ),
+                    Expanded(
+                      flex: 1,
+                      child: RepaintBoundary(
                         child: AudioExtraActions(
                           track: track,
                           isDesktop: isDesktop,
                         ),
                       ),
-                    ] else
-                      Padding(
-                        padding: const EdgeInsets.only(left: 8.0, right: 12.0),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            AudioCoreControls(isDesktop: false),
-                            const SizedBox(width: 4),
-                            AudioExtraActions(
+                    ),
+                  ] else
+                    Padding(
+                      padding: const EdgeInsets.only(left: 8.0, right: 12.0),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          RepaintBoundary(
+                            child: AudioCoreControls(isDesktop: false),
+                          ),
+                          const SizedBox(width: 4),
+                          RepaintBoundary(
+                            child: AudioExtraActions(
                               track: track,
                               isDesktop: false,
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                  ],
-                );
-              },
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _DockedAmbientGlow extends StatelessWidget {
-  final bool isHovered;
-  final Color accent;
-
-  const _DockedAmbientGlow({
-    required this.isHovered,
-    required this.accent,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Positioned(
-      top: 0,
-      left: 0,
-      right: 0,
-      height: 6,
-      child: IgnorePointer(
-        child: AnimatedOpacity(
-          opacity: isHovered ? 1.0 : 0.0,
-          duration: const Duration(milliseconds: 220),
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  accent.withValues(alpha: 0.45),
-                  accent.withValues(alpha: 0.0),
+                    ),
                 ],
-              ),
-            ),
+              );
+            },
           ),
         ),
       ),
@@ -204,27 +170,6 @@ class _DockedAmbientGlow extends StatelessWidget {
   }
 }
 
-class _DockedProgressSlider extends ConsumerWidget {
-  const _DockedProgressSlider();
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final pos = ref.watch(audioProvider.select((s) => s.position));
-    final dur = ref.watch(audioProvider.select((s) => s.duration));
 
-    return Positioned(
-      top: -14, // Sets exactly 16px below and 16px above for maximum hit-area comfort
-      left: 0,
-      right: 0,
-      height: 32,
-      child: ReusableSeekSlider(
-        value: pos.inMilliseconds.toDouble(),
-        max: dur.inMilliseconds.toDouble() > 0 ? dur.inMilliseconds.toDouble() : 1.0,
-        onChanged: (val) {
-          ref.read(audioProvider.notifier).seek(Duration(milliseconds: val.toInt()));
-        },
-      ),
-    );
-  }
-}
 

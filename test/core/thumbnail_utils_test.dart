@@ -28,7 +28,7 @@ void main() {
 
       const maxResYtUrl = 'https://i.ytimg.com/vi/12345/maxresdefault.jpg';
       expect(ThumbnailUtils.getFallbackResolution(maxResYtUrl),
-          equals('https://i.ytimg.com/vi/12345/hqdefault.jpg'));
+          equals('https://i.ytimg.com/vi/12345/mqdefault.jpg'));
     });
 
     test('getFallbackResolution returns null for URLs not using 1080p upgrade parameters', () {

@@ -11,15 +11,19 @@
 #include <flutter/standard_method_codec.h>
 
 #include "jump_list.h"
+#include "discord_rpc_manager.h"
+#include "system_tray_manager.h"
 
 static bool g_subclassed = false;
 static bool g_child_subclassed = false;
 static bool g_is_hovered_state = false;
 // Unique ID avoids collision with window_manager's internal subclass (ID=1).
 static constexpr UINT_PTR kSubclassId = 100;
+static constexpr UINT_PTR kDiscordTimerId = 1001;
 
 std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> g_hover_channel = nullptr;
 std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> g_jump_list_channel = nullptr;
+std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> g_discord_rpc_channel = nullptr;
 
 static std::wstring Utf8ToWide(const std::string& str) {
   if (str.empty()) return std::wstring();
@@ -332,6 +336,50 @@ bool FlutterWindow::OnCreate() {
         }
       });
 
+  // Initialize MethodChannel for Discord Rich Presence
+  g_discord_rpc_channel = std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+      flutter_controller_->engine()->messenger(),
+      "com.chronostudio.resonance/discord_rpc",
+      &flutter::StandardMethodCodec::GetInstance());
+
+  g_discord_rpc_channel->SetMethodCallHandler(
+      [](const flutter::MethodCall<flutter::EncodableValue>& call,
+         std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
+        if (call.method_name() == "initialize") {
+          std::string app_id = "1481352932568862823";
+          if (const auto* args = std::get_if<flutter::EncodableMap>(call.arguments())) {
+            auto it = args->find(flutter::EncodableValue("applicationId"));
+            if (it != args->end() && std::holds_alternative<std::string>(it->second)) {
+              app_id = std::get<std::string>(it->second);
+            }
+          }
+          bool ok = DiscordRpcManager::GetInstance().Initialize(app_id);
+          result->Success(flutter::EncodableValue(ok));
+        } else if (call.method_name() == "updatePresence") {
+          if (const auto* args = std::get_if<flutter::EncodableMap>(call.arguments())) {
+            bool ok = DiscordRpcManager::GetInstance().UpdatePresence(*args);
+            result->Success(flutter::EncodableValue(ok));
+          } else {
+            result->Error("INVALID_ARGUMENTS", "Expected map arguments");
+          }
+        } else if (call.method_name() == "clearPresence") {
+          bool ok = DiscordRpcManager::GetInstance().ClearPresence();
+          result->Success(flutter::EncodableValue(ok));
+        } else if (call.method_name() == "dispose") {
+          DiscordRpcManager::GetInstance().Dispose();
+          result->Success(flutter::EncodableValue(true));
+        } else {
+          result->NotImplemented();
+        }
+      });
+
+  // Initialize Native System Tray Manager
+  system_tray_manager_ = std::make_unique<SystemTrayManager>();
+  system_tray_manager_->Initialize(GetHandle(), flutter_controller_->engine()->messenger());
+
+  // Tick Discord RPC message loop every 1 second
+  ::SetTimer(GetHandle(), kDiscordTimerId, 1000, nullptr);
+
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
     // Keep window hidden initially; Dart window_manager will show it after configuring hidden titlebar style.
   });
@@ -354,8 +402,15 @@ void FlutterWindow::OnDestroy() {
     g_child_subclassed = false;
   }
 
+  ::KillTimer(GetHandle(), kDiscordTimerId);
+  if (system_tray_manager_) {
+    system_tray_manager_->Destroy();
+    system_tray_manager_ = nullptr;
+  }
   g_hover_channel = nullptr;
   g_jump_list_channel = nullptr;
+  g_discord_rpc_channel = nullptr;
+  DiscordRpcManager::GetInstance().Dispose();
 
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
@@ -396,6 +451,13 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
     return TRUE;
   }
 
+  if (system_tray_manager_) {
+    LRESULT tray_result = 0;
+    if (system_tray_manager_->HandleMessage(hwnd, message, wparam, lparam, &tray_result)) {
+      return tray_result;
+    }
+  }
+
   // 1. Let window_manager process messages first (it may install its own subclass on WM_SHOWWINDOW).
   std::optional<LRESULT> flutter_result;
   if (flutter_controller_) {
@@ -418,6 +480,12 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
   }
 
   switch (message) {
+    case WM_TIMER:
+      if (wparam == kDiscordTimerId) {
+        DiscordRpcManager::GetInstance().Tick();
+        return 0;
+      }
+      break;
     case WM_FONTCHANGE:
       flutter_controller_->engine()->ReloadSystemFonts();
       break;

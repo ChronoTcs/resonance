@@ -41,6 +41,14 @@ class PlaylistState {
   Playlist? get likedSongs =>
       playlists.where((p) => p.name == 'Liked Songs').firstOrNull;
 
+  /// Check if a track is in the "Liked Songs" playlist.
+  bool isLiked(MediaItem track) {
+    final liked = likedSongs;
+    if (liked == null) return false;
+    final trackId = track.id ?? track.path;
+    return liked.tracks.any((t) => (t.id ?? t.path) == trackId);
+  }
+
   // ── Backward-compat getters (avoids mass call-site updates in one pass) ──
   List<Playlist> get local =>
       playlists.where((p) => p.id.startsWith('loc_')).toList();
@@ -194,10 +202,7 @@ class PlaylistNotifier extends AsyncNotifier<PlaylistState> {
   }
 
   bool isLiked(MediaItem track) {
-    final liked = state.value?.likedSongs;
-    if (liked == null) return false;
-    final trackId = track.id ?? track.path;
-    return liked.tracks.any((t) => (t.id ?? t.path) == trackId);
+    return state.value?.isLiked(track) ?? false;
   }
 
   Future<void> removeTrackFromPlaylist(String playlistId, String trackPathOrId) async {

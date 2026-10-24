@@ -39,23 +39,19 @@ class PlaybackArchitectureService {
   // Ensures only 1 network request is ever active for a specific ID.
   final Map<String, Future<String?>> _activeRequests = {};
 
-  // Prefetch Debouncer (15s to prevent Bot Detection)
-  Timer? _prefetchTimer;
-
-  // Track the current prefetch session ID to cancel older ones
-  int _prefetchSessionId = 0;
-
   /// Gets the stream URL for a video ID.
   /// Uses cache first, then calls the repository with atomic synchronization.
   Future<String?> getStreamUrl(
     String videoId, {
     bool forceRefresh = false,
   }) async {
-    // 0. MANDATORY CACHE-FIRST: Cek file lokal sebelum internet
-    final localPath = await _checkLocalFile(videoId);
-    if (localPath != null) {
-      debugPrint('[RateLimitDefender] Local Cache Hit for $videoId');
-      return localPath;
+    // 0. MANDATORY CACHE-FIRST: Cek file lokal sebelum internet (bypassed on forceRefresh)
+    if (!forceRefresh) {
+      final localPath = await _checkLocalFile(videoId);
+      if (localPath != null) {
+        debugPrint('[RateLimitDefender] Local Cache Hit for $videoId');
+        return localPath;
+      }
     }
 
     // 0.5 Safety Guard: If it looks like a local path, don't even try
@@ -74,17 +70,19 @@ class PlaybackArchitectureService {
       _urlCache.remove(videoId);
     }
 
-    // If there is an active request (prefetch or user action), join it.
-    final existingRequest = _activeRequests[videoId];
-    if (existingRequest != null) {
-      debugPrint(
-        '[RateLimitDefender] Joining existing active request for $videoId',
-      );
-      return existingRequest;
+    // If there is an active request (prefetch or user action), join it unless forceRefresh is requested.
+    if (!forceRefresh) {
+      final existingRequest = _activeRequests[videoId];
+      if (existingRequest != null) {
+        debugPrint(
+          '[RateLimitDefender] Joining existing active request for $videoId',
+        );
+        return existingRequest;
+      }
     }
 
     // 3. Initiate New Atomic Request
-    final requestFuture = _performFetch(videoId);
+    final requestFuture = _performFetch(videoId, forceRefresh: forceRefresh);
     _activeRequests[videoId] = requestFuture;
 
     try {
@@ -94,9 +92,12 @@ class PlaybackArchitectureService {
     }
   }
 
-  Future<String?> _performFetch(String videoId) async {
+  Future<String?> _performFetch(String videoId, {bool forceRefresh = false}) async {
     try {
-      final String? url = await _repository.getStreamUrl(videoId);
+      final String? url = await _repository.getStreamUrl(
+        videoId,
+        forceRefresh: forceRefresh,
+      );
 
       if (url != null) {
         // Parse exact expiry from YouTube URL &expire= param
@@ -114,6 +115,16 @@ class PlaybackArchitectureService {
       debugPrint('[RateLimitDefender] Fetch ERROR for $videoId: $e');
       return null;
     }
+  }
+
+  /// Manually stores a resolved stream URL into memory cache (e.g. salvaged from late daemon arrival).
+  void cacheStreamUrl(String videoId, String url) {
+    final expireParam = Uri.tryParse(url)?.queryParameters['expire'];
+    final expiresAt = expireParam != null
+        ? DateTime.fromMillisecondsSinceEpoch(int.parse(expireParam) * 1000)
+        : null;
+    _urlCache[videoId] = CachedStreamInfo(url, DateTime.now(), expiresAt: expiresAt);
+    debugPrint('[RateLimitDefender] Stream URL manually cached for $videoId (expires: $expiresAt)');
   }
 
   Future<String?> _checkLocalFile(String videoId) async {
@@ -145,58 +156,10 @@ class PlaybackArchitectureService {
     return null;
   }
 
-  /// Proactively fetches URLs for a list of video IDs (e.g. next 3 tracks).
-  /// Only performs URL pre-warm (does not download full byte) to save bandwidth.
+  /// Deprecated: Speculative prefetch disabled to prevent premature rate limits and CPU burn.
+  /// Track caching is strictly managed on-demand and by GaplessPrefetchService during active playback.
   void predictiveFetch(List<String> videoIds) {
-    // 1. Cancel previous scheduling immediately
-    _prefetchTimer?.cancel();
-
-    if (videoIds.isEmpty) return;
-
-    // 2. Increment Session ID to ignore outstanding fetches
-    _prefetchSessionId++;
-    final currentSession = _prefetchSessionId;
-
-    // 3. Only fetch the next track
-    final nextId = videoIds.first;
-
-    // 4. MANDATORY 15-SECOND DEBOUNCE:
-    // If user moves before 15s, timer is canceled and
-    // network request getStreamUrl is NEVER sent.
-    debugPrint(
-      '[RateLimitDefender] Scheduling prefetch for $nextId in 15 seconds...',
-    );
-    _prefetchTimer = Timer(const Duration(seconds: 15), () async {
-      // Check if session is still valid after 15s (user did not skip track)
-      if (_prefetchSessionId != currentSession) {
-        debugPrint(
-          '[RateLimitDefender] Aborted ghost prefetch for SESSION $currentSession',
-        );
-        return;
-      }
-
-      if (!_urlCache.containsKey(nextId) &&
-          !_activeRequests.containsKey(nextId)) {
-        // Check local files first (no internet)
-        final localPath = await _checkLocalFile(nextId);
-        if (localPath != null) {
-          _urlCache[nextId] = CachedStreamInfo(localPath, DateTime.now());
-          debugPrint(
-            '[RateLimitDefender] Next track found in local. No internet request needed.',
-          );
-          return;
-        }
-
-        // If not found locally, fetch the URL via network
-        debugPrint(
-          '[RateLimitDefender] [NETWORK] Prefetching next track URL from YouTube for SESSION $currentSession...',
-        );
-        final url = await getStreamUrl(nextId);
-        if (url != null) {
-          debugPrint('[RateLimitDefender] URL Pre-warmed for ID: $nextId');
-        }
-      }
-    });
+    // No-op: speculative timer removed.
   }
 
   /// Invalidate stream URL cache for a specific track (e.g. on playback error)
@@ -206,8 +169,14 @@ class PlaybackArchitectureService {
     debugPrint('[RateLimitDefender] Invalidated stream cache for $videoId');
   }
 
+  /// Invalidates memory cache AND deletes any truncated/corrupted .m4a file on disk.
+  /// Used by Premature EOF Guard and mid-stream error self-healing.
+  Future<void> invalidateAndPurgeDisk(String videoId) async {
+    invalidate(videoId);
+    await _ref.read(mediaCacheServiceProvider).deleteCachedAudio(videoId);
+  }
+
   void clearCache() {
-    _prefetchTimer?.cancel();
     _urlCache.clear();
     _activeRequests.clear();
   }

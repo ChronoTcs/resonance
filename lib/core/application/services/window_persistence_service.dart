@@ -2,7 +2,10 @@ import 'dart:io';
 import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
+import 'package:resonance/core/application/providers/window_lifecycle_provider.dart';
 import 'package:resonance/features/player/presentation/notifiers/mini_player_view_notifier.dart';
+import 'package:resonance/features/settings/application/app_behavior_provider.dart';
+import 'package:resonance/features/tray/application/tray_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Persists window size and position to SharedPreferences on resize/move.
@@ -13,6 +16,11 @@ class WindowPersistenceService extends WindowListener {
   WindowPersistenceService(this._ref);
 
   @override
+  void onWindowMinimize() {
+    _ref.read(isWindowRenderActiveProvider.notifier).state = false;
+  }
+
+  @override
   void onWindowFocus() {
     // Re-present Direct3D 11 swapchain immediately when the user clicks/focuses the window
     WidgetsBinding.instance.scheduleWarmUpFrame();
@@ -20,6 +28,7 @@ class WindowPersistenceService extends WindowListener {
 
   @override
   void onWindowRestore() {
+    _ref.read(isWindowRenderActiveProvider.notifier).state = true;
     WidgetsBinding.instance.scheduleWarmUpFrame();
   }
 
@@ -50,7 +59,13 @@ class WindowPersistenceService extends WindowListener {
   @override
   void onWindowClose() async {
     if (Platform.isWindows) {
-      await windowManager.hide();
+      final closeToTray = _ref.read(appBehaviorProvider).closeToTray;
+      if (closeToTray) {
+        _ref.read(isWindowRenderActiveProvider.notifier).state = false;
+        await windowManager.hide();
+      } else {
+        await _ref.read(trayServiceProvider).handleExit();
+      }
     } else {
       await windowManager.destroy();
     }

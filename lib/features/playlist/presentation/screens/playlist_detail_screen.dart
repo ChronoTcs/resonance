@@ -1,4 +1,3 @@
-import 'dart:ui' show ImageFilter;
 import 'package:resonance/core/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -32,11 +31,13 @@ class PlaylistDetailScreen extends ConsumerWidget {
     final playlistsAsync = ref.watch(playlistProvider);
 
     return Scaffold(
+      backgroundColor: Colors.transparent,
       body: playlistsAsync.when(
         data: (state) {
           final playlist = state.getById(playlistId);
           if (playlist == null) {
             return Scaffold(
+              backgroundColor: Colors.transparent,
               appBar: AppBar(),
               body: const Center(child: Text('Playlist not found')),
             );
@@ -83,10 +84,41 @@ class PlaylistDetailScreen extends ConsumerWidget {
                 ),
               ),
               if (tracks.isEmpty)
-                const SliverFillRemaining(
+                SliverFillRemaining(
+                  hasScrollBody: false,
                   child: Center(
-                    child: Text(
-                      'This playlist is empty.\nAdd songs from your library or explore.',
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            UIcons.regular.music,
+                            size: 44,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.35),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'This playlist is empty',
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Add songs from your library, search YouTube, or paste a link.',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          ResonanceButton(
+                            onPressed: () => MusicPickerSheet.show(context, playlistId),
+                            label: 'Add Music',
+                            icon: UIcons.regular.add,
+                            style: ResonanceButtonStyle.primary,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 )
@@ -115,8 +147,9 @@ class PlaylistDetailScreen extends ConsumerWidget {
     );
         },
         loading: () =>
-            const Scaffold(body: Center(child: CircularProgressIndicator())),
+            const Scaffold(backgroundColor: Colors.transparent, body: Center(child: CircularProgressIndicator())),
         error: (e, _) => Scaffold(
+          backgroundColor: Colors.transparent,
           appBar: AppBar(),
           body: Center(child: Text('Error: $e')),
         ),
@@ -170,8 +203,8 @@ class _PlaylistHeroAppBar extends StatelessWidget {
     } else if (firstTrack != null) {
       return MediaArtworkWidget(
         item: firstTrack,
-        width: double.infinity,
-        height: double.infinity,
+        width: 220,
+        height: 220,
         borderRadius: 0,
         placeholderIcon: UIcons.regular.list_music,
       );
@@ -242,45 +275,40 @@ class _PlaylistHeroAppBar extends StatelessWidget {
           ),
         ),
       ],
-      flexibleSpace: ClipRect(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: FlexibleSpaceBar(
-            title: Text(
-              playlist.name,
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: theme.colorScheme.onSurface,
-                shadows: [
-                  Shadow(
-                    blurRadius: 4,
-                    color: theme.colorScheme.shadow.withValues(alpha: 0.5),
-                  ),
-                ],
+      flexibleSpace: FlexibleSpaceBar(
+        title: Text(
+          playlist.name,
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: theme.colorScheme.onSurface,
+            shadows: [
+              Shadow(
+                blurRadius: 4,
+                color: theme.colorScheme.shadow.withValues(alpha: 0.5),
+              ),
+            ],
+          ),
+        ),
+        titlePadding: const EdgeInsets.only(left: 48, bottom: 16),
+        background: Stack(
+          fit: StackFit.expand,
+          children: [
+            _buildBanner(theme, isDark),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    theme.colorScheme.surface.withValues(alpha: isDark ? 0.7 : 0.55),
+                    theme.colorScheme.surface.withValues(alpha: 0.05),
+                    theme.colorScheme.surface.withValues(alpha: isDark ? 0.85 : 0.75),
+                  ],
+                  stops: const [0.0, 0.45, 1.0],
+                ),
               ),
             ),
-            titlePadding: const EdgeInsets.only(left: 48, bottom: 16),
-            background: Stack(
-              fit: StackFit.expand,
-              children: [
-                _buildBanner(theme, isDark),
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        theme.colorScheme.surface.withValues(alpha: isDark ? 0.7 : 0.55),
-                        theme.colorScheme.surface.withValues(alpha: 0.05),
-                        theme.colorScheme.surface.withValues(alpha: isDark ? 0.85 : 0.75),
-                      ],
-                      stops: const [0.0, 0.45, 1.0],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          ],
         ),
       ),
     );

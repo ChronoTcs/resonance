@@ -55,6 +55,7 @@ class QuickPicksTrackTile extends ConsumerWidget {
         File(localArtPath),
         width: 52,
         height: 52,
+        cacheWidth: 200,
         fit: BoxFit.cover,
         errorBuilder: (_, _, _) => _buildPlaceholder(theme),
       );
@@ -64,7 +65,6 @@ class QuickPicksTrackTile extends ConsumerWidget {
         width: 52,
         height: 52,
         memCacheWidth: 400,
-        memCacheHeight: 400,
         fit: BoxFit.cover,
         placeholder: (_, _) => _buildPlaceholder(theme),
         errorWidget: (_, _, _) => _buildPlaceholder(theme),
@@ -104,85 +104,91 @@ class QuickPicksTrackTile extends ConsumerWidget {
     final durationStr = _formatDuration(item.duration);
     final secondary = subtitleInfo ?? (durationStr.isNotEmpty ? '$artist • $durationStr' : artist);
 
-    return InkWell(
-      mouseCursor: SystemMouseCursors.click,
-      onTap: () => _handleTap(ref),
-      onSecondaryTapDown: (details) => MediaActionUtils.showTrackContextMenu(
-        context: context,
-        ref: ref,
-        item: item,
-        position: details.globalPosition,
-      ),
-      onLongPress: () => MediaActionUtils.showMediaActions(context: context, ref: ref, item: item),
-      borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3.5),
-        child: Row(
-          children: [
-            // 1. Thumbnail
-            _buildThumbnail(theme),
-            const SizedBox(width: 12),
+    return RepaintBoundary(
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          mouseCursor: SystemMouseCursors.click,
+          onTap: () => _handleTap(ref),
+          onSecondaryTapDown: (details) => MediaActionUtils.showTrackContextMenu(
+            context: context,
+            ref: ref,
+            item: item,
+            position: details.globalPosition,
+          ),
+          onLongPress: () => MediaActionUtils.showMediaActions(context: context, ref: ref, item: item),
+          borderRadius: BorderRadius.circular(8),
+          splashFactory: NoSplash.splashFactory,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3.5),
+            child: Row(
+              children: [
+                // 1. Thumbnail
+                _buildThumbnail(theme),
+                const SizedBox(width: 12),
 
-            // 2. Track Title & Artist Subtitle
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13.5,
-                      letterSpacing: -0.1,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Row(
+                // 2. Track Title & Artist Subtitle
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (isExplicit) ...[
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 3.5, vertical: 0.5),
-                          margin: const EdgeInsets.only(right: 5),
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.onSurface.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(2),
-                          ),
-                          child: Text(
-                            'E',
-                            style: TextStyle(
-                              fontSize: 9.5,
-                              fontWeight: FontWeight.bold,
-                              color: theme.colorScheme.onSurfaceVariant,
+                      Text(
+                        item.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13.5,
+                          letterSpacing: -0.1,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Row(
+                        children: [
+                          if (isExplicit) ...[
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 3.5, vertical: 0.5),
+                              margin: const EdgeInsets.only(right: 5),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.onSurface.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                              child: Text(
+                                'E',
+                                style: TextStyle(
+                                  fontSize: 9.5,
+                                  fontWeight: FontWeight.bold,
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
+                          ],
+                          Expanded(
+                            child: Text(
+                              secondary,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.75),
+                              ),
                             ),
                           ),
-                        ),
-                      ],
-                      Expanded(
-                        child: Text(
-                          secondary,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 11.5,
-                            color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.75),
-                          ),
-                        ),
+                        ],
                       ),
                     ],
                   ),
-                ],
-              ),
-            ),
+                ),
 
-            // 3. Overflow Action Menu
-            OverflowMenuButton(
-              tooltip: 'Actions',
-              onTap: () => MediaActionUtils.showMediaActions(context: context, ref: ref, item: item),
+                // 3. Overflow Action Menu
+                OverflowMenuButton(
+                  tooltip: 'Actions',
+                  onTap: () => MediaActionUtils.showMediaActions(context: context, ref: ref, item: item),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

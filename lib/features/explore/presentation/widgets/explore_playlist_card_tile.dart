@@ -5,6 +5,7 @@ import 'package:resonance/core/utils/app_icons.dart';
 import 'package:resonance/core/utils/thumbnail_utils.dart';
 import 'package:resonance/core/widgets/widgets.dart';
 import 'package:resonance/features/explore/data/models/explore_playlist.dart';
+import 'package:resonance/features/explore/presentation/providers/explore_provider.dart';
 import 'package:resonance/features/library/data/models/media_item.dart';
 import 'package:resonance/features/player/utils/media_action_utils.dart';
 
@@ -41,7 +42,9 @@ class ExplorePlaylistCardTile extends ConsumerWidget {
         ),
         child: InkWell(
           mouseCursor: SystemMouseCursors.click,
-          onTap: () => _playPlaylist(context, ref),
+          onTap: () {
+            ref.read(selectedExplorePlaylistProvider.notifier).setSelected(playlist);
+          },
           onSecondaryTapDown: (details) => MediaActionUtils.showTrackContextMenu(
             context: context,
             ref: ref,
@@ -60,7 +63,6 @@ class ExplorePlaylistCardTile extends ConsumerWidget {
                     width: 80,
                     height: 80,
                     memCacheWidth: 400,
-                    memCacheHeight: 400,
                     fit: BoxFit.cover,
                     placeholder: (c, u) => Container(
                       color: theme.colorScheme.surfaceContainerHighest,
@@ -74,7 +76,6 @@ class ExplorePlaylistCardTile extends ConsumerWidget {
                           width: 80,
                           height: 80,
                           memCacheWidth: 400,
-                          memCacheHeight: 400,
                           fit: BoxFit.cover,
                           placeholder: (c2, u2) => Container(
                             color: theme.colorScheme.surfaceContainerHighest,
@@ -100,25 +101,32 @@ class ExplorePlaylistCardTile extends ConsumerWidget {
                     children: [
                       Text(
                         playlist.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 4),
                       Text(
                         playlist.author,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(width: 12),
+                ReusableHoverIconButton(
+                  icon: Icons.play_arrow_rounded,
+                  tooltip: 'Play Playlist',
+                  iconSize: 22,
+                  onTap: () => _playPlaylist(context, ref),
+                ),
+                const SizedBox(width: 4),
                 ReusableHoverIconButton(
                   icon: Icons.playlist_add,
                   tooltip: 'Save to Playlists',

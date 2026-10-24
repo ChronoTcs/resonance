@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/core/widgets/buttons/reusable_hover_icon_button.dart';
 import 'package:resonance/core/widgets/overlays/floating_sheet_shell.dart';
@@ -90,7 +91,7 @@ class BlockedTracksSheet extends ConsumerWidget {
                 color: theme.colorScheme.primary.withValues(alpha: 0.1),
               ),
               child: Icon(
-                UIcons.regular.shield_check,
+                UIcons.regular.music_slash,
                 size: 26,
                 color: theme.colorScheme.primary,
               ),
@@ -140,12 +141,14 @@ class _BlockedTrackTile extends ConsumerWidget {
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
             child: track.thumbnailUrl != null && track.thumbnailUrl!.isNotEmpty
-                ? Image.network(
-                    track.thumbnailUrl!,
+                ? CachedNetworkImage(
+                    imageUrl: track.thumbnailUrl!,
                     width: 44,
                     height: 44,
+                    memCacheWidth: 200,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => _fallbackArtwork(theme),
+                    placeholder: (_, _) => _fallbackArtwork(theme),
+                    errorWidget: (_, _, _) => _fallbackArtwork(theme),
                   )
                 : _fallbackArtwork(theme),
           ),

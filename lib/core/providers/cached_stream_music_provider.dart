@@ -45,6 +45,8 @@ void _triggerAutoHeal(Ref ref, String songId) {
         type: 'audio',
       );
 
+      if (await cacheService.getCachedAudioPath(songId) == null) return;
+
       await cacheService.saveMetadata(songId, healed);
 
       if (thumb.isNotEmpty) {

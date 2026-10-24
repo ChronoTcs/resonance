@@ -139,8 +139,8 @@ class CacheManagementSection extends ConsumerWidget {
                   const SizedBox(height: 8),
                   ResonanceHorizontalSelector<int>(
                     icon: UIcons.regular.clock,
-                    title: 'Track Activity Retention',
-                    subtitle: 'Days to retain playback history timestamp per stream track',
+                    title: 'Stream Cache Retention',
+                    subtitle: 'Days to retain cached stream audio, images & lyrics after last play',
                     value: ref.watch(streamTrackRetentionDaysProvider),
                     onChanged: (val) => ref.read(streamTrackRetentionDaysProvider.notifier).setDays(val),
                     items: const [
@@ -148,20 +148,6 @@ class CacheManagementSection extends ConsumerWidget {
                       ResonanceSelectorItem(value: 14, label: '14 Days'),
                       ResonanceSelectorItem(value: 30, label: '30 Days (Default)'),
                       ResonanceSelectorItem(value: 60, label: '60 Days'),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  ResonanceHorizontalSelector<int>(
-                    icon: UIcons.regular.trash,
-                    title: 'Orphaned Secondary Cache Retention',
-                    subtitle: 'Days to retain images & lyrics after audio stream is erased',
-                    value: ref.watch(secondaryCacheRetentionDaysProvider),
-                    onChanged: (val) => ref.read(secondaryCacheRetentionDaysProvider.notifier).setDays(val),
-                    items: const [
-                      ResonanceSelectorItem(value: 3, label: '3 Days'),
-                      ResonanceSelectorItem(value: 7, label: '7 Days (Default)'),
-                      ResonanceSelectorItem(value: 14, label: '14 Days'),
-                      ResonanceSelectorItem(value: 30, label: '30 Days'),
                     ],
                   ),
                 ],
@@ -303,7 +289,7 @@ class CacheManagementSection extends ConsumerWidget {
         content: 'Are you sure you want to delete all files in $label? This action cannot be undone.',
         confirmLabel: 'Clear',
         isDanger: true,
-        onConfirm: () => Navigator.of(ctx).pop(true),
+        onConfirm: () {},
       ),
     );
 
@@ -319,7 +305,7 @@ class CacheManagementSection extends ConsumerWidget {
           confirmLabel: 'Yes, Purge Everything',
           cancelLabel: 'No, Stop!',
           isDanger: true,
-          onConfirm: () => Navigator.of(ctx).pop(true),
+          onConfirm: () {},
         ),
       );
       if (secondConfirm != true) return;

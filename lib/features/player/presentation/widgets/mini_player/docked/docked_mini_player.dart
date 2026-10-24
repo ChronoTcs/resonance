@@ -8,13 +8,14 @@ class DockedMiniPlayer extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final audioState = ref.watch(audioProvider);
-    final currentTrack = audioState.currentTrack;
+    final hasTrack = ref.watch(audioProvider.select((s) => s.currentTrack != null));
 
-    if (currentTrack == null) {
+    if (!hasTrack) {
       return const SizedBox.shrink();
     }
 
-    return const AudioDockedPlayer();
+    return const RepaintBoundary(
+      child: AudioDockedPlayer(),
+    );
   }
 }

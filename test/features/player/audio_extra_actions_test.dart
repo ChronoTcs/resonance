@@ -24,6 +24,18 @@ class _MockAudioHandler extends BaseAudioHandler implements ResonanceAudioHandle
 
   @override
   VoidCallback? onSkipToPrevious;
+
+  @override
+  VoidCallback? onPlay;
+
+  @override
+  VoidCallback? onPause;
+
+  @override
+  VoidCallback? onStop;
+
+  @override
+  void notifyQueueCompleted() {}
 }
 
 void main() {

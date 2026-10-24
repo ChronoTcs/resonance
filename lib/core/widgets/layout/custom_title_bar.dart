@@ -44,6 +44,7 @@ class _CustomTitleBarState extends ConsumerState<CustomTitleBar> with WindowList
 
   @override
   void dispose() {
+    _hoverChannel.setMethodCallHandler(null);
     windowManager.removeListener(this);
     super.dispose();
   }
@@ -100,8 +101,6 @@ class _CustomTitleBarState extends ConsumerState<CustomTitleBar> with WindowList
         return UIcons.regular.sun;
       case AppThemeMode.dark:
         return UIcons.regular.moon;
-      case AppThemeMode.onyx:
-        return UIcons.regular.eclipse;
     }
   }
 
@@ -113,8 +112,6 @@ class _CustomTitleBarState extends ConsumerState<CustomTitleBar> with WindowList
         return 'Theme: Gilded Ivory (Light)';
       case AppThemeMode.dark:
         return 'Theme: Deep Opulence (Dark)';
-      case AppThemeMode.onyx:
-        return 'Theme: Onyx (Pure Dark)';
     }
   }
 

@@ -37,6 +37,7 @@ class ReusableSeekSlider extends StatefulWidget {
 
 class _ReusableSeekSliderState extends State<ReusableSeekSlider> {
   double? _hoverValue;
+  double? _lastHoverX;
   bool _isHovering = false;
   bool _isDragging = false;
   double _dragValue = 0;
@@ -44,6 +45,12 @@ class _ReusableSeekSliderState extends State<ReusableSeekSlider> {
   // The Slider widget has internal horizontal padding matching the overlay radius.
   // We use 14.0 as a standard Resonance hit-area padding.
   static const double horizontalPadding = 14.0;
+
+  static final TextStyle _tooltipTextStyle = GoogleFonts.inter(
+    fontSize: 11,
+    fontWeight: FontWeight.w600,
+    color: Colors.white,
+  );
 
   String _formatDuration(Duration d) {
     if (d.isNegative) return "00:00";
@@ -66,66 +73,93 @@ class _ReusableSeekSliderState extends State<ReusableSeekSlider> {
         theme.sliderTheme.inactiveTrackColor ??
         theme.colorScheme.onSurface.withValues(alpha: 0.12);
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final totalWidth = constraints.maxWidth;
-        final trackWidth = totalWidth - (2 * horizontalPadding);
+    return RepaintBoundary(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final totalWidth = constraints.maxWidth;
+          final trackWidth = totalWidth - (2 * horizontalPadding);
 
-        return MouseRegion(
-          onEnter: (_) => setState(() => _isHovering = true),
-          onExit: (_) => setState(() => _isHovering = false),
-          onHover: (event) {
-            setState(() {
-              final double localX = event.localPosition.dx;
-              final double normalizedX = (localX - horizontalPadding) / trackWidth;
-              _hoverValue = (normalizedX * widget.max).clamp(0.0, widget.max);
-            });
-          },
-          child: Container(
-            height: widget.height,
-            color: Colors.transparent,
-            alignment: Alignment.center,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                SliderTheme(
-                  data: SliderTheme.of(context).copyWith(
-                    trackHeight: widget.trackHeight,
-                    trackShape: const RetroSliderTrackShape(),
-                    thumbShape: RetroSliderThumbShape(fillColor: theme.scaffoldBackgroundColor),
-                    overlayShape: const RoundSliderOverlayShape(overlayRadius: horizontalPadding),
-                    activeTrackColor: activeColor,
-                    inactiveTrackColor: inactiveColor,
-                    thumbColor: activeColor,
+          return MouseRegion(
+            onEnter: widget.showTooltip
+                ? (_) => setState(() => _isHovering = true)
+                : null,
+            onExit: widget.showTooltip
+                ? (_) => setState(() {
+                      _isHovering = false;
+                      _lastHoverX = null;
+                    })
+                : null,
+            onHover: widget.showTooltip
+                ? (event) {
+                    if (trackWidth <= 0) return;
+                    final double localX = event.localPosition.dx;
+                    if (_lastHoverX != null &&
+                        (localX - _lastHoverX!).abs() < 2.0) {
+                      return;
+                    }
+                    _lastHoverX = localX;
+                    final double normalizedX =
+                        (localX - horizontalPadding) / trackWidth;
+                    final double nextValue =
+                        (normalizedX * widget.max).clamp(0.0, widget.max);
+                    setState(() {
+                      _hoverValue = nextValue;
+                    });
+                  }
+                : null,
+            child: Container(
+              height: widget.height,
+              color: Colors.transparent,
+              alignment: Alignment.center,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      trackHeight: widget.trackHeight,
+                      trackShape: const RetroSliderTrackShape(),
+                      thumbShape: RetroSliderThumbShape(
+                        fillColor: theme.scaffoldBackgroundColor,
+                      ),
+                      overlayShape: const RoundSliderOverlayShape(
+                        overlayRadius: horizontalPadding,
+                      ),
+                      activeTrackColor: activeColor,
+                      inactiveTrackColor: inactiveColor,
+                      thumbColor: activeColor,
+                    ),
+                    child: Slider(
+                      value: (_isDragging ? _dragValue : widget.value)
+                          .clamp(0.0, widget.max),
+                      max: widget.max > 0 ? widget.max : 1.0,
+                      onChanged: (val) {
+                        setState(() => _dragValue = val);
+                        widget.onChanged(val);
+                      },
+                      onChangeStart: (val) {
+                        setState(() {
+                          _isDragging = true;
+                          _dragValue = val;
+                        });
+                        widget.onChangeStart?.call(val);
+                      },
+                      onChangeEnd: (val) {
+                        setState(() => _isDragging = false);
+                        widget.onChangeEnd?.call(val);
+                      },
+                    ),
                   ),
-                  child: Slider(
-                    value: (_isDragging ? _dragValue : widget.value).clamp(0.0, widget.max),
-                    max: widget.max > 0 ? widget.max : 1.0,
-                    onChanged: (val) {
-                      setState(() => _dragValue = val);
-                      widget.onChanged(val);
-                    },
-                    onChangeStart: (val) {
-                      setState(() {
-                        _isDragging = true;
-                        _dragValue = val;
-                      });
-                      widget.onChangeStart?.call(val);
-                    },
-                    onChangeEnd: (val) {
-                      setState(() => _isDragging = false);
-                      widget.onChangeEnd?.call(val);
-                    },
-                  ),
-                ),
-                // Tooltip Layer
-                if (widget.showTooltip && (_isHovering || _isDragging) && widget.max > 0)
-                  _buildTooltip(totalWidth, trackWidth, theme),
-              ],
+                  // Tooltip Layer
+                  if (widget.showTooltip &&
+                      (_isHovering || _isDragging) &&
+                      widget.max > 0)
+                    _buildTooltip(totalWidth, trackWidth, theme),
+                ],
+              ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 
@@ -147,24 +181,13 @@ class _ReusableSeekSliderState extends State<ReusableSeekSlider> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                color: const Color(0xFF000000).withValues(alpha: 0.85),
+                color: const Color(0xFF000000).withValues(alpha: 0.88),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: Colors.white.withValues(alpha: 0.1), width: 1),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.4),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
               ),
               child: Text(
                 _formatDuration(Duration(milliseconds: (_isDragging ? _dragValue : (_hoverValue ?? 0)).toInt())),
-                style: GoogleFonts.inter(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
-                ),
+                style: _tooltipTextStyle,
               ),
             ),
             // For simplicity, we center it under the clamped tooltip
@@ -331,10 +354,8 @@ class RetroSliderThumbShape extends SliderComponentShape {
     final Rect rect = Rect.fromLTWH(left, top, width, height);
     final RRect rrect = RRect.fromRectAndRadius(rect, Radius.circular(radius));
 
-    // Subtle drop shadow for depth
-    final shadowPaint = Paint()
-      ..color = Colors.black.withValues(alpha: 0.3)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.0);
+    // Crisp non-blurred shadow for zero GPU shader overhead
+    final shadowPaint = Paint()..color = Colors.black.withValues(alpha: 0.25);
 
     canvas.drawRRect(rrect.shift(const Offset(0, 1)), shadowPaint);
     canvas.drawRRect(rrect, fillPaint);

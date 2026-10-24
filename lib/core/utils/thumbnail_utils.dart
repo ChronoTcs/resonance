@@ -44,7 +44,8 @@ class ThumbnailUtils {
       return url.replaceAll('=s1080', '=s544');
     }
     if (url.contains('maxresdefault.jpg')) {
-      return url.replaceAll('maxresdefault.jpg', 'hqdefault.jpg');
+      // Fall back to clean 16:9 mqdefault.jpg (320x180) to avoid YouTube's burned-in 4:3 letterbox/pillarbox bars in hqdefault.jpg
+      return url.replaceAll('maxresdefault.jpg', 'mqdefault.jpg');
     }
     return null;
   }

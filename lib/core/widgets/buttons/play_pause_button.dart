@@ -12,6 +12,8 @@ class PlayPauseButton extends StatelessWidget {
   final Color? color;
   final Color? iconColor;
   final Color? backgroundColor;
+  final double? customIconSize;
+  final double? customPadding;
 
   const PlayPauseButton({
     super.key,
@@ -22,6 +24,8 @@ class PlayPauseButton extends StatelessWidget {
     this.color,
     this.iconColor,
     this.backgroundColor,
+    this.customIconSize,
+    this.customPadding,
   });
 
   @override
@@ -31,19 +35,24 @@ class PlayPauseButton extends StatelessWidget {
     double iconSize;
     double padding;
     
-    switch (size) {
-      case PlayPauseSize.small:
-        iconSize = 20.0;
-        padding = 6.0;
-        break;
-      case PlayPauseSize.medium:
-        iconSize = 28.0;
-        padding = 8.0;
-        break;
-      case PlayPauseSize.large:
-        iconSize = 34.0;
-        padding = 10.0;
-        break;
+    if (customIconSize != null) {
+      iconSize = customIconSize!;
+      padding = customPadding ?? 10.0;
+    } else {
+      switch (size) {
+        case PlayPauseSize.small:
+          iconSize = 20.0;
+          padding = 6.0;
+          break;
+        case PlayPauseSize.medium:
+          iconSize = 28.0;
+          padding = 8.0;
+          break;
+        case PlayPauseSize.large:
+          iconSize = 34.0;
+          padding = 10.0;
+          break;
+      }
     }
 
     if (isLoading) {

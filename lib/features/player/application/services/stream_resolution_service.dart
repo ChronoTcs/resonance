@@ -136,12 +136,33 @@ class StreamResolutionService {
 // ── MPV Configurator (static utility) ─────────────────────────────────────────
 
 /// Infrastructure configurator for MPV-specific settings.
-/// All operations are fire-and-forget (via [Future.microtask]).
 class MpvConfigurator {
-  /// Redirects the MPV buffer/cache to [customPath] and applies EBU R128 loudness normalization.
-  static void applyCacheSettings(dynamic player, String? customPath) {
+  /// Builds the MPV audio filter string from active equalizer settings.
+  /// If [eqFilter] is null or empty, returns an empty string to cleanly bypass all filters.
+  static String buildAudioFilter([String? eqFilter]) {
+    if (eqFilter != null && eqFilter.isNotEmpty) {
+      return eqFilter;
+    }
+    return '';
+  }
+
+  /// Redirects the MPV buffer/cache to [customPath] and applies unified EBU R128 loudness normalization and EQ.
+  static void applyCacheSettings(dynamic player, String? customPath, {String? eqFilter}) {
     Future.microtask(() async {
       try {
+        // Startup MPV Demuxer Memory Caps (platform-tuned: 32MiB/16MiB on Android, 100MiB/50MiB on Desktop)
+        final maxBytes = Platform.isAndroid ? '32MiB' : '100MiB';
+        final maxBackBytes = Platform.isAndroid ? '16MiB' : '50MiB';
+        await (player.platform as dynamic).setProperty('demuxer-max-bytes', maxBytes);
+        await (player.platform as dynamic).setProperty('demuxer-max-back-bytes', maxBackBytes);
+        await (player.platform as dynamic).setProperty(
+          'demuxer-lavf-o',
+          'reconnect=1,reconnect_streamed=1,reconnect_on_network_error=1,reconnect_on_http_error=4xx,5xx,reconnect_delay_max=5',
+        );
+        await (player.platform as dynamic).setProperty('network-timeout', '15');
+        await (player.platform as dynamic).setProperty('vo', 'null');
+        await (player.platform as dynamic).setProperty('vid', 'no');
+
         if (customPath != null && customPath.isNotEmpty) {
           final mpvTemp = Directory(p.join(customPath, 'mpv_temp'));
           if (!mpvTemp.existsSync()) {
@@ -149,17 +170,16 @@ class MpvConfigurator {
           }
           await (player.platform as dynamic).setProperty('cache', 'yes');
           await (player.platform as dynamic).setProperty('cache-dir', mpvTemp.path);
-          await (player.platform as dynamic).setProperty('demuxer-max-bytes', '100MiB');
-          await (player.platform as dynamic).setProperty('demuxer-max-back-bytes', '50MiB');
-          await (player.platform as dynamic).setProperty('demuxer-lavf-o', 'reconnect=1,reconnect_streamed=1,reconnect_delay_max=5');
-          await (player.platform as dynamic).setProperty('network-timeout', '10');
-          await (player.platform as dynamic).setProperty('tls-verify', 'no');
           debugPrint('[MpvConfigurator] Cache redirected to: ${mpvTemp.path}');
         }
 
-        // EBU R128 Loudness Normalization via FFmpeg libavfilter
-        await (player.platform as dynamic).setProperty('af', 'lavfi=[loudnorm=I=-14:TP=-1.5:LRA=11]');
-        debugPrint('[MpvConfigurator] Loudness normalization applied (lavfi loudnorm I=-14, TP=-1.5)');
+        // Unified Audio Filter Graph: EBU R128 Loudness Normalization + active EQ
+        // Only apply on Desktop or when non-empty to prevent Android audiotrack filter init errors.
+        final fullFilter = buildAudioFilter(eqFilter);
+        if (!Platform.isAndroid || fullFilter.isNotEmpty) {
+          await (player.platform as dynamic).setProperty('af', fullFilter);
+          debugPrint('[MpvConfigurator] Audio filter graph applied: $fullFilter');
+        }
       } catch (e) {
         debugPrint('[MpvConfigurator] Failed to set properties: $e');
       }

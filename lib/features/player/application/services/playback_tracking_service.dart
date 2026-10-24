@@ -27,10 +27,14 @@ class PlaybackTrackingService {
       try {
         final bytes = await (player.platform as dynamic).getProperty('bytes-read');
         if (bytes != null && (bytes is int || bytes is double)) {
-          final delta = bytes.toInt() - _lastBytesRead;
+          final currentBytes = bytes.toInt();
+          if (currentBytes < _lastBytesRead) {
+            _lastBytesRead = 0;
+          }
+          final delta = currentBytes - _lastBytesRead;
           if (delta > 0) {
             _ref.read(dataUsageServiceProvider).addBytes(delta);
-            _lastBytesRead = bytes.toInt();
+            _lastBytesRead = currentBytes;
           }
         }
       } catch (_) {}

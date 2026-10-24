@@ -21,9 +21,9 @@ class AndroidStreamResolver implements IPlatformStreamResolver {
   @override
   String get platformName => 'android';
 
-  // ── Canonical Android UA Strings (single source of truth) ─────────────────
+  // ── Canonical Android UA Strings (aligned with YoutubeInnerTubeClient WEB_REMIX / WEB) ──
   static const String _uaWebRemix =
-      'Mozilla/5.0 (Linux; Android 12; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Mobile Safari/537.36';
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36';
 
   @override
   String get userAgent => _uaWebRemix;
@@ -39,6 +39,7 @@ class AndroidStreamResolver implements IPlatformStreamResolver {
       'User-Agent': _uaWebRemix,
       'Accept': '*/*',
       'Accept-Language': 'en-US,en;q=0.9',
+      'Connection': 'keep-alive',
       'Origin': origin,
       'Referer': '$origin/',
     };
@@ -103,6 +104,11 @@ class AndroidStreamResolver implements IPlatformStreamResolver {
             tokenPair!.streamPoToken.isNotEmpty &&
             !streamUrl.contains('&pot=')) {
           streamUrl = '$streamUrl&pot=${tokenPair.streamPoToken}';
+        }
+
+        // Ensure ratebypass=yes to prevent YouTube CDN mid-stream throttling
+        if (!streamUrl.contains('ratebypass=')) {
+          streamUrl = '$streamUrl&ratebypass=yes';
         }
 
         // Liveness probe — reject c=ANDROID (1MB cap)

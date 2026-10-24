@@ -145,7 +145,7 @@ class FullScreenAudioView extends ConsumerWidget {
         borderRadius: BorderRadius.circular(16),
         child: Hero(
           tag: 'player_artwork_${displayTrack.id ?? displayTrack.hashCode}',
-          child: MediaArtworkWidget(item: displayTrack),
+          child: MediaArtworkWidget(item: displayTrack, width: 420, height: 420, fit: BoxFit.cover),
         ),
       ),
     );

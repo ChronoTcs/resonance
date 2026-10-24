@@ -57,6 +57,7 @@ Output/
 *.exe
 !windows/tools/*.exe
 *.dll
+!windows/libs/discord/bin/*.dll
 *.pdb
 *.msix
 

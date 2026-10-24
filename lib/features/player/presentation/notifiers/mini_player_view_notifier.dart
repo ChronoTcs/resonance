@@ -133,8 +133,6 @@ class MiniPlayerPopNotifier extends Notifier<MiniPlayerPopState> {
       wasMaximized: isMaximized,
     );
 
-    await Future.delayed(const Duration(milliseconds: 20));
-
     if (Platform.isWindows) {
       await windowManager.setHasShadow(true);
       await windowManager.setTitleBarStyle(TitleBarStyle.hidden, windowButtonVisibility: false);
@@ -145,6 +143,7 @@ class MiniPlayerPopNotifier extends Notifier<MiniPlayerPopState> {
       await windowManager.setMinimumSize(const Size(250, 300));
       await windowManager.setMaximumSize(const Size(450, 550));
       await windowManager.setSize(const Size(260, 320));
+      await Future.delayed(const Duration(milliseconds: 30));
     }
     
     _startIdleTimer();
@@ -153,6 +152,7 @@ class MiniPlayerPopNotifier extends Notifier<MiniPlayerPopState> {
   Future<void> _closeMiniPlayer() async {
     _idleTimer?.cancel();
 
+    // 1. Restore native window dimensions to full size FIRST behind opaque curtain
     if (Platform.isWindows) {
       await windowManager.setAlwaysOnTop(false);
       await windowManager.setMinimumSize(const Size(0, 0));
@@ -174,9 +174,10 @@ class MiniPlayerPopNotifier extends Notifier<MiniPlayerPopState> {
         }
       }
 
-      await Future.delayed(const Duration(milliseconds: 50));
+      await Future.delayed(const Duration(milliseconds: 30));
     }
-    
+
+    // 2. Un-pop state only once window is expanded to prevent squishing dashboard
     state = state.copyWith(
       isPopped: false,
       viewState: MiniPlayerViewState.normal,

@@ -233,10 +233,9 @@ class LibraryRepository {
       }
 
       final locId = PathUtils.generateLocId(finalPath);
-      final finalFile = File(finalPath);
 
-      // 2. Extract embedded ID3/Vorbis/MP4 tags and picture
-      final tags = _extractTagsFromFile(finalFile);
+      // 2. Extract embedded ID3/Vorbis/MP4 tags and picture (offloaded via compute to keep UI isolate smooth)
+      final tags = await compute(_extractTagsFromPath, finalPath);
       String? localThumbnailUrl;
 
       final targetArtFile = File(p.join(localImagesDir.path, 'art_$locId.jpg'));
@@ -244,6 +243,7 @@ class LibraryRepository {
       if (tags.pictureBytes != null && tags.pictureBytes!.isNotEmpty) {
         try {
           await targetArtFile.writeAsBytes(tags.pictureBytes!);
+          mediaCacheService.notifyDelta('local_images', tags.pictureBytes!.length);
           localThumbnailUrl = targetArtFile.path;
         } catch (e) {
           debugPrint('[LibraryRepo] Failed to write embedded art: $e');
@@ -315,6 +315,11 @@ class LibraryRepository {
 
     return importedItems;
   }
+}
+
+/// Top-level helper to offload metadata parsing to a worker isolate via compute.
+({String? title, String? artist, String? album, String? date, Duration? duration, Uint8List? pictureBytes}) _extractTagsFromPath(String path) {
+  return _extractTagsFromFile(File(path), getImage: true);
 }
 
 /// Extracts tags and embedded picture safely from audio file

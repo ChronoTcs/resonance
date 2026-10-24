@@ -24,6 +24,7 @@ import threading
 _active_events = {}
 _events_lock = threading.Lock()
 _stdout_lock = threading.Lock()
+_resolve_lock = threading.Lock()
 
 try:
     import yt_dlp
@@ -228,17 +229,19 @@ def handle_download(cmd: dict):
 
     is_direct_url = url.startswith("http://") or url.startswith("https://")
     
+    po_token = cmd.get("po_token")
+    youtube_extractor_args = {
+        "player_client": ["ios", "web", "mweb", "android"]
+    }
+    if po_token:
+        youtube_extractor_args["po_token"] = [f"web+{po_token}"]
+
     common_opts = {
         "noplaylist": True, "quiet": True, "no_warnings": True, "nocheckcertificate": True,
         "progress_hooks": [build_progress_hook(download_id)],
         "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
         "extractor_args": {
-            "youtube": {
-                "player_client": ["android", "ios", "web", "mweb"]
-            },
-            "youtubepot-bgutilhttp": {
-                "base_url": "http://127.0.0.1:4416"
-            }
+            "youtube": youtube_extractor_args,
         }
     }
 
@@ -353,48 +356,24 @@ def handle_download(cmd: dict):
                 del _active_events[download_id]
 
 
-_bgutil_alive = None
-_bgutil_lock = threading.Lock()
-
-def check_bgutil():
-    global _bgutil_alive
-    if _bgutil_alive is not None:
-        return _bgutil_alive
-    with _bgutil_lock:
-        if _bgutil_alive is not None:
-            return _bgutil_alive
-        bgutil_url = "http://127.0.0.1:4416"
-        alive = False
-        try:
-            import urllib.request
-            urllib.request.urlopen(bgutil_url, timeout=0.2)
-            alive = True
-        except Exception:
-            pass
-        _bgutil_alive = alive
-        if not alive:
-            sys.stderr.write(f"[resolve] INFO: bgutil-pot not reachable at {bgutil_url} — resolving without PoToken\n")
-            sys.stderr.flush()
-        return _bgutil_alive
-
-
 def _warmup_ytdlp():
-    """Background warm-up for yt-dlp: pre-caches YouTube player JS and checks bgutil on launch."""
+    """Background warm-up for yt-dlp: pre-caches YouTube player JS on launch."""
     import time
     start = time.time()
     try:
-        check_bgutil()
         sys.stderr.write("[warmup] Pre-warming yt-dlp YouTube player JS in background...\n")
         sys.stderr.flush()
         ydl_opts = {
             "quiet": True,
             "no_warnings": True,
             "nocheckcertificate": True,
+            "socket_timeout": 8,
+            "retries": 1,
             "youtube_include_dash_manifest": False,
             "youtube_include_hls_playlist": False,
             "extractor_args": {
                 "youtube": {
-                    "player_client": ["android", "ios", "web", "mweb"]
+                    "player_client": ["ios", "web", "mweb", "android"]
                 }
             },
         }
@@ -412,42 +391,57 @@ def _warmup_ytdlp():
 def handle_resolve_stream(cmd: dict):
     req_id = cmd.get("id", "unknown")
     video_id = cmd.get("videoId", "")
+    po_token = cmd.get("po_token")
     sys.stderr.write(f"[resolve] START req_id={req_id} videoId={video_id}\n")
     sys.stderr.flush()
-    try:
-        url = f"https://www.youtube.com/watch?v={video_id}"
-        bgutil_alive = check_bgutil()
+    with _resolve_lock:
+        try:
+            url = f"https://www.youtube.com/watch?v={video_id}"
 
-        extractor_args = {
-            "youtube": {
-                "player_client": ["android", "ios", "web", "mweb"]
+            youtube_extractor_args = {
+                "player_client": ["ios", "web", "mweb", "android"]
             }
-        }
-        if bgutil_alive:
-            extractor_args["youtubepot-bgutilhttp"] = {"base_url": "http://127.0.0.1:4416"}
+            if po_token:
+                youtube_extractor_args["po_token"] = [f"web+{po_token}"]
+                sys.stderr.write(f"[resolve] Injected active PoToken from Flutter (len={len(po_token)})\n")
+                sys.stderr.flush()
+            else:
+                sys.stderr.write("[resolve] Resolving without PoToken\n")
+                sys.stderr.flush()
 
-        ydl_opts = {
-            "quiet": True,
-            "no_warnings": True,
-            "nocheckcertificate": True,
-            "format": "ba[ext=m4a]/ba[ext=mp4]/bestaudio/best",
-            "youtube_include_dash_manifest": False,
-            "youtube_include_hls_playlist": False,
-            "extractor_args": extractor_args,
-        }
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-            stream_url = info.get("url")
-            sys.stderr.write(f"[resolve] DONE req_id={req_id} url_len={len(stream_url or '')}\n")
+            ydl_opts = {
+                "quiet": True,
+                "no_warnings": True,
+                "nocheckcertificate": True,
+                "socket_timeout": 15,
+                "retries": 2,
+                "fragment_retries": 2,
+                "format": "ba[ext=m4a]/ba[ext=mp4]/bestaudio/best",
+                "youtube_include_dash_manifest": False,
+                "youtube_include_hls_playlist": False,
+                "extractor_args": {
+                    "youtube": youtube_extractor_args,
+                },
+            }
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=False)
+                stream_url = info.get("url")
+                sys.stderr.write(f"[resolve] DONE req_id={req_id} url_len={len(stream_url or '')}\n")
+                sys.stderr.flush()
+                emit({"id": req_id, "videoId": video_id, "type": "resolved", "url": stream_url})
+        except Exception as e:
+            sys.stderr.write(f"[resolve] ERROR req_id={req_id}: {e}\n")
             sys.stderr.flush()
-            emit({"id": req_id, "type": "resolved", "url": stream_url})
-    except Exception as e:
-        sys.stderr.write(f"[resolve] ERROR req_id={req_id}: {e}\n")
-        sys.stderr.flush()
-        emit({"id": req_id, "type": "error", "message": str(e)})
+            emit({"id": req_id, "videoId": video_id, "type": "error", "message": str(e)})
 
 
 def main():
+    if hasattr(sys.stderr, 'reconfigure'):
+        try:
+            sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+        except Exception:
+            pass
+
     # Force stdin/stdout to unbuffered binary on Windows to fix pipe blocking
     sys.stdout = open(sys.stdout.fileno(), 'wb', buffering=0)
     stdin_raw = open(sys.stdin.fileno(), 'rb', buffering=0)

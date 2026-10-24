@@ -81,14 +81,14 @@ class AudioTrackInfo extends ConsumerWidget {
                   padding: const EdgeInsets.only(top: 4.0),
                   child: Consumer(
                     builder: (context, ref, _) {
-                      final pos = ref.watch(
-                        audioProvider.select((s) => s.position),
+                      final posSec = ref.watch(
+                        audioProvider.select((s) => s.position.inSeconds),
                       );
-                      final dur = ref.watch(
-                        audioProvider.select((s) => s.duration),
+                      final durSec = ref.watch(
+                        audioProvider.select((s) => s.duration.inSeconds),
                       );
                       return Text(
-                        "${AppFormatters.formatDuration(pos)} / ${AppFormatters.formatDuration(dur)}",
+                        "${AppFormatters.formatDuration(Duration(seconds: posSec))} / ${AppFormatters.formatDuration(Duration(seconds: durSec))}",
                         style: TextStyle(
                           fontSize: 10,
                           color: Theme.of(

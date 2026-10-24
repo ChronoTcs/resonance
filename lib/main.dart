@@ -136,7 +136,7 @@ void main([List<String> args = const []]) async {
 
   MediaKit.ensureInitialized();
 
-  final player = Player(configuration: const PlayerConfiguration(pitch: true));
+  final player = Player(configuration: const PlayerConfiguration(pitch: true, vo: 'null'));
 
   if (Platform.isAndroid) {
     Future.microtask(() async {
@@ -154,8 +154,8 @@ void main([List<String> args = const []]) async {
     config: const AudioServiceConfig(
       androidNotificationChannelId: 'com.resonance.audio',
       androidNotificationChannelName: 'Resonance Playback',
-      androidNotificationOngoing: true,
-      androidStopForegroundOnPause: true,
+      androidStopForegroundOnPause: false,
+      androidNotificationIcon: 'drawable/ic_stat_music',
     ),
   );
 
@@ -165,10 +165,12 @@ void main([List<String> args = const []]) async {
   ]);
 
   if (Platform.isAndroid) {
-    // Raise image cache so thumbnails survive scrolling large Home/Explore feeds.
-    // 128MB / 250 images vs the old 40MB / 100 images.
-    PaintingBinding.instance.imageCache.maximumSizeBytes = 128 * 1024 * 1024;
-    PaintingBinding.instance.imageCache.maximumSize = 250;
+    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    PaintingBinding.instance.imageCache.maximumSizeBytes = 64 * 1024 * 1024;
+    PaintingBinding.instance.imageCache.maximumSize = 150;
+  } else if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+    PaintingBinding.instance.imageCache.maximumSizeBytes = 256 * 1024 * 1024;
+    PaintingBinding.instance.imageCache.maximumSize = 500;
   }
 
   if (Platform.isWindows || Platform.isLinux) {
@@ -292,7 +294,6 @@ class _ResonanceAppState extends ConsumerState<ResonanceApp> {
         resolvedThemeMode = ThemeMode.light;
         break;
       case AppThemeMode.dark:
-      case AppThemeMode.onyx:
         resolvedThemeMode = ThemeMode.dark;
         break;
       case AppThemeMode.system:
@@ -307,9 +308,23 @@ class _ResonanceAppState extends ConsumerState<ResonanceApp> {
       debugShowCheckedModeBanner: false,
       themeMode: resolvedThemeMode,
       theme: AppTheme.getLightTheme(accentColor),
-      darkTheme: AppTheme.getDarkTheme(accentColor, isOnyx: appThemeMode == AppThemeMode.onyx),
+      darkTheme: AppTheme.getDarkTheme(accentColor),
       scrollBehavior: FluentScrollBehavior(),
-      builder: (context, child) => OverlayLayer(child: child!),
+      builder: (context, child) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        return AnnotatedRegion<SystemUiOverlayStyle>(
+          value: SystemUiOverlayStyle(
+            statusBarColor: Colors.transparent,
+            statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+            statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
+            systemNavigationBarColor: Colors.transparent,
+            systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+            systemNavigationBarDividerColor: Colors.transparent,
+            systemNavigationBarContrastEnforced: false,
+          ),
+          child: OverlayLayer(child: child!),
+        );
+      },
       home: const PlayerShortcutWrapper(child: MainDashboard()),
     );
   }

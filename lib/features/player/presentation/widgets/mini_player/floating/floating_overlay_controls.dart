@@ -28,19 +28,29 @@ class _FloatingOverlayControlsState extends ConsumerState<FloatingOverlayControl
 
   @override
   Widget build(BuildContext context) {
-    final audioState = ref.watch(audioProvider);
-    final audioNotifier = ref.read(audioProvider.notifier);
-    final popState = ref.watch(miniPlayerPopProvider);
-    final popNotifier = ref.read(miniPlayerPopProvider.notifier);
+    final isOverlayVisible = ref.watch(
+      miniPlayerPopProvider.select((s) => s.viewState == MiniPlayerViewState.hover),
+    );
+    if (!isOverlayVisible) {
+      return const SizedBox.shrink();
+    }
 
-    final viewState = popState.viewState;
-    final bool isOverlayVisible = viewState == MiniPlayerViewState.hover;
+    final (isShuffleEnabled, loopMode, volume, speed, pitch) = ref.watch(
+      audioProvider.select((s) => (
+        s.isShuffleEnabled,
+        s.loopMode,
+        s.volume,
+        s.speed,
+        s.pitch,
+      )),
+    );
+    final audioNotifier = ref.read(audioProvider.notifier);
+    final popNotifier = ref.read(miniPlayerPopProvider.notifier);
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
-      color: isOverlayVisible ? Colors.black.withValues(alpha: 0.6) : Colors.transparent,
-      child: isOverlayVisible
-          ? Center(
+      color: Colors.black.withValues(alpha: 0.6),
+      child: Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -52,7 +62,7 @@ class _FloatingOverlayControlsState extends ConsumerState<FloatingOverlayControl
                         icon: UIcons.regular.shuffle,
                         onTap: audioNotifier.toggleShuffle,
                         tooltip: 'Shuffle',
-                        color: audioState.isShuffleEnabled ? Theme.of(context).primaryColor : Colors.white,
+                        color: isShuffleEnabled ? Theme.of(context).primaryColor : Colors.white,
                       ),
                       const SizedBox(width: 24),
                       ReusableHoverIconButton(
@@ -63,10 +73,10 @@ class _FloatingOverlayControlsState extends ConsumerState<FloatingOverlayControl
                       ),
                       const SizedBox(width: 24),
                       ReusableHoverIconButton(
-                        icon: audioState.loopMode == LoopMode.one ? UIcons.regular.arrows_repeat_1 : UIcons.regular.arrows_repeat,
+                        icon: loopMode == LoopMode.one ? UIcons.regular.arrows_repeat_1 : UIcons.regular.arrows_repeat,
                         onTap: audioNotifier.cycleLoopMode,
                         tooltip: 'Repeat Mode',
-                        color: audioState.loopMode != LoopMode.off ? Theme.of(context).primaryColor : Colors.white,
+                        color: loopMode != LoopMode.off ? Theme.of(context).primaryColor : Colors.white,
                         isSelected: false, 
                       ),
                     ],
@@ -80,9 +90,9 @@ class _FloatingOverlayControlsState extends ConsumerState<FloatingOverlayControl
                     child: Row(
                       children: [
                         ReusableHoverIconButton(
-                          icon: _getVolumeIcon(audioState.volume),
-                          onTap: () => _toggleMute(audioState.volume, audioNotifier),
-                          tooltip: audioState.volume > 0 ? 'Mute' : 'Unmute',
+                          icon: _getVolumeIcon(volume),
+                          onTap: () => _toggleMute(volume, audioNotifier),
+                          tooltip: volume > 0 ? 'Mute' : 'Unmute',
                           iconSize: 18,
                           padding: 4,
                           color: Colors.white,
@@ -99,7 +109,7 @@ class _FloatingOverlayControlsState extends ConsumerState<FloatingOverlayControl
                               overlayShape: const RoundSliderOverlayShape(overlayRadius: 10),
                             ),
                             child: Slider(
-                              value: audioState.volume,
+                              value: volume,
                               min: 0,
                               max: 100,
                               onChanged: (v) => audioNotifier.setVolume(v),
@@ -110,7 +120,7 @@ class _FloatingOverlayControlsState extends ConsumerState<FloatingOverlayControl
                         SizedBox(
                           width: 32,
                           child: Text(
-                            '${audioState.volume.round()}%',
+                            '${volume.round()}%',
                             style: const TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold),
                             textAlign: TextAlign.end,
                           ),
@@ -126,7 +136,7 @@ class _FloatingOverlayControlsState extends ConsumerState<FloatingOverlayControl
                     padding: const EdgeInsets.symmetric(horizontal: 24),
                     child: Row(
                       children: [
-                        _buildSpeedToggle(audioState.speed, audioNotifier),
+                        _buildSpeedToggle(speed, audioNotifier),
                         const SizedBox(width: 8),
                         Expanded(
                           child: SliderTheme(
@@ -139,7 +149,7 @@ class _FloatingOverlayControlsState extends ConsumerState<FloatingOverlayControl
                               overlayShape: const RoundSliderOverlayShape(overlayRadius: 10),
                             ),
                             child: Slider(
-                              value: audioState.pitch,
+                              value: pitch,
                               min: -12.0,
                               max: 12.0,
                               onChanged: (v) => audioNotifier.setPitch(v),
@@ -150,7 +160,7 @@ class _FloatingOverlayControlsState extends ConsumerState<FloatingOverlayControl
                         SizedBox(
                           width: 32,
                           child: Text(
-                            '${audioState.pitch >= 0 ? '+' : ''}${audioState.pitch.toStringAsFixed(1)}',
+                            '${pitch >= 0 ? '+' : ''}${pitch.toStringAsFixed(1)}',
                             style: TextStyle(color: Theme.of(context).primaryColor, fontSize: 10, fontWeight: FontWeight.bold),
                             textAlign: TextAlign.end,
                           ),
@@ -162,8 +172,7 @@ class _FloatingOverlayControlsState extends ConsumerState<FloatingOverlayControl
                   ),
                 ],
               ),
-            )
-          : const SizedBox.shrink(),
+            ),
     );
   }
 

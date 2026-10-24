@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/explore_item.dart';
 import '../models/explore_playlist.dart';
 import '../services/youtube_innertube_client.dart';
+import '../../../playlist/application/services/playlist_input_handler.dart';
+import '../../../../core/utils/thumbnail_utils.dart';
 
 final youtubePlaylistRepositoryProvider = Provider<YoutubePlaylistRepository>((ref) {
   final client = ref.watch(youtubeInnerTubeClientProvider);
@@ -43,11 +45,25 @@ class YoutubePlaylistRepository {
     }
   }
 
-  Future<List<ExploreItem>> fetchFullPlaylistContents(String playlistId) async {
+  Future<List<ExploreItem>> fetchFullPlaylistContents(String input) async {
     final List<ExploreItem> items = [];
     String? continuationToken;
 
     try {
+      final analysis = PlaylistInputHandler.analyze(input);
+      if (analysis.type == PlaylistInputType.singleTrack && analysis.videoId != null) {
+        debugPrint('[YoutubePlaylistRepo] Single track detected (${analysis.videoId}), resolving track details directly');
+        final track = await _fetchSingleTrackDetails(analysis.videoId!);
+        if (track != null) items.add(track);
+        return items;
+      }
+
+      final playlistId = analysis.playlistId ?? input.trim();
+      if (playlistId.startsWith('http://') || playlistId.startsWith('https://')) {
+        debugPrint('[YoutubePlaylistRepo] Cannot browse raw URL: $playlistId');
+        return items;
+      }
+
       final rawId = playlistId.startsWith('VL') ? playlistId.substring(2) : playlistId;
       
       // Mix/radio playlists (RDAMVM..., RDCLAK..., VLRD..., RDAT..., OLAK...) use 'next' endpoint
@@ -136,6 +152,42 @@ class YoutubePlaylistRepository {
       debugPrint('[YoutubePlaylistRepo] Error fetching playlist contents: $e');
     }
     return items;
+  }
+
+  Future<ExploreItem?> _fetchSingleTrackDetails(String videoId) async {
+    try {
+      final data = await _client.post(
+        'player',
+        {"videoId": videoId},
+        profile: YoutubeClientProfile.webRemix,
+      );
+      final details = data['videoDetails'] as Map<String, dynamic>?;
+      if (details == null) return null;
+
+      final title = details['title'] as String? ?? 'Unknown Title';
+      final author = details['author'] as String? ?? 'Unknown Artist';
+      final seconds = int.tryParse(details['lengthSeconds']?.toString() ?? '0') ?? 0;
+      final m = seconds ~/ 60;
+      final s = seconds % 60;
+      final duration = '$m:${s.toString().padLeft(2, '0')}';
+      final thumbs = details['thumbnail']?['thumbnails'] as List?;
+      final rawThumbUrl = thumbs != null && thumbs.isNotEmpty ? thumbs.last['url'] as String? : null;
+      final thumbnailUrl = ThumbnailUtils.upgradeResolution(rawThumbUrl);
+
+      return ExploreItem(
+        id: videoId,
+        title: title,
+        author: author,
+        duration: duration,
+        type: 'audio',
+        thumbnailUrl: thumbnailUrl,
+        url: 'https://www.youtube.com/watch?v=$videoId',
+        originalVideo: null,
+      );
+    } catch (e) {
+      debugPrint('[YoutubePlaylistRepo] _fetchSingleTrackDetails error: $e');
+      return null;
+    }
   }
 
   Future<bool> editYouTubePlaylist(String playlistId, String videoId, {required bool isAdd, String? setVideoId}) async {

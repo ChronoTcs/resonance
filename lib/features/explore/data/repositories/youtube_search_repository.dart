@@ -7,6 +7,8 @@ import '../models/explore_playlist.dart';
 import '../services/youtube_innertube_client.dart';
 import '../models/explore_home.dart';
 import '../../../../core/utils/thumbnail_utils.dart';
+import '../../../../core/utils/recommendation_sampler.dart';
+import 'youtube_playlist_repository.dart';
 
 final youtubeSearchRepositoryProvider = Provider<YoutubeSearchRepository>((ref) {
   final client = ref.watch(youtubeInnerTubeClientProvider);
@@ -39,17 +41,71 @@ class YoutubeSearchRepository {
       );
 
       final List<ExploreItem> results = [];
-      final contents =
-          data['contents']?['tabbedSearchResultsRenderer']?['tabs']?[0]
-              ?['tabRenderer']?['content']?['sectionListRenderer']
-              ?['contents'] as List? ?? [];
+      String? continuationToken;
+      final sectionListRenderer = data['contents']?['tabbedSearchResultsRenderer']?['tabs']?[0]
+              ?['tabRenderer']?['content']?['sectionListRenderer'];
+      final contents = sectionListRenderer?['contents'] as List? ?? [];
+
+      continuationToken = _extractContinuationToken(sectionListRenderer);
 
       for (var section in contents) {
+        continuationToken ??= _extractContinuationToken(section);
+
         // ── Top Result card (musicCardShelfRenderer) ──
         final cardShelf = section['musicCardShelfRenderer'];
         if (cardShelf != null) {
-          final videoId = cardShelf['navigationEndpoint']?['watchEndpoint']?['videoId'];
-          if (videoId != null) {
+          final titleRuns = cardShelf['title']?['runs'] as List?;
+
+          // Check if top card is an Artist channel
+          String? artistBrowseId;
+          if (titleRuns != null && titleRuns.isNotEmpty) {
+            final endpoint = (titleRuns.first as Map<String, dynamic>?)?['navigationEndpoint']?['browseEndpoint'];
+            final pageType = endpoint?['browseEndpointContextSupportedConfigs']?['browseEndpointContextMusicConfig']?['pageType'] as String?;
+            final browseId = endpoint?['browseId'] as String?;
+            if (pageType == 'MUSIC_PAGE_TYPE_ARTIST' || (browseId != null && browseId.startsWith('UC'))) {
+              artistBrowseId = browseId;
+            }
+          }
+
+          // 1. Extract embedded top songs inside cardShelf['contents']
+          final cardContents = cardShelf['contents'] as List?;
+          if (cardContents != null && cardContents.isNotEmpty) {
+            for (final c in cardContents) {
+              final renderer = c['musicResponsiveListItemRenderer'];
+              if (renderer == null) continue;
+              final vid = _extractVideoId(renderer);
+              if (vid == null) continue;
+              final meta = _parseMetadataLine(renderer);
+              results.add(ExploreItem(
+                id: vid,
+                title: _client.getText(renderer['flexColumns']?[0]
+                        ?['musicResponsiveListItemFlexColumnRenderer']?['text']) ??
+                    'Unknown',
+                author: meta.author != 'Unknown Author' ? meta.author : (_client.getText(cardShelf['title']) ?? 'Unknown'),
+                album: meta.album,
+                duration: meta.duration,
+                type: meta.type,
+                thumbnailUrl: ThumbnailUtils.upgradeResolution(
+                  renderer['thumbnail']?['musicThumbnailRenderer']?['thumbnail']?['thumbnails']?.last?['url'] ??
+                      cardShelf['thumbnail']?['musicThumbnailRenderer']?['thumbnail']?['thumbnails']?.last?['url'],
+                ),
+                url: 'https://www.youtube.com/watch?v=$vid',
+                originalVideo: null,
+              ));
+            }
+          }
+
+          // 2. Extract playable single track from the card shelf itself
+          String? videoId = cardShelf['onTap']?['watchEndpoint']?['videoId'] as String?;
+          if (videoId == null && titleRuns != null && titleRuns.isNotEmpty) {
+            videoId = (titleRuns.first as Map<String, dynamic>?)?['navigationEndpoint']?['watchEndpoint']?['videoId'] as String?;
+          }
+          videoId ??= cardShelf['navigationEndpoint']?['watchEndpoint']?['videoId'] as String?;
+          final buttons = cardShelf['buttons'] as List?;
+          if (videoId == null && buttons != null && buttons.isNotEmpty) {
+            videoId = (buttons.first as Map<String, dynamic>?)?['musicPlayButtonRenderer']?['playNavigationEndpoint']?['watchEndpoint']?['videoId'] as String?;
+          }
+          if (videoId != null && !results.any((r) => r.id == videoId)) {
             final subtitleRuns = cardShelf['subtitle']?['runs'] as List?;
             String author = 'Unknown Author';
             String duration = '0:00';
@@ -68,7 +124,6 @@ class YoutubeSearchRepository {
                 }
               }
 
-              // Prefer extracting artist via navigationEndpoint (authoritative)
               for (final r in subtitleRuns) {
                 final pageType = r['navigationEndpoint']?['browseEndpoint']?['browseEndpointContextSupportedConfigs']?['browseEndpointContextMusicConfig']?['pageType'] as String?;
                 final browseId = r['navigationEndpoint']?['browseEndpoint']?['browseId'] as String?;
@@ -105,23 +160,37 @@ class YoutubeSearchRepository {
               originalVideo: null,
             ));
           }
+
+          // 3. If an Artist channel was matched, enrich with artist canonical catalog
+          if (artistBrowseId != null) {
+            final artistTracks = await fetchArtistTopTracks(artistBrowseId);
+            for (final track in artistTracks) {
+              if (!results.any((r) => r.id == track.id)) {
+                results.add(track);
+              }
+            }
+          }
+
           continue;
         }
 
-        // ── Grouped shelf (musicShelfRenderer) — fallback layout ──
-        final shelfItems = section['musicShelfRenderer']?['contents'] as List?;
-
-        // ── Per-item sections (itemSectionRenderer) — Songs filter layout ──
-        // Each track lives in its own itemSectionRenderer.contents[0]
+        // ── Grouped shelf (musicShelfRenderer) & per-item sections ──
+        final shelf = section['musicShelfRenderer'];
+        if (shelf != null) {
+          continuationToken ??= _extractContinuationToken(shelf);
+        }
+        final shelfItems = shelf?['contents'] as List?;
         final itemSectionItems = section['itemSectionRenderer']?['contents'] as List?;
 
         final rowList = shelfItems ?? itemSectionItems ?? [];
         for (var item in rowList) {
           final renderer = item['musicResponsiveListItemRenderer'];
-          if (renderer == null) continue;
+          if (renderer == null) {
+            continuationToken ??= _extractContinuationToken(item);
+            continue;
+          }
 
-          final videoId = renderer['playlistItemData']?['videoId'] ??
-              renderer['navigationEndpoint']?['watchEndpoint']?['videoId'];
+          final videoId = _extractVideoId(renderer);
           if (videoId == null) continue;
 
           final metadata = _parseMetadataLine(renderer);
@@ -143,10 +212,157 @@ class YoutubeSearchRepository {
         }
       }
 
-      debugPrint('[YoutubeSearchRepo] search: found ${results.length} YTM tracks for "$query"');
-      return results;
+      // ── Process continuations if available (up to 2 hops or 40 items) ──
+      int contHops = 0;
+      while (continuationToken != null && contHops < 2 && results.length < 40) {
+        contHops++;
+        try {
+          final contData = await _client.post(
+            'search',
+            {"continuation": continuationToken},
+            profile: YoutubeClientProfile.webRemix,
+          );
+          final contItems = contData['continuationContents']?['musicShelfContinuation']?['contents'] as List? ??
+              contData['onResponseReceivedActions']?[0]?['appendContinuationItemsAction']?['continuationItems'] as List? ??
+              [];
+          for (var item in contItems) {
+            final renderer = item['musicResponsiveListItemRenderer'];
+            if (renderer == null) continue;
+            final videoId = _extractVideoId(renderer);
+            if (videoId == null) continue;
+
+            final metadata = _parseMetadataLine(renderer);
+            results.add(ExploreItem(
+              id: videoId,
+              title: _client.getText(renderer['flexColumns']?[0]
+                      ?['musicResponsiveListItemFlexColumnRenderer']?['text']) ??
+                  'Unknown',
+              author: metadata.author,
+              album: metadata.album,
+              duration: metadata.duration,
+              type: metadata.type,
+              thumbnailUrl: ThumbnailUtils.upgradeResolution(
+                renderer['thumbnail']?['musicThumbnailRenderer']?['thumbnail']?['thumbnails']?.last?['url'],
+              ),
+              url: 'https://www.youtube.com/watch?v=$videoId',
+              originalVideo: null,
+            ));
+          }
+          continuationToken = _extractContinuationToken(contData['continuationContents']?['musicShelfContinuation']) ??
+              _extractContinuationToken(contData['onResponseReceivedActions']?[0]?['appendContinuationItemsAction']?['continuationItems']?.last);
+        } catch (e) {
+          debugPrint('[YoutubeSearchRepo] Search continuation error: $e');
+          break;
+        }
+      }
+
+      // Deduplicate results by ID while preserving ranking order
+      final Set<String> seenIds = {};
+      final List<ExploreItem> deduped = [];
+      for (final item in results) {
+        if (seenIds.add(item.id)) {
+          deduped.add(item);
+        }
+      }
+
+      debugPrint('[YoutubeSearchRepo] search: found ${deduped.length} YTM tracks for "$query"');
+      return deduped;
     } catch (e) {
       debugPrint('[YoutubeSearchRepo] Search error: $e');
+      return [];
+    }
+  }
+
+  /// Extracts playable videoId across direct endpoints and thumbnail overlay action buttons.
+  String? _extractVideoId(Map<String, dynamic> renderer) {
+    return renderer['playlistItemData']?['videoId'] as String? ??
+        renderer['navigationEndpoint']?['watchEndpoint']?['videoId'] as String? ??
+        renderer['overlay']?['musicItemThumbnailOverlayRenderer']?['content']
+            ?['musicPlayButtonRenderer']?['playNavigationEndpoint']
+            ?['watchEndpoint']?['videoId'] as String? ??
+        renderer['onTap']?['watchEndpoint']?['videoId'] as String?;
+  }
+
+  /// Extracts continuation token from diverse InnerTube renderer schemas.
+  String? _extractContinuationToken(dynamic container) {
+    if (container is Map<String, dynamic>) {
+      final conts = container['continuations'] as List?;
+      if (conts != null && conts.isNotEmpty) {
+        final token = conts[0]?['nextContinuationData']?['continuation'] as String?;
+        if (token != null && token.isNotEmpty) return token;
+      }
+      final contRenderer = container['continuationItemRenderer'];
+      if (contRenderer != null) {
+        final token = contRenderer['continuationEndpoint']?['continuationCommand']?['token'] as String?;
+        if (token != null && token.isNotEmpty) return token;
+      }
+    }
+    return null;
+  }
+
+  /// Fetches top canonical songs for an artist channel (e.g. from artist browseId 'UC...').
+  Future<List<ExploreItem>> fetchArtistTopTracks(String artistBrowseId, {int limit = 35}) async {
+    if (ref != null && !ref!.read(networkConnectivityProvider).isOnline) {
+      return [];
+    }
+    try {
+      final data = await _client.post(
+        'browse',
+        {"browseId": artistBrowseId},
+        profile: YoutubeClientProfile.webRemix,
+      );
+
+      final tabs = data['contents']?['singleColumnBrowseResultsRenderer']?['tabs'] as List?;
+      final sectionContents = tabs?[0]?['tabRenderer']?['content']?['sectionListRenderer']?['contents'] as List?;
+      if (sectionContents == null || sectionContents.isEmpty) return [];
+
+      for (final section in sectionContents) {
+        final shelf = section['musicShelfRenderer'];
+        if (shelf == null) continue;
+
+        // Check if shelf has bottomEndpoint for the full Top Songs playlist
+        final bottomEndpoint = shelf['bottomEndpoint']?['browseEndpoint']?['browseId'] as String?;
+        if (bottomEndpoint != null && (bottomEndpoint.startsWith('VL') || bottomEndpoint.startsWith('PL') || bottomEndpoint.startsWith('OLAK'))) {
+          if (ref != null) {
+            final playlistTracks = await ref!.read(youtubePlaylistRepositoryProvider).fetchFullPlaylistContents(bottomEndpoint);
+            if (playlistTracks.isNotEmpty) {
+              return playlistTracks.take(limit).toList();
+            }
+          }
+        }
+
+        // Fallback: parse direct shelf contents
+        final shelfItems = shelf['contents'] as List?;
+        if (shelfItems != null && shelfItems.isNotEmpty) {
+          final List<ExploreItem> directTracks = [];
+          for (final item in shelfItems) {
+            final renderer = item['musicResponsiveListItemRenderer'];
+            if (renderer == null) continue;
+            final vid = _extractVideoId(renderer);
+            if (vid == null) continue;
+            final meta = _parseMetadataLine(renderer);
+            directTracks.add(ExploreItem(
+              id: vid,
+              title: _client.getText(renderer['flexColumns']?[0]
+                      ?['musicResponsiveListItemFlexColumnRenderer']?['text']) ??
+                  'Unknown',
+              author: meta.author,
+              album: meta.album,
+              duration: meta.duration,
+              type: meta.type,
+              thumbnailUrl: ThumbnailUtils.upgradeResolution(
+                renderer['thumbnail']?['musicThumbnailRenderer']?['thumbnail']?['thumbnails']?.last?['url'],
+              ),
+              url: 'https://www.youtube.com/watch?v=$vid',
+              originalVideo: null,
+            ));
+          }
+          if (directTracks.isNotEmpty) return directTracks;
+        }
+      }
+      return [];
+    } catch (e) {
+      debugPrint('[YoutubeSearchRepo] fetchArtistTopTracks error for $artistBrowseId: $e');
       return [];
     }
   }
@@ -233,12 +449,55 @@ class YoutubeSearchRepository {
     }
   }
 
+  /// Fetches authoritative metadata for a single video/track via InnerTube player endpoint.
+  Future<ExploreItem?> fetchTrackDetails(String videoId) async {
+    if (ref != null && !ref!.read(networkConnectivityProvider).isOnline) {
+      debugPrint('[YoutubeSearchRepo] Offline — skipping fetchTrackDetails for $videoId');
+      return null;
+    }
+    try {
+      final data = await _client.post(
+        'player',
+        {"videoId": videoId},
+        profile: YoutubeClientProfile.webRemix,
+      );
+      final details = data['videoDetails'] as Map<String, dynamic>?;
+      if (details == null) return null;
+
+      final title = details['title'] as String? ?? 'Unknown Title';
+      final author = details['author'] as String? ?? 'Unknown Artist';
+      final seconds = int.tryParse(details['lengthSeconds']?.toString() ?? '0') ?? 0;
+      final m = seconds ~/ 60;
+      final s = seconds % 60;
+      final duration = '$m:${s.toString().padLeft(2, '0')}';
+      final thumbs = details['thumbnail']?['thumbnails'] as List?;
+      final rawThumbUrl = thumbs != null && thumbs.isNotEmpty ? thumbs.last['url'] as String? : null;
+      final thumbnailUrl = ThumbnailUtils.upgradeResolution(rawThumbUrl);
+
+      return ExploreItem(
+        id: videoId,
+        title: title,
+        author: author,
+        duration: duration,
+        type: 'audio',
+        thumbnailUrl: thumbnailUrl,
+        url: 'https://www.youtube.com/watch?v=$videoId',
+        originalVideo: null,
+      );
+    } catch (e) {
+      debugPrint('[YoutubeSearchRepo] fetchTrackDetails error: $e');
+      return null;
+    }
+  }
+
   /// Fetches Spotify-like radio recommendations seeded from [videoId].
   /// Uses YT Music /next endpoint with RDAMVM prefix.
-  /// Returns up to [limit] tracks, excluding the seed track itself.
+  /// Applies entropy sampling and optional [excludeIds] deduplication.
   Future<List<MediaItem>> getRadioRecommendations(
     String videoId, {
     int limit = 20,
+    Set<String>? excludeIds,
+    bool enableEntropy = true,
   }) async {
     if (ref != null && !ref!.read(networkConnectivityProvider).isOnline) {
       debugPrint('[YoutubeSearchRepo] Offline — skipping radio recommendations for $videoId');
@@ -269,7 +528,7 @@ class YoutubeSearchRepository {
               ?['contents'] ??
           [];
 
-      final List<MediaItem> recommendations = [];
+      final List<MediaItem> rawCandidates = [];
       for (final entry in queueItems) {
         final renderer = entry['playlistPanelVideoRenderer'];
         if (renderer == null) continue;
@@ -297,7 +556,7 @@ class YoutubeSearchRepository {
               : Duration(hours: parts[0], minutes: parts[1], seconds: parts[2]);
         }
 
-        recommendations.add(MediaItem(
+        rawCandidates.add(MediaItem(
           id: id,
           path: id, // streaming — resolved on play
           title: title,
@@ -307,11 +566,25 @@ class YoutubeSearchRepository {
           type: 'audio',
         ));
 
-        if (recommendations.length >= limit) break;
+        if (rawCandidates.length >= 30) break; // Collect candidate pool for entropy
+      }
+
+      final List<MediaItem> recommendations;
+      if (enableEntropy && rawCandidates.length > limit) {
+        recommendations = RecommendationSampler.sample(
+          candidates: rawCandidates,
+          count: limit,
+          excludeIds: excludeIds ?? const {},
+        );
+      } else {
+        recommendations = rawCandidates
+            .where((t) => !(excludeIds?.contains(t.id ?? t.path) ?? false))
+            .take(limit)
+            .toList();
       }
 
       debugPrint(
-          '[YoutubeSearchRepo] Got ${recommendations.length} recommendations for $videoId');
+          '[YoutubeSearchRepo] Got ${recommendations.length} recommendations (from ${rawCandidates.length} candidates) for $videoId');
       return recommendations;
     } catch (e) {
       debugPrint('[YoutubeSearchRepo] Radio recommendations failed for $videoId: $e');

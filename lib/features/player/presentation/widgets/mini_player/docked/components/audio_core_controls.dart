@@ -14,7 +14,23 @@ class AudioCoreControls extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final audioState = ref.watch(audioProvider);
+    final (
+      isPlaying,
+      isLoading,
+      isShuffleEnabled,
+      loopMode,
+      isPrevDisabled,
+      isNextDisabled,
+    ) = ref.watch(
+      audioProvider.select((s) => (
+        s.isPlaying,
+        s.isLoading,
+        s.isShuffleEnabled,
+        s.loopMode,
+        s.currentIndex <= 0 && s.loopMode == LoopMode.off,
+        s.currentIndex >= s.queue.length - 1 && s.loopMode == LoopMode.off,
+      )),
+    );
     final audioNotifier = ref.read(audioProvider.notifier);
 
     if (isDesktop) {
@@ -27,7 +43,7 @@ class AudioCoreControls extends ConsumerWidget {
               ReusableHoverIconButton(
                 tooltip: 'Shuffle',
                 icon: UIcons.regular.shuffle,
-                color: audioState.isShuffleEnabled
+                color: isShuffleEnabled
                     ? Theme.of(context).primaryColor
                     : Theme.of(context).iconTheme.color?.withValues(alpha: 0.5),
                 iconSize: 18,
@@ -37,13 +53,12 @@ class AudioCoreControls extends ConsumerWidget {
                 tooltip: 'Previous',
                 icon: UIcons.regular.step_backward,
                 iconSize: 18,
-                isDisabled: audioState.currentIndex <= 0 &&
-                    audioState.loopMode == LoopMode.off,
+                isDisabled: isPrevDisabled,
                 onTap: () => audioNotifier.skipToPrevious(),
               ),
               PlayPauseButton(
-                isPlaying: audioState.isPlaying,
-                isLoading: audioState.isLoading,
+                isPlaying: isPlaying,
+                isLoading: isLoading,
                 size: PlayPauseSize.medium,
                 onTap: () => audioNotifier.togglePlayPause(),
               ),
@@ -51,20 +66,19 @@ class AudioCoreControls extends ConsumerWidget {
                 tooltip: 'Next',
                 icon: UIcons.regular.step_forward,
                 iconSize: 18,
-                isDisabled: audioState.currentIndex >= audioState.queue.length - 1 &&
-                    audioState.loopMode == LoopMode.off,
+                isDisabled: isNextDisabled,
                 onTap: () => audioNotifier.skipToNext(),
               ),
               ReusableHoverIconButton(
-                tooltip: audioState.loopMode == LoopMode.off
+                tooltip: loopMode == LoopMode.off
                     ? 'Repeat Off'
-                    : audioState.loopMode == LoopMode.one
+                    : loopMode == LoopMode.one
                         ? 'Repeat One'
                         : 'Repeat All',
-                icon: audioState.loopMode == LoopMode.one
+                icon: loopMode == LoopMode.one
                     ? UIcons.regular.arrows_repeat_1
                     : UIcons.regular.arrows_repeat,
-                color: audioState.loopMode == LoopMode.off
+                color: loopMode == LoopMode.off
                     ? Theme.of(context).iconTheme.color?.withValues(alpha: 0.5)
                     : Theme.of(context).primaryColor,
                 iconSize: 18,
@@ -81,8 +95,8 @@ class AudioCoreControls extends ConsumerWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           PlayPauseButton(
-            isPlaying: audioState.isPlaying,
-            isLoading: audioState.isLoading,
+            isPlaying: isPlaying,
+            isLoading: isLoading,
             size: PlayPauseSize.small,
             onTap: () => audioNotifier.togglePlayPause(),
           ),
@@ -91,8 +105,7 @@ class AudioCoreControls extends ConsumerWidget {
             tooltip: 'Next',
             icon: UIcons.regular.step_forward,
             iconSize: 18,
-            isDisabled: audioState.currentIndex >= audioState.queue.length - 1 &&
-                audioState.loopMode == LoopMode.off,
+            isDisabled: isNextDisabled,
             onTap: () => audioNotifier.skipToNext(),
           ),
         ],

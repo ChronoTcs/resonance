@@ -5,7 +5,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:silky_scroll/silky_scroll.dart';
 import 'package:resonance/core/utils/app_icons.dart';
 import 'package:resonance/core/utils/thumbnail_utils.dart';
-import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/core/widgets/widgets.dart';
 import 'package:resonance/features/home/presentation/providers/home_feed_provider.dart';
 import 'package:resonance/features/library/data/models/media_item.dart';
@@ -38,6 +37,7 @@ Widget _buildPersonalizedArtwork(
       File(localArtPath),
       width: width,
       height: height,
+      cacheWidth: 200,
       fit: BoxFit.cover,
       errorBuilder: (context, error, stackTrace) => Container(
         width: width,
@@ -52,7 +52,6 @@ Widget _buildPersonalizedArtwork(
       width: width,
       height: height,
       memCacheWidth: 400,
-      memCacheHeight: 400,
       fit: BoxFit.cover,
       placeholder: (context, url) => Container(
         width: width,
@@ -87,13 +86,11 @@ Widget _buildPersonalizedArtwork(
 class _TrackCarouselBoxSection extends ConsumerWidget {
   final String title;
   final String? subtitle;
-  final IconData? icon;
   final List<MediaItem> items;
 
   const _TrackCarouselBoxSection({
     required this.title,
     this.subtitle,
-    this.icon,
     required this.items,
   });
 
@@ -110,24 +107,20 @@ class _TrackCarouselBoxSection extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  if (icon != null) ...[
-                    Icon(icon, size: 18, color: theme.primaryColor),
-                    const SizedBox(width: 8),
-                  ],
-                  Text(
-                    title,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               if (subtitle != null) ...[
                 const SizedBox(height: 2),
                 Text(
                   subtitle!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                     fontSize: 11.5,
@@ -206,13 +199,11 @@ class _TrackCarouselBoxSection extends ConsumerWidget {
 class _TrackCarouselSliverSection extends StatelessWidget {
   final String title;
   final String? subtitle;
-  final IconData? icon;
   final List<MediaItem> items;
 
   const _TrackCarouselSliverSection({
     required this.title,
     this.subtitle,
-    this.icon,
     required this.items,
   });
 
@@ -223,7 +214,6 @@ class _TrackCarouselSliverSection extends StatelessWidget {
       child: _TrackCarouselBoxSection(
         title: title,
         subtitle: subtitle,
-        icon: icon,
         items: items,
       ),
     );
@@ -242,7 +232,6 @@ class HomeDailyDiscoverSection extends ConsumerWidget {
       data: (items) => _TrackCarouselSliverSection(
         title: 'Daily Discover',
         subtitle: 'Fresh mix seeded by your top listening trends',
-        icon: UIcons.regular.globe,
         items: items,
       ),
       loading: () => const SectionCarouselSliverSkeleton(titleWidth: 110, subtitleWidth: 200),
@@ -263,7 +252,6 @@ class HomeForgottenFavoritesSection extends ConsumerWidget {
       data: (items) => _TrackCarouselSliverSection(
         title: 'Forgotten Favorites',
         subtitle: 'Rediscover tracks you used to love',
-        icon: UIcons.regular.heart,
         items: items,
       ),
       loading: () => const SectionCarouselSliverSkeleton(titleWidth: 140, subtitleWidth: 175),
@@ -291,7 +279,6 @@ class HomeSimilarArtistsSection extends ConsumerWidget {
               return _TrackCarouselBoxSection(
                 title: 'Similar to ${row.artist}',
                 subtitle: 'Based on your history with ${row.artist}',
-                icon: UIcons.regular.user,
                 items: row.tracks,
               );
             },

@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -48,8 +47,8 @@ class _BlurNotifier extends Notifier<bool> {
 /// BlurTransitionOverlay.run(ref, () async => togglePop());
 /// ```
 class BlurTransitionOverlay {
-  /// Time to let AnimatedSwitcher reach full opacity before acting.
-  static const _peakDuration = Duration(milliseconds: 260);
+  /// Time to let curtain paint before initiating window transform.
+  static const _peakDuration = Duration(milliseconds: 30);
 
   /// Static reference to the notifier, allowing safe execution even if
   /// the triggering widget is unmounted during transitions.
@@ -105,16 +104,12 @@ class BlurTransitionLayer extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final visible = ref.watch(_blurTransitionProvider);
+    if (!visible) return const SizedBox.shrink(key: ValueKey('blur_off'));
 
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 280),
-      child: visible
-          ? BackdropFilter(
-              key: const ValueKey('blur_on'),
-              filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-              child: Container(color: Colors.black.withValues(alpha: 0.45)),
-            )
-          : const SizedBox.shrink(key: ValueKey('blur_off')),
+    final theme = Theme.of(context);
+    return ColoredBox(
+      key: const ValueKey('blur_on'),
+      color: theme.colorScheme.surface,
     );
   }
 }

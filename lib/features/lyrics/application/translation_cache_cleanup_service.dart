@@ -3,13 +3,13 @@ import 'package:flutter/foundation.dart';
 import '../../../core/data/services/cache_manager.dart';
 
 class TranslationCacheCleanup {
-  static Future<void> cleanup(CacheManager cacheManager) async {
+  static Future<void> cleanup(CacheManager cacheManager, {int maxAgeDays = 30}) async {
     try {
       final translateDir = await cacheManager.getTranslateDir();
       if (!await translateDir.exists()) return;
 
       final now = DateTime.now();
-      final maxAge = const Duration(days: 30);
+      final maxAge = Duration(days: maxAgeDays);
       int deletedCount = 0;
 
       await for (final entity in translateDir.list(recursive: false)) {

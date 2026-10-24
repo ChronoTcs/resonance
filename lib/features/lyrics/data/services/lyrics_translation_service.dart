@@ -20,7 +20,7 @@ class LyricsTranslationService {
 
   /// Fetches both translation and romanization (pronunciation) from Google Translate
   /// in a single HTTP request for maximum efficiency.
-  /// Uses a "Delimiter Hack" to preserve synchronization across lines.
+  /// Uses structured line delimiters to preserve synchronization across lines.
   Future<UnifiedLyricsResult> fetchUnifiedLyrics(
     List<LyricLine> originalLyrics,
     String targetLanguage,

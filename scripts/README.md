@@ -57,26 +57,26 @@ Follow this checklist whenever releasing an update, pushing new commits, or trig
 Always keep the version and build numbers in sync across configuration files:
 1. **`pubspec.yaml`**:
    ```yaml
-   version: 0.1.9-beta+14   # Format: <major>.<minor>.<patch>[-<prerelease>]+<build_number>
+   version: 1.0.0+15   # Format: <major>.<minor>.<patch>[-<prerelease>]+<build_number>
    ```
 2. **`python_engine/version_info.txt`**:
    ```python
-   filevers=(0, 1, 9, 14),
-   prodvers=(0, 1, 9, 14),
+   filevers=(1, 0, 0, 15),
+   prodvers=(1, 0, 0, 15),
    # ...
-   StringStruct(u'FileVersion', u'0.1.9.14'),
-   StringStruct(u'ProductVersion', u'0.1.9-beta+14')
+   StringStruct(u'FileVersion', u'1.0.0.15'),
+   StringStruct(u'ProductVersion', u'1.0.0+15')
    ```
 3. **`windows/resonance_installer.iss`** (when updating base version):
    ```iss
-   #define MyAppVersion "0.1.9-beta"
-   #define MyAppNumericVersion "0.1.9.0"
+   #define MyAppVersion "1.0.0"
+   #define MyAppNumericVersion "1.0.0.0"
    ```
 
 ### Step 2: Prepare Release Notes & Commit Reports
 Document what changed in the project reports folders:
-- **Commit Summary**: Create `reports/commits/commit_v<version>_build<build>.md` (e.g. `reports/commits/commit_v0.1.9_build14.md`).
-- **Release Notes**: Update `reports/releases/release_v<version>_notes.md` and create `reports/releases/release_v<version>-beta_notes.md` (e.g. `reports/releases/release_v0.1.9-beta_notes.md`).
+- **Commit Summary**: Create `reports/commits/commit_v<version>_build<build>.md` (e.g. `reports/commits/commit_v1.0.0_build15.md`).
+- **Release Notes**: Update `reports/releases/release_v<version>_notes.md` (e.g. `reports/releases/release_v1.0.0_notes.md`).
 - **State Memory**: Update `graphify-out/Resonance_State.md` with new features, bug fixes, and architectural notes.
 
 ### Step 3: Run Automated Verification
@@ -88,7 +88,7 @@ flutter test
 ### Step 4: Commit & Push Code to Main Branch
 ```powershell
 git add .
-git commit -F "reports/commits/commit_v0.1.9_build14.md"
+git commit -F "reports/commits/commit_v1.0.0_build15.md"
 git push origin main
 ```
 
@@ -97,21 +97,21 @@ git push origin main
 #### Option A: Trigger via Git Tag (Automatic)
 - **New Release Tag:**
   ```powershell
-  git tag -a v0.1.9-beta -m "Release v0.1.9-beta (Build 14)"
-  git push origin v0.1.9-beta
+  git tag -a v1.0.0 -m "Release v1.0.0 (Build 15)"
+  git push origin v1.0.0
   ```
 - **Updating an Existing Release Tag with a New Build:**
   If the release tag `v0.1.9-beta` already exists on GitHub and you want to rebuild it with the new build number:
   ```powershell
-  git tag -fa v0.1.9-beta -m "Update v0.1.9-beta to Build 14"
-  git push origin v0.1.9-beta --force
+  git tag -fa v1.0.0 -m "Update v1.0.0 to Build 15"
+  git push origin v1.0.0 --force
   ```
 
 #### Option B: Trigger via GitHub Actions UI (Manual Dispatch)
 1. Navigate to the repository on GitHub.
 2. Go to **Actions** → select **Release Pipeline**.
 3. Click **Run workflow** dropdown on the right.
-4. Select the `main` branch and enter the target tag (e.g. `v0.1.9-beta`).
+4. Select the `main` branch and enter the target tag (e.g. `v1.0.0`).
 5. Click **Run workflow**.
 
 ---
@@ -122,12 +122,12 @@ The pipeline and local packaging scripts produce matching binaries conforming to
 
 | File Name | Platform | Description |
 | :--- | :--- | :--- |
-| `Resonance-v0.1.9-beta.14-Android-64bit-arm64.apk` | Android | Optimized 64-bit ARM APK (~33 MB) |
-| `Resonance-v0.1.9-beta.14-Android-32bit-v7a.apk` | Android | Optimized 32-bit ARM APK (~29 MB) |
-| `Resonance-v0.1.9-beta.14-Android-Universal.apk` | Android | Universal APK for all CPU architectures (~92 MB) |
-| `Resonance-v0.1.9-beta-Windows.exe` | Windows | Inno Setup Windows Full Installer (~97 MB) |
-| `Resonance-v0.1.9-beta-Windows-Portable.zip` | Windows | Standalone portable zip archive (~124 MB) |
-| `Resonance-...-to-v0.1.9-beta.14-delta.patch` | Windows | Differential binary patch via HDiffPatch (<26 MB) |
+| `Resonance-v1.0.0.15-Android-64bit-arm64.apk` | Android | Optimized 64-bit ARM APK (~33 MB) |
+| `Resonance-v1.0.0.15-Android-32bit-v7a.apk` | Android | Optimized 32-bit ARM APK (~29 MB) |
+| `Resonance-v1.0.0.15-Android-Universal.apk` | Android | Universal APK for all CPU architectures (~92 MB) |
+| `Resonance-v1.0.0-Windows.exe` | Windows | Inno Setup Windows Full Installer (~97 MB) |
+| `Resonance-v1.0.0-Windows-Portable.zip` | Windows | Standalone portable zip archive (~124 MB) |
+| `Resonance-...-to-v1.0.0.15-delta.patch` | Windows | Differential binary patch via HDiffPatch (skipped on v1.0.0 baseline) |
 
 ---
 
@@ -144,12 +144,16 @@ powershell -ExecutionPolicy Bypass -File "scripts/package_all.ps1"
 # Package Windows only (fast portable build without installer or python rebuild)
 powershell -ExecutionPolicy Bypass -File "scripts/package_all.ps1" -Platform Windows -SkipPythonEngine -SkipInstaller
 
-# Package Android only
+# Package Android only (all ABIs + Universal)
 powershell -ExecutionPolicy Bypass -File "scripts/package_all.ps1" -Platform Android
+
+# Package Android for a specific phone architecture (fast single-ABI build, e.g. arm64)
+powershell -ExecutionPolicy Bypass -File "scripts/package_all.ps1" -Platform Android -TargetAbi arm64
 ```
 
 **Parameters**:
 - `-Platform`: `All` (default), `Windows`, or `Android`.
+- `-TargetAbi`: Target single architecture for Android (`arm64`, `arm`, `x64`, `universal`).
 - `-Version`: Target version string (defaults to `pubspec.yaml`).
 - `-PreviousVersion`: Specify baseline for Windows delta patch generation.
 - `-SkipPythonEngine`: Skip compiling `python_engine/build_downloader.py`.
@@ -163,9 +167,13 @@ powershell -ExecutionPolicy Bypass -File "scripts/package_windows.ps1"
 ```
 
 ### 3. `package_android.ps1`
-Builds Proposal B Split-ABI APKs (`64bit-arm64`, `32bit-v7a`, `x86_64`) and Universal APK into `Releases/v<BaseVersion>/Android/` alongside `manifest.json`.
+Builds Proposal B Split-ABI APKs (`64bit-arm64`, `32bit-v7a`, `x86_64`) and Universal APK into `Releases/v<BaseVersion>/Android/` alongside `manifest.json`. Also supports `-TargetAbi` for ultra-fast single architecture builds.
 ```powershell
+# Build all architectures + Universal
 powershell -ExecutionPolicy Bypass -File "scripts/package_android.ps1"
+
+# Build strictly for 64-bit ARM devices (most modern phones)
+powershell -ExecutionPolicy Bypass -File "scripts/package_android.ps1" -TargetAbi arm64
 ```
 
 ---
@@ -175,7 +183,7 @@ powershell -ExecutionPolicy Bypass -File "scripts/package_android.ps1"
 To test a release build on your own devices before publishing:
 - **Android Phone**:
   ```powershell
-  adb install -r "Releases\v0.1.9-beta\Android\Resonance-v0.1.9-beta.14-Android-64bit-arm64.apk"
+  adb install -r "Releases\v0.1.9-beta\Android\Resonance-v0.1.9-beta.15-Android-64bit-arm64.apk"
   ```
 - **Windows PC**:
   - Run `Releases\v0.1.9-beta\Windows\Resonance-v0.1.9-beta-Windows.exe` to test full installer installation and registry registration.

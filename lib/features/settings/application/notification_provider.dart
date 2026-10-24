@@ -248,6 +248,7 @@ class NotificationNotifier extends Notifier<NotificationState> {
           ongoing: false,
           autoCancel: true,
           showWhen: true,
+          groupKey: 'com.resonance.alerts',
         );
 
         final int notifId = newItem.id.hashCode & 0x7FFFFFFF;
@@ -270,11 +271,14 @@ class NotificationNotifier extends Notifier<NotificationState> {
   }
 
   void clearAll() {
+    final idsToCancel = state.items.map((i) => i.id.hashCode & 0x7FFFFFFF).toList();
     state = state.copyWith(items: []);
     if (_isInitialized) {
-      _localNotificationsPlugin.cancelAll().catchError((e) {
-        debugPrint('[NotificationNotifier] cancelAll failed: $e');
-      });
+      for (final id in idsToCancel) {
+        _localNotificationsPlugin.cancel(id: id).catchError((e) {
+          debugPrint('[NotificationNotifier] cancel failed for $id: $e');
+        });
+      }
     }
   }
 

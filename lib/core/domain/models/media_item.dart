@@ -137,8 +137,7 @@ class MediaItem {
         other.thumbnailUrl == thumbnailUrl &&
         other.duration == duration &&
         other.date == date &&
-        other.type == type &&
-        other.lyricsOffset == lyricsOffset;
+        other.type == type;
   }
 
   @override
@@ -153,7 +152,6 @@ class MediaItem {
       duration,
       date,
       type,
-      lyricsOffset,
     );
   }
 

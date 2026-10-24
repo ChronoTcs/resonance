@@ -26,82 +26,91 @@ class _HoverTrackCardState extends ConsumerState<HoverTrackCard> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    ref.watch(playlistProvider);
-    final isLoved = ref.read(playlistProvider.notifier).isLiked(widget.track);
+    final isLoved = ref.watch(
+      playlistProvider.select(
+        (s) => s.value?.isLiked(widget.track) ?? false,
+      ),
+    );
 
-    return Container(
-      width: 140,
-      margin: const EdgeInsets.symmetric(horizontal: 4),
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        onEnter: (event) {
-          if (event.kind == PointerDeviceKind.touch) return;
-          setState(() => _isHovered = true);
-        },
-        onExit: (_) {
-          if (_isHovered) {
-            setState(() => _isHovered = false);
-          }
-        },
-        child: InkWell(
-          mouseCursor: SystemMouseCursors.click,
-          onTap: () {
-            if (widget.track.isStreaming) {
-              ref.read(audioProvider.notifier).playYouTubeTrack(widget.track);
-            } else {
-              final library = ref.read(libraryProvider);
-              final audioTracks = library.allMedia.where((m) => m.type == 'audio').toList();
-              ref.read(queueOrchestratorProvider).playWithLocalRadioFallback(widget.track, audioTracks);
+    return RepaintBoundary(
+      child: Container(
+        width: 140,
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          onEnter: (event) {
+            if (event.kind == PointerDeviceKind.touch) return;
+            if (!_isHovered) setState(() => _isHovered = true);
+          },
+          onExit: (_) {
+            if (_isHovered) {
+              setState(() => _isHovered = false);
             }
           },
-          onSecondaryTapDown: (details) => MediaActionUtils.showTrackContextMenu(
-            context: context,
-            ref: ref,
-            item: widget.track,
-            position: details.globalPosition,
-          ),
-          onLongPress: () => MediaActionUtils.showMediaActions(context: context, ref: ref, item: widget.track),
-          borderRadius: BorderRadius.circular(8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Stack(
+          child: Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              mouseCursor: SystemMouseCursors.click,
+              splashFactory: NoSplash.splashFactory,
+              onTap: () {
+                if (widget.track.isStreaming) {
+                  ref.read(audioProvider.notifier).playYouTubeTrack(widget.track);
+                } else {
+                  final library = ref.read(libraryProvider);
+                  final audioTracks = library.allMedia.where((m) => m.type == 'audio').toList();
+                  ref.read(queueOrchestratorProvider).playWithLocalRadioFallback(widget.track, audioTracks);
+                }
+              },
+              onSecondaryTapDown: (details) => MediaActionUtils.showTrackContextMenu(
+                context: context,
+                ref: ref,
+                item: widget.track,
+                position: details.globalPosition,
+              ),
+              onLongPress: () => MediaActionUtils.showMediaActions(context: context, ref: ref, item: widget.track),
+              borderRadius: BorderRadius.circular(8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  MediaArtworkWidget(
-                    item: widget.track,
-                    width: 140,
-                    height: 140,
-                    borderRadius: 8,
+                  Stack(
+                    children: [
+                      MediaArtworkWidget(
+                        item: widget.track,
+                        width: 140,
+                        height: 140,
+                        borderRadius: 8,
+                      ),
+                      if (_isHovered)
+                        _HoverTrackActionOverlay(
+                          track: widget.track,
+                          isLoved: isLoved,
+                        ),
+                    ],
                   ),
-                  if (_isHovered)
-                    _HoverTrackActionOverlay(
-                      track: widget.track,
-                      isLoved: isLoved,
+
+                  const SizedBox(height: 6),
+                  Text(
+                    widget.track.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12.5,
                     ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    widget.track.artist ?? 'Unknown Artist',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      fontSize: 11,
+                    ),
+                  ),
                 ],
               ),
-
-              const SizedBox(height: 6),
-              Text(
-                widget.track.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 12.5,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                widget.track.artist ?? 'Unknown Artist',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                  fontSize: 11,
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),

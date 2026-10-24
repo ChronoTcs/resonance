@@ -99,6 +99,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           }
         },
         child: Scaffold(
+          backgroundColor: Colors.transparent,
           body: Column(
             children: [
               TopNavigationHeader(
@@ -148,6 +149,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         }
       },
       child: Scaffold(
+        backgroundColor: Colors.transparent,
         body: Column(
           children: [
             const OfflineBanner(),

@@ -12,6 +12,7 @@ import 'package:resonance/features/explore/data/repositories/youtube_playlist_re
 import 'package:resonance/features/library/data/models/media_item.dart';
 import 'package:resonance/features/library/presentation/widgets/add_audio/mobile_media_import_card.dart';
 import 'package:resonance/features/playlist/application/playlist_provider.dart';
+import 'package:resonance/features/playlist/application/services/playlist_input_handler.dart';
 import 'package:resonance/features/settings/application/notification_provider.dart';
 
 /// Modern floating inset bottom sheet for importing playlists via YouTube link or JSON file.
@@ -48,35 +49,13 @@ class _ImportPlaylistSheetState extends ConsumerState<ImportPlaylistSheet> {
     super.dispose();
   }
 
-  String? _extractPlaylistId(String input) {
-    final trimmed = input.trim();
-    if (trimmed.isEmpty) return null;
-
-    final uri = Uri.tryParse(trimmed);
-    if (uri != null && uri.queryParameters.containsKey('list')) {
-      return uri.queryParameters['list'];
-    }
-
-    if (trimmed.startsWith('PL') ||
-        trimmed.startsWith('VL') ||
-        trimmed.startsWith('RD') ||
-        trimmed.startsWith('OLAK') ||
-        trimmed.startsWith('UU') ||
-        trimmed.startsWith('FL') ||
-        trimmed.startsWith('LL') ||
-        trimmed.length >= 12) {
-      return trimmed;
-    }
-
-    return null;
-  }
-
   Future<void> _handleYouTubeImport() async {
     final rawInput = _urlController.text.trim();
-    final playlistId = _extractPlaylistId(rawInput);
+    final analysis = PlaylistInputHandler.analyze(rawInput);
 
-    if (playlistId == null || playlistId.isEmpty) {
-      setState(() => _errorMessage = 'Please enter a valid YouTube or YouTube Music playlist link.');
+    if (analysis.type == PlaylistInputType.invalid ||
+        (analysis.type == PlaylistInputType.searchQuery && analysis.playlistId == null)) {
+      setState(() => _errorMessage = analysis.errorMessage ?? 'Please enter a valid YouTube playlist or video link.');
       return;
     }
 
@@ -93,20 +72,22 @@ class _ImportPlaylistSheetState extends ConsumerState<ImportPlaylistSheet> {
 
     try {
       final repo = ref.read(youtubePlaylistRepositoryProvider);
-      final tracks = await repo.fetchFullPlaylistContents(playlistId);
+      final tracks = await repo.fetchFullPlaylistContents(rawInput);
 
       if (tracks.isEmpty) {
         if (mounted) {
           setState(() {
             _isLoading = false;
-            _errorMessage = 'No tracks found. The playlist may be private or invalid.';
+            _errorMessage = 'No tracks found. The playlist or video may be private or invalid.';
           });
         }
         return;
       }
 
       final customName = _nameController.text.trim();
-      final playlistName = customName.isNotEmpty ? customName : 'Imported Playlist (${tracks.length} tracks)';
+      final playlistName = customName.isNotEmpty
+          ? customName
+          : (tracks.length == 1 ? tracks.first.title : 'Imported Playlist (${tracks.length} tracks)');
 
       final newId = await ref.read(playlistProvider.notifier).createPlaylist(playlistName);
 

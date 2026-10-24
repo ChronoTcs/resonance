@@ -41,7 +41,7 @@ class QueueNowPlayingCard extends StatelessWidget {
             child: SizedBox(
               width: 52,
               height: 52,
-              child: MediaArtworkWidget(item: track),
+              child: MediaArtworkWidget(item: track, width: 52, height: 52),
             ),
           ),
           const SizedBox(width: 14),

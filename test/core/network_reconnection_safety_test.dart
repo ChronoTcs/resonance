@@ -37,6 +37,18 @@ class _MockAudioHandler extends BaseAudioHandler implements ResonanceAudioHandle
 
   @override
   VoidCallback? onSkipToPrevious;
+
+  @override
+  VoidCallback? onPlay;
+
+  @override
+  VoidCallback? onPause;
+
+  @override
+  VoidCallback? onStop;
+
+  @override
+  void notifyQueueCompleted() {}
 }
 
 class _MockPlaylistStreamCacheHandler extends Fake implements PlaylistStreamCacheHandler {
@@ -122,7 +134,7 @@ void main() {
       expect(container.read(networkConnectivityProvider).isOnline, isTrue);
 
       // Allow microtask queue to drain and background tasks to execute
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await Future<void>.delayed(const Duration(milliseconds: 150));
 
       // Feed provider should automatically refresh to fresh_online_feed via select watch
       final onlineResult = await container.read(testFeedProvider.future);

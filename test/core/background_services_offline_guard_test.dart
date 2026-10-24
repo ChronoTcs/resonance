@@ -36,6 +36,18 @@ class MockAudioHandler extends BaseAudioHandler implements ResonanceAudioHandler
 
   @override
   VoidCallback? onSkipToPrevious;
+
+  @override
+  VoidCallback? onPlay;
+
+  @override
+  VoidCallback? onPause;
+
+  @override
+  VoidCallback? onStop;
+
+  @override
+  void notifyQueueCompleted() {}
 }
 
 class FakeInnerTubeClient implements YoutubeInnerTubeClient {

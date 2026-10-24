@@ -40,18 +40,20 @@ class YoutubeStreamRepository {
   ]);
 
   /// Resolves the final playable audio URL with Cache-First strategy
-  Future<String?> getStreamUrl(String videoId) async {
-    // [GUARDRAIL 2] MANDATORY CACHE-FIRST
-    try {
-      final cachedPath = await _cacheService.getCachedAudioPath(videoId);
-      if (cachedPath != null) {
-        debugPrint(
-          '[YoutubeStreamRepo][CACHE HIT] Using local file for $videoId',
-        );
-        return cachedPath;
+  Future<String?> getStreamUrl(String videoId, {bool forceRefresh = false}) async {
+    // [GUARDRAIL 2] MANDATORY CACHE-FIRST (bypassed on forceRefresh)
+    if (!forceRefresh) {
+      try {
+        final cachedPath = await _cacheService.getCachedAudioPath(videoId);
+        if (cachedPath != null) {
+          debugPrint(
+            '[YoutubeStreamRepo][CACHE HIT] Using local file for $videoId',
+          );
+          return cachedPath;
+        }
+      } catch (e) {
+        debugPrint('[YoutubeStreamRepo] Cache check error: $e');
       }
-    } catch (e) {
-      debugPrint('[YoutubeStreamRepo] Cache check error: $e');
     }
 
     // [OFFLINE GUARD] No cache hit — abort immediately if device is offline

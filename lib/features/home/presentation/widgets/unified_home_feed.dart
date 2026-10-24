@@ -1,16 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:silky_scroll/silky_scroll.dart';
+import 'package:resonance/core/configs/app_breakpoints.dart';
 import 'package:resonance/features/home/presentation/widgets/home_online_feed_section.dart';
 import 'package:resonance/features/home/presentation/widgets/home_personalized_sections.dart';
 import 'package:resonance/features/home/presentation/widgets/home_recent_plays_section.dart';
 import 'package:resonance/features/home/presentation/widgets/local_quick_picks_section.dart';
 import 'package:resonance/features/home/presentation/widgets/home_cached_music_section.dart';
 import 'package:resonance/features/home/presentation/widgets/quick_picks_column_section.dart';
+import 'package:resonance/features/home/presentation/widgets/recommended_for_you_hero_card.dart';
+import 'package:resonance/features/home/presentation/widgets/mobile_now_playing_hero_card.dart';
 import 'package:resonance/features/home/presentation/widgets/speed_dial_section.dart';
 
 /// Unified responsive feed for Home screen across Windows Desktop and Android Mobile.
 ///
 /// Order of presentation:
+/// 0. Recommended for You Hero Card (Desktop Wide) / Mobile Now Playing Hero Card (Mobile Compact)
 /// 1. Speed Dial Bento Grid (Picture 4)
 /// 2. Quick Picks 4-Row Column Snap Carousel (Picture 3)
 /// 3. YouTube Music Recommendation Feeds (Mixed for you, Listen again, Trending, Charts from old Explore)
@@ -51,8 +55,24 @@ class UnifiedHomeFeed extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isWide = AppBreakpoints.isWide(context);
+
     return SilkyCustomScrollView(
-      slivers: slivers,
+      slivers: [
+        if (isWide)
+          const SliverToBoxAdapter(
+            child: RepaintBoundary(
+              child: RecommendedForYouHeroCard(),
+            ),
+          )
+        else
+          const SliverToBoxAdapter(
+            child: RepaintBoundary(
+              child: MobileNowPlayingHeroCard(),
+            ),
+          ),
+        ...slivers,
+      ],
     );
   }
 }

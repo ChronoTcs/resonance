@@ -174,17 +174,39 @@ class AudioPersistenceService {
     _prefs.setInt(_kLastIndex, index);
   }
 
+  int? _pendingPositionMs;
+
   void savePosition(int milliseconds) {
-    // Seek position changes very often. We use a 1-second debounce timer to prevent
-    // constant rewriting of the SharedPreferences JSON file on Windows, saving disk writes.
-    _saveTimers[_kLastPosition]?.cancel();
-    _saveTimers[_kLastPosition] = Timer(const Duration(seconds: 1), () {
-      _write(_kLastPosition, milliseconds);
+    // Seek position changes at 20-50 Hz. Use a 3-second non-starvable throttle
+    // (instead of a debounce that gets cancelled on every 20ms tick) so position
+    // is reliably persisted during active playback while avoiding disk thrashing.
+    _pendingPositionMs = milliseconds;
+    if (_saveTimers.containsKey(_kLastPosition)) return;
+    _saveTimers[_kLastPosition] = Timer(const Duration(seconds: 3), () {
+      final latest = _pendingPositionMs ?? milliseconds;
+      _write(_kLastPosition, latest);
       _saveTimers.remove(_kLastPosition);
     });
   }
 
+  /// Clears all persisted track, queue, index, and position data from SharedPreferences
+  /// and cancels any pending debounced/throttled save timers.
+  Future<void> clearPlaybackState() async {
+    _pendingPositionMs = null;
+    _saveTimers.remove(_kLastPosition)?.cancel();
+    _saveTimers.remove(_kLastTrack)?.cancel();
+    _saveTimers.remove(_kLastQueue)?.cancel();
+    _saveTimers.remove(_kLastIndex)?.cancel();
+    await _prefs.remove(_kLastTrack);
+    await _prefs.remove(_kLastQueue);
+    await _prefs.remove(_kLastIndex);
+    await _prefs.remove(_kLastPosition);
+  }
+
   void dispose() {
+    if (_pendingPositionMs != null) {
+      _write(_kLastPosition, _pendingPositionMs!);
+    }
     for (var timer in _saveTimers.values) {
       timer.cancel();
     }

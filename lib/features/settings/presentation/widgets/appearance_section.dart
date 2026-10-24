@@ -3,7 +3,6 @@ import 'package:resonance/core/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance/core/utils/uicons.dart';
-import 'package:resonance/features/settings/application/app_behavior_provider.dart';
 import 'package:system_theme/system_theme.dart';
 
 import '../../../../core/theme/theme_provider.dart';
@@ -29,7 +28,7 @@ class AppearanceSection extends ConsumerWidget {
     final accentMode = ref.watch(accentColorProvider);
     final activeOpacity = ref.watch(lyricsActiveOpacityProvider);
     final inactiveOpacity = ref.watch(lyricsInactiveOpacityProvider);
-    final appBehavior = ref.watch(appBehaviorProvider);
+
     final systemAccentLabel = Platform.isAndroid ? 'System Accent' : 'Windows Accent';
 
     return Column(
@@ -52,7 +51,6 @@ class AppearanceSection extends ConsumerWidget {
             ResonanceSelectorItem(value: AppThemeMode.system, label: 'System Default'),
             ResonanceSelectorItem(value: AppThemeMode.light,  label: 'Gilded Ivory (Light)'),
             ResonanceSelectorItem(value: AppThemeMode.dark,   label: 'Deep Opulence (Dark)'),
-            ResonanceSelectorItem(value: AppThemeMode.onyx,   label: 'Onyx (Pure Dark)'),
           ],
         ),
 
@@ -159,68 +157,7 @@ class AppearanceSection extends ConsumerWidget {
             ),
           ),
         ),
-
-        if (Platform.isWindows) ...[
-          const SizedBox(height: 24),
-          Text(
-            'App Behavior',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface),
-          ),
-          const SizedBox(height: 12),
-
-          // Grouped Card Container for App Behavior settings (Desktop only)
-          Material(
-            color: theme.colorScheme.surface,
-            clipBehavior: Clip.antiAlias,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: theme.dividerColor.withValues(alpha: 0.08)),
-            ),
-            child: Column(
-              children: [
-                // Launch at Startup switch
-                ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  leading: Icon(UIcons.regular.laptop, size: 18, color: theme.primaryColor),
-                  title: const Text('Launch at Startup', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                  subtitle: Text(
-                    'Automatically open Resonance when Windows boots up',
-                    style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
-                  ),
-                  trailing: ResonanceSwitch(
-                    value: appBehavior.autoStartOnBoot,
-                    onChanged: (val) => ref.read(appBehaviorProvider.notifier).setAutoStartOnBoot(val),
-                  ),
-                ),
-                const Divider(height: 1),
-
-                // Close / Background behavior switch
-                ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  leading: Icon(
-                    UIcons.regular.compress_alt,
-                    size: 18,
-                    color: theme.primaryColor,
-                  ),
-                  title: const Text(
-                    'Minimize to System Tray on Close',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                  ),
-                  subtitle: Text(
-                    'Closing the window keeps Resonance running in the background tray',
-                    style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
-                  ),
-                  trailing: ResonanceSwitch(
-                    value: appBehavior.closeToTray,
-                    onChanged: (val) => ref.read(appBehaviorProvider.notifier).setCloseToTray(val),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
       ],
     );
   }
 }
-

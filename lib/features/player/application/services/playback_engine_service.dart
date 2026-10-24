@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/data/services/media_cache_service.dart';
 import '../services/stream_resolution_service.dart';
+import '../services/equalizer_service.dart';
+import '../providers/equalizer_controller.dart';
 
 class PlaybackEngineService {
   final Ref _ref;
@@ -12,7 +14,12 @@ class PlaybackEngineService {
 
   void configureCache(dynamic player, String? cacheFolderPath) {
     _ref.read(mediaCacheServiceProvider).setCustomPath(cacheFolderPath);
-    MpvConfigurator.applyCacheSettings(player, cacheFolderPath);
+    final eqState = _ref.read(equalizerControllerProvider);
+    final eqFilter = _ref.read(equalizerServiceProvider).generateFilterString(
+      eqState.bands,
+      enabled: eqState.isEnabled,
+    );
+    MpvConfigurator.applyCacheSettings(player, cacheFolderPath, eqFilter: eqFilter);
   }
 
   bool handlePlaybackError(dynamic error) {

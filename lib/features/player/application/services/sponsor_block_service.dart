@@ -48,16 +48,21 @@ class SponsorBlockService {
           }
 
           final introDurationMs = ((skipEnd - skipStart) * 1000).toInt();
-          if (introDurationMs > 1000) {
-            // Shifting forward in time: we subtract from adjustedPosition (i.e. delay highlight triggers by intro duration)
+          // Cap auto-intro skip to 45s max so mislabeled community segments cannot skip half a song
+          if (introDurationMs > 1000 && skipEnd <= 45.0) {
+            final activeTrack = _ref.read(audioProvider).currentTrack;
+            final activeId = activeTrack?.id ?? activeTrack?.path;
+            if (activeId != videoId) return;
+
+            final notifier = _ref.read(audioProvider.notifier);
             final delayOffset = Duration(milliseconds: -introDurationMs);
             debugPrint('[SponsorBlock] Detected $introDurationMs ms of intro skit. Applying offset: $delayOffset');
-            _ref.read(audioProvider.notifier).adjustLyricsOffset(delayOffset);
+            notifier.adjustLyricsOffset(delayOffset);
 
-            // Instant intro skit trimming: skip audio past intro if player is still near track start
-            final currentPos = _ref.read(audioProvider).position;
+            // Instant intro skit trimming: read hardware position directly (state.position freezes when minimized)
+            final currentPos = notifier.player.state.position;
             if (currentPos.inSeconds < 2) {
-              _ref.read(audioProvider.notifier).seek(Duration(milliseconds: (skipEnd * 1000).toInt()));
+              notifier.seek(Duration(milliseconds: (skipEnd * 1000).toInt()));
               debugPrint('[SponsorBlock] Auto-skipped intro skit to ${skipEnd}s');
             }
           }

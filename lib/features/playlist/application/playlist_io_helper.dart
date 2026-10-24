@@ -105,98 +105,106 @@ class PlaylistIOHelper {
   ) {
     final ctrl = TextEditingController(text: playlist.name);
     final theme = Theme.of(context);
+    String? errorText;
     showDialog(
       context: context,
       builder: (dialogCtx) => Consumer(
-        builder: (context, dialogRef, _) => Dialog(
-          backgroundColor: Colors.transparent,
-          child: Container(
-            width: 360,
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surface.withValues(alpha: 0.95),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: theme.primaryColor.withValues(alpha: 0.2),
-                width: 1,
-              ),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Rename Playlist',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.onSurface,
+        builder: (context, dialogRef, _) => StatefulBuilder(
+          builder: (context, setDialogState) {
+            final isEmpty = ctrl.text.trim().isEmpty;
+            void submitRename() {
+              final trimmed = ctrl.text.trim();
+              if (trimmed.isEmpty) {
+                setDialogState(() => errorText = 'Playlist name cannot be empty');
+                return;
+              }
+              dialogRef.read(playlistProvider.notifier).renamePlaylist(playlist.id, trimmed);
+              Navigator.pop(dialogCtx);
+            }
+
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              child: Container(
+                width: 360,
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surface.withValues(alpha: 0.95),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: theme.primaryColor.withValues(alpha: 0.2),
+                    width: 1,
                   ),
                 ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: ctrl,
-                  autofocus: true,
-                  style: theme.textTheme.bodyMedium?.copyWith(fontSize: 14),
-                  decoration: InputDecoration(
-                    filled: true,
-                    fillColor: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide.none,
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide(
-                        color: theme.dividerColor.withValues(alpha: 0.08),
-                      ),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide(
-                        color: theme.colorScheme.primary.withValues(alpha: 0.5),
-                        width: 1.5,
-                      ),
-                    ),
-                  ),
-                  textCapitalization: TextCapitalization.sentences,
-                  onSubmitted: (v) {
-                    if (v.trim().isNotEmpty) {
-                      dialogRef.read(playlistProvider.notifier).renamePlaylist(playlist.id, v.trim());
-                      Navigator.pop(dialogCtx);
-                    }
-                  },
-                ),
-                const SizedBox(height: 24),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    ResonanceButton(
-                      onPressed: () => Navigator.pop(dialogCtx),
-                      label: 'Cancel',
-                      style: ResonanceButtonStyle.secondary,
+                    Text(
+                      'Rename Playlist',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.onSurface,
+                      ),
                     ),
-                    const SizedBox(width: 12),
-                    ResonanceButton(
-                      onPressed: () {
-                        if (ctrl.text.trim().isNotEmpty) {
-                          dialogRef
-                              .read(playlistProvider.notifier)
-                              .renamePlaylist(playlist.id, ctrl.text.trim());
-                          Navigator.pop(dialogCtx);
-                        }
-                      },
-                      label: 'Save',
-                      style: ResonanceButtonStyle.primary,
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: ctrl,
+                      autofocus: true,
+                      maxLength: 50,
+                      style: theme.textTheme.bodyMedium?.copyWith(fontSize: 14),
+                      decoration: InputDecoration(
+                        hintText: 'Playlist name',
+                        errorText: errorText,
+                        filled: true,
+                        fillColor: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide.none,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(
+                            color: theme.dividerColor.withValues(alpha: 0.08),
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(
+                            color: theme.colorScheme.primary.withValues(alpha: 0.5),
+                            width: 1.5,
+                          ),
+                        ),
+                      ),
+                      textCapitalization: TextCapitalization.sentences,
+                      onChanged: (_) => setDialogState(() => errorText = null),
+                      onSubmitted: (_) => submitRename(),
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        ResonanceButton(
+                          onPressed: () => Navigator.pop(dialogCtx),
+                          label: 'Cancel',
+                          style: ResonanceButtonStyle.secondary,
+                        ),
+                        const SizedBox(width: 12),
+                        ResonanceButton(
+                          onPressed: isEmpty ? null : submitRename,
+                          label: 'Save',
+                          style: ResonanceButtonStyle.primary,
+                        ),
+                      ],
                     ),
                   ],
                 ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         ),
       ),
-    );
+    ).whenComplete(() => ctrl.dispose());
   }
 
   static void deletePlaylistDialog(

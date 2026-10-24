@@ -69,7 +69,6 @@ class ExploreMusicTile extends ConsumerWidget {
             width: 60,
             height: 60,
             memCacheWidth: 400,
-            memCacheHeight: 400,
             fit: BoxFit.cover,
             placeholder: (context, url) => Container(
               color: theme.colorScheme.surfaceContainerHighest,
@@ -83,7 +82,6 @@ class ExploreMusicTile extends ConsumerWidget {
                   width: 60,
                   height: 60,
                   memCacheWidth: 400,
-                  memCacheHeight: 400,
                   fit: BoxFit.cover,
                   placeholder: (context, _) => Container(
                     color: theme.colorScheme.surfaceContainerHighest,
@@ -101,7 +99,7 @@ class ExploreMusicTile extends ConsumerWidget {
             Expanded(
               child: Text(
                 item.title,
-                maxLines: 2,
+                maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
@@ -114,6 +112,11 @@ class ExploreMusicTile extends ConsumerWidget {
           (item.duration != '0:00' && item.duration.isNotEmpty)
               ? '${item.author} • ${item.duration}'
               : item.author,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
         ),
         onTap: () {
           ref.read(recentSearchesProvider.notifier).addSearchTrack(mediaItem);

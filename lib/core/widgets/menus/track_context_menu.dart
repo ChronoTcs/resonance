@@ -36,6 +36,8 @@ class TrackContextMenu {
         );
 
     final isBlocked = ref.read(blockedTracksProvider.notifier).isBlocked(item.id, path: item.path);
+    final isInQueue = onRemoveFromQueue != null ||
+        ref.read(audioProvider).queue.any((t) => (t.id ?? t.path) == (item.id ?? item.path));
 
     final entries = <PopupMenuEntry<String>>[
       PopupMenuItem<String>(
@@ -60,17 +62,19 @@ class TrackContextMenu {
           ],
         ),
       ),
-      PopupMenuItem<String>(
-        value: 'add_queue',
-        height: 38,
-        child: Row(
-          children: [
-            Icon(UIcons.regular.list_music, size: 15, color: theme.colorScheme.onSurface),
-            const SizedBox(width: 12),
-            Text('Add to Queue', style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurface)),
-          ],
+      if (!isInQueue) ...[
+        PopupMenuItem<String>(
+          value: 'add_queue',
+          height: 38,
+          child: Row(
+            children: [
+              Icon(UIcons.regular.list_music, size: 15, color: theme.colorScheme.onSurface),
+              const SizedBox(width: 12),
+              Text('Add to Queue', style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurface)),
+            ],
+          ),
         ),
-      ),
+      ],
       const PopupMenuDivider(height: 8),
       PopupMenuItem<String>(
         value: 'add_playlist',

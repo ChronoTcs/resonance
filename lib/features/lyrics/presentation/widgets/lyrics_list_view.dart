@@ -7,6 +7,7 @@ import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:silky_scroll/silky_scroll.dart';
 import '../../application/lyrics_provider.dart';
 import '../../application/lyrics_translation_provider.dart';
+import '../../../player/application/providers/audio_provider.dart';
 import 'word_synced_lyric_row.dart';
 import '../../../../core/theme/theme_provider.dart';
 import '../../../../core/theme/fluent_scroll_behavior.dart';
@@ -33,7 +34,7 @@ class _LyricsListViewState extends ConsumerState<LyricsListView> {
   final ItemPositionsListener _itemPositionsListener = ItemPositionsListener.create();
   final UniqueKey _silkyLockKey = UniqueKey();
   int _currentIndex = -1;
-  double _listHeight = 600.0;
+  String? _lastTrackId;
   Timer? _autoScrollTimer;
   bool _isAutoScrolling = false;
   DateTime _lastUserScrollTime = DateTime.fromMillisecondsSinceEpoch(0);
@@ -74,15 +75,14 @@ class _LyricsListViewState extends ConsumerState<LyricsListView> {
     if (_itemScrollController.isAttached && index >= 0) {
       _isAutoScrolling = true;
       _autoScrollTimer?.cancel();
-      _autoScrollTimer = Timer(const Duration(milliseconds: 750), () {
+      _autoScrollTimer = Timer(const Duration(milliseconds: 650), () {
         _isAutoScrolling = false;
       });
 
-      final targetIndex = widget.compact ? index + 3 : index;
       _itemScrollController.scrollTo(
-        index: targetIndex,
-        duration: const Duration(milliseconds: 600),
-        curve: Curves.fastOutSlowIn,
+        index: index,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeOutCubic,
         alignment: widget.compact ? 0.45 : 0.5,
       );
     }
@@ -95,6 +95,14 @@ class _LyricsListViewState extends ConsumerState<LyricsListView> {
     final activeIndex = ref.watch(activeLyricIndexProvider);
     final activeOpacity = ref.watch(lyricsActiveOpacityProvider);
     final inactiveOpacity = ref.watch(lyricsInactiveOpacityProvider);
+
+    final track = ref.watch(audioProvider.select((s) => s.currentTrack));
+    final trackId = track?.id ?? track?.path;
+    final isNewTrack = trackId != _lastTrackId;
+    if (isNewTrack) {
+      _lastTrackId = trackId;
+      _currentIndex = activeIndex;
+    }
 
     if (lyricsState.isLoading) {
       return const Center(child: CircularProgressIndicator());
@@ -133,9 +141,11 @@ class _LyricsListViewState extends ConsumerState<LyricsListView> {
     // Auto-scroll trigger
     if (activeIndex != _currentIndex) {
       _currentIndex = activeIndex;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _scrollToActiveLyric(_currentIndex);
-      });
+      if (activeIndex >= 0) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _scrollToActiveLyric(_currentIndex);
+        });
+      }
     }
 
     final effectivePhysics = widget.physics ??
@@ -145,57 +155,68 @@ class _LyricsListViewState extends ConsumerState<LyricsListView> {
 
     Widget content;
     if (widget.compact) {
-      content = ShaderMask(
-        shaderCallback: (Rect rect) {
-          return const LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Colors.transparent,
-              Colors.white,
-              Colors.white,
-              Colors.transparent,
-            ],
-            stops: [0.0, 0.1, 0.9, 1.0],
-          ).createShader(rect);
-        },
-        blendMode: BlendMode.dstIn,
-        child: ScrollablePositionedList.builder(
-          itemScrollController: _itemScrollController,
-          itemPositionsListener: _itemPositionsListener,
-          initialScrollIndex: activeIndex != -1 ? activeIndex + 3 : 0,
-          initialAlignment: 0.45,
-          itemCount: lyrics.length + 6,
-          physics: effectivePhysics,
-          itemBuilder: (context, index) {
-            if (index < 3 || index >= lyrics.length + 3) {
-              return const SizedBox(height: 48);
-            }
-
-            final lineIndex = index - 3;
-            final line = lyrics[lineIndex];
-            final isActive = lineIndex == activeIndex;
-
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
-              child: WordSyncedLyricRow(
-                line: line,
-                playerPosition: Duration.zero,
-                isActive: isActive,
-                activeOpacity: activeOpacity,
-                inactiveOpacity: inactiveOpacity,
-                fontSizeActive: 18,
-                fontSizeInactive: 14,
-                textColor: effectiveTextColor,
+      content = LayoutBuilder(
+        builder: (context, constraints) {
+          final halfHeight = constraints.maxHeight > 0
+              ? constraints.maxHeight / 2
+              : 120.0;
+          return ShaderMask(
+            shaderCallback: (Rect rect) {
+              return const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.transparent,
+                  Colors.white,
+                  Colors.white,
+                  Colors.transparent,
+                ],
+                stops: [0.0, 0.1, 0.9, 1.0],
+              ).createShader(rect);
+            },
+            blendMode: BlendMode.dstIn,
+            child: ScrollablePositionedList.builder(
+              itemScrollController: _itemScrollController,
+              itemPositionsListener: _itemPositionsListener,
+              initialScrollIndex:
+                  (activeIndex >= 0 && activeIndex < lyrics.length)
+                      ? activeIndex
+                      : 0,
+              initialAlignment: 0.45,
+              padding: EdgeInsets.only(
+                top: halfHeight - 20,
+                bottom: halfHeight,
               ),
-            );
-          },
-        ),
+              itemCount: lyrics.length,
+              physics: effectivePhysics,
+              itemBuilder: (context, index) {
+                final line = lyrics[index];
+                final isActive = index == activeIndex;
+
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8.0),
+                  child: WordSyncedLyricRow(
+                    line: line,
+                    playerPosition: Duration.zero,
+                    isActive: isActive,
+                    activeOpacity: activeOpacity,
+                    inactiveOpacity: inactiveOpacity,
+                    fontSizeActive: 18,
+                    fontSizeInactive: 14,
+                    textColor: effectiveTextColor,
+                  ),
+                );
+              },
+            ),
+          );
+        },
       );
     } else {
       content = LayoutBuilder(
         builder: (context, constraints) {
-          _listHeight = constraints.maxHeight;
+          final halfHeight = constraints.maxHeight > 0
+              ? constraints.maxHeight / 2
+              : 300.0;
           return RepaintBoundary(
             child: ScrollablePositionedList.builder(
               itemScrollController: _itemScrollController,
@@ -204,17 +225,15 @@ class _LyricsListViewState extends ConsumerState<LyricsListView> {
               initialAlignment: 0.5,
               physics: effectivePhysics,
               padding: EdgeInsets.only(
-                top: _listHeight / 2 - 30,
-                bottom: _listHeight / 2,
+                top: halfHeight - 30,
+                bottom: halfHeight,
               ),
               itemCount: lyrics.length,
               itemBuilder: (context, index) {
                 final line = lyrics[index];
                 final isActive = index == activeIndex;
 
-                return AnimatedContainer(
-                  duration: const Duration(milliseconds: 400),
-                  curve: Curves.easeOutCubic,
+                return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 12.0),
                   child: WordSyncedLyricRow(
                     line: line,

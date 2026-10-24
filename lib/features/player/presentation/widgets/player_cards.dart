@@ -135,7 +135,13 @@ class _InfoLine extends StatelessWidget {
 
 class MiniLyricsCard extends ConsumerStatefulWidget {
   final double? height;
-  const MiniLyricsCard({super.key, this.height});
+  final EdgeInsetsGeometry? padding;
+
+  const MiniLyricsCard({
+    super.key,
+    this.height,
+    this.padding,
+  });
 
   @override
   ConsumerState<MiniLyricsCard> createState() => _MiniLyricsCardState();
@@ -154,6 +160,8 @@ class _MiniLyricsCardState extends ConsumerState<MiniLyricsCard> {
   Widget build(BuildContext context) {
     final lyricsState = ref.watch(lyricsProvider);
     final translationState = ref.watch(lyricsTranslationProvider);
+    final track = ref.watch(audioProvider.select((s) => s.currentTrack));
+    final trackKey = track?.id ?? track?.path;
     return RepaintBoundary(
       child: MouseRegion(
         cursor: SystemMouseCursors.click,
@@ -163,7 +171,7 @@ class _MiniLyricsCardState extends ConsumerState<MiniLyricsCard> {
           onTap: () => ref.read(lyricsOverlayProvider.notifier).toggle(),
           child: Container(
             height: widget.height,
-            padding: const EdgeInsets.all(24),
+            padding: widget.padding ?? const EdgeInsets.all(24),
             decoration: BoxDecoration(
               color: Theme.of(context).brightness == Brightness.light
                   ? Colors.white.withValues(alpha: 0.4)
@@ -188,8 +196,11 @@ class _MiniLyricsCardState extends ConsumerState<MiniLyricsCard> {
                       ref.read(lyricsOverlayProvider.notifier).toggle(),
                 ),
                 const SizedBox(height: 16),
-                const Expanded(
-                  child: LyricsListView(compact: true),
+                Expanded(
+                  child: LyricsListView(
+                    key: ValueKey(trackKey),
+                    compact: true,
+                  ),
                 ),
               ],
             ),
@@ -311,7 +322,7 @@ class NextInQueueCard extends ConsumerWidget {
                         child: SizedBox(
                           width: 48,
                           height: 48,
-                          child: MediaArtworkWidget(item: next),
+                          child: MediaArtworkWidget(item: next, width: 48, height: 48),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -355,7 +366,19 @@ class NavigationControlCard extends ConsumerStatefulWidget {
   /// When true, shows seek slider + timestamps instead of volume slider.
   /// Intended for the Android Now Playing full-screen view.
   final bool showSeekSlider;
-  const NavigationControlCard({super.key, this.showSeekSlider = false});
+  final bool showVolumeSlider;
+  final bool isLargePlayButton;
+  /// When false, strips card background and borders so it fuses seamlessly into parent view.
+  final bool isCard;
+
+  const NavigationControlCard({
+    super.key,
+    this.showSeekSlider = false,
+    this.showVolumeSlider = true,
+    this.isLargePlayButton = false,
+    this.isCard = true,
+  });
+
   @override
   ConsumerState<NavigationControlCard> createState() =>
       _NavigationControlCardState();
@@ -380,20 +403,28 @@ class _NavigationControlCardState extends ConsumerState<NavigationControlCard> {
     final audioNotifier = ref.read(audioProvider.notifier);
     final isLight = Theme.of(context).brightness == Brightness.light;
 
+    final decoration = widget.isCard
+        ? BoxDecoration(
+            color: isLight
+                ? Colors.white.withValues(alpha: 0.65)
+                : Colors.black.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: isLight
+                  ? Colors.white.withValues(alpha: 0.4)
+                  : Colors.white.withValues(alpha: 0.1),
+            ),
+          )
+        : null;
+
+    final padding = widget.isCard
+        ? const EdgeInsets.symmetric(horizontal: 16, vertical: 20)
+        : const EdgeInsets.symmetric(horizontal: 4, vertical: 8);
+
     return RepaintBoundary(
       child: Container(
-        decoration: BoxDecoration(
-          color: isLight
-              ? Colors.white.withValues(alpha: 0.65)
-              : Colors.black.withValues(alpha: 0.5),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(
-            color: isLight
-                ? Colors.white.withValues(alpha: 0.4)
-                : Colors.white.withValues(alpha: 0.1),
-          ),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+        decoration: decoration,
+        padding: padding,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -407,25 +438,28 @@ class _NavigationControlCardState extends ConsumerState<NavigationControlCard> {
               isNextDisabled: isNextDisabled,
               loopMode: loopMode,
               audioNotifier: audioNotifier,
+              isLargePlayButton: widget.isLargePlayButton,
             ),
-            const SizedBox(height: 20),
-            _VolumeSliderRow(
-              volume: volume,
-              onVolumeChanged: (v) {
-                audioNotifier.setVolume(v);
-                if (v > 0) _prevVolume = v;
-              },
-              onMuteToggle: () {
-                if (volume > 0) {
-                  _prevVolume = volume;
-                  audioNotifier.setVolume(0);
-                } else {
-                  audioNotifier.setVolume(
-                    _prevVolume > 0 ? _prevVolume : 100,
-                  );
-                }
-              },
-            ),
+            if (widget.showVolumeSlider) ...[
+              const SizedBox(height: 20),
+              _VolumeSliderRow(
+                volume: volume,
+                onVolumeChanged: (v) {
+                  audioNotifier.setVolume(v);
+                  if (v > 0) _prevVolume = v;
+                },
+                onMuteToggle: () {
+                  if (volume > 0) {
+                    _prevVolume = volume;
+                    audioNotifier.setVolume(0);
+                  } else {
+                    audioNotifier.setVolume(
+                      _prevVolume > 0 ? _prevVolume : 100,
+                    );
+                  }
+                },
+              ),
+            ],
           ],
         ),
       ),
@@ -451,32 +485,34 @@ class _SeekSliderRow extends ConsumerWidget {
       color: colorScheme.onSurface.withValues(alpha: 0.5),
     );
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        ReusableSeekSlider(
-          value: pos.inMilliseconds.toDouble(),
-          max: dur.inMilliseconds.toDouble() > 0
-              ? dur.inMilliseconds.toDouble()
-              : 1.0,
-          trackHeight: 4,
-          height: 28,
-          onChanged: (_) {},
-          onChangeEnd: (val) {
-            audioNotifier.seek(Duration(milliseconds: val.toInt()));
-          },
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(AppFormatters.formatDuration(pos), style: labelStyle),
-              Text(AppFormatters.formatDuration(dur), style: labelStyle),
-            ],
+    return RepaintBoundary(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ReusableSeekSlider(
+            value: pos.inMilliseconds.toDouble(),
+            max: dur.inMilliseconds.toDouble() > 0
+                ? dur.inMilliseconds.toDouble()
+                : 1.0,
+            trackHeight: 4,
+            height: 28,
+            onChanged: (_) {},
+            onChangeEnd: (val) {
+              audioNotifier.seek(Duration(milliseconds: val.toInt()));
+            },
           ),
-        ),
-      ],
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(AppFormatters.formatDuration(pos), style: labelStyle),
+                Text(AppFormatters.formatDuration(dur), style: labelStyle),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -553,6 +589,7 @@ class _PlaybackActionButtonsRow extends StatelessWidget {
   final bool isNextDisabled;
   final LoopMode loopMode;
   final AudioNotifier audioNotifier;
+  final bool isLargePlayButton;
 
   const _PlaybackActionButtonsRow({
     required this.isShuffleEnabled,
@@ -562,6 +599,7 @@ class _PlaybackActionButtonsRow extends StatelessWidget {
     required this.isNextDisabled,
     required this.loopMode,
     required this.audioNotifier,
+    this.isLargePlayButton = false,
   });
 
   @override
@@ -593,7 +631,9 @@ class _PlaybackActionButtonsRow extends StatelessWidget {
         PlayPauseButton(
           isPlaying: isPlaying,
           isLoading: isLoading,
-          size: PlayPauseSize.medium,
+          size: isLargePlayButton ? PlayPauseSize.large : PlayPauseSize.medium,
+          customIconSize: isLargePlayButton ? 38.0 : null,
+          customPadding: isLargePlayButton ? 12.0 : null,
           color: theme.primaryColor,
           onTap: audioNotifier.togglePlayPause,
         ),

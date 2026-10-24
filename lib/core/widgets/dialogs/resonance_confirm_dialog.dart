@@ -78,7 +78,7 @@ class ResonanceConfirmDialog extends StatelessWidget {
                     ResonanceButton(
                       onPressed: () {
                         onConfirm();
-                        if (context.mounted) {
+                        if (context.mounted && ModalRoute.of(context)?.isCurrent == true) {
                           Navigator.pop(context, true);
                         }
                       },

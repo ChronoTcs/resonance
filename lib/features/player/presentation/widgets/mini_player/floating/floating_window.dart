@@ -1,5 +1,4 @@
 import 'package:resonance/core/widgets/widgets.dart';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
@@ -129,21 +128,17 @@ class _FloatingArtworkStage extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        // Background Blurred
+        // Background Tinted Backdrop
         Positioned.fill(
-          child: ImageFiltered(
-            imageFilter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
-            child: MediaArtworkWidget(
-              item: track,
-              width: double.infinity,
-              height: double.infinity,
-              borderRadius: 0,
+          child: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0xFF1E1E26), Color(0xFF121216)],
+              ),
             ),
           ),
-        ),
-        // Background darkening overlay
-        Positioned.fill(
-          child: Container(color: Colors.black.withValues(alpha: 0.3)),
         ),
 
         // Main Artwork (1:1 Ratio)
@@ -164,8 +159,8 @@ class _FloatingArtworkStage extends StatelessWidget {
                 ),
                 child: MediaArtworkWidget(
                   item: track,
-                  width: double.infinity,
-                  height: double.infinity,
+                  width: 250,
+                  height: 250,
                   borderRadius: 8,
                 ),
               ),

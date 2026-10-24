@@ -41,14 +41,16 @@ class DownloaderBridgeDatasource {
       );
 
       _stdoutSub = _process!.stdout
-          .transform(utf8.decoder)
+          .transform(const Utf8Decoder(allowMalformed: true))
           .transform(const LineSplitter())
           .listen((line) {
             debugPrint('[DownloaderBridge Process STDOUT] $line');
             _handleRawLine(line);
           });
 
-      _stderrSub = _process!.stderr.transform(utf8.decoder).listen((line) {
+      _stderrSub = _process!.stderr
+          .transform(const Utf8Decoder(allowMalformed: true))
+          .listen((line) {
         debugPrint('[DownloaderBridge Process STDERR] $line');
         if (line.contains('MISSING_DEP')) {
           _errorController.add('Python dependency missing: $line');
@@ -118,6 +120,8 @@ class DownloaderBridgeDatasource {
     _process?.kill();
     _process = null;
     _isReady = false;
+    _eventController.close();
+    _errorController.close();
   }
 
   /// Returns exe+args for one-shot process invocation (no stdin pipe needed).

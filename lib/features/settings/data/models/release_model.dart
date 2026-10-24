@@ -205,27 +205,31 @@ class AppRelease {
       }
     }
 
-    // If base numeric parts (0.1.2 == 0.1.2) match, compare build numbers only when
-    // BOTH versions have an explicit '+N' suffix.
-    // Rationale: a GitHub release tag like 'v0.1.7-beta' (no build number) is the
-    // canonical release for that version — hotfix build numbers (+10, +11…) are
-    // internal and should never make the base tag appear "older than installed".
-    final bool v1HasBuild = v1.contains('+');
-    final bool v2HasBuild = v2.contains('+');
-
-    if (!v1HasBuild || !v2HasBuild) {
-      // One side has no explicit build number → treat as same release
-      return 0;
-    }
-
-    int extractBuild(String v) {
-      final buildStr = v.split('+').last;
-      final b = int.tryParse(buildStr) ?? 0;
-      return b >= 1000 ? (b % 1000) : b;
+    // If base numeric parts (0.1.2 == 0.1.2) match, compare build numbers when
+    // both versions have an explicit build suffix (+N or .N after tag).
+    int? extractBuild(String v) {
+      if (v.contains('+')) {
+        final buildStr = v.split('+').last;
+        final b = int.tryParse(buildStr);
+        if (b != null) return b >= 1000 ? (b % 1000) : b;
+      }
+      // Support dot-delimited build numbers after pre-release tags (e.g. 0.1.9-beta.15)
+      final dotMatch = RegExp(r'-(?:[a-zA-Z0-9]+)\.([0-9]+)$').firstMatch(v);
+      if (dotMatch != null) {
+        final b = int.tryParse(dotMatch.group(1)!);
+        if (b != null) return b >= 1000 ? (b % 1000) : b;
+      }
+      return null;
     }
 
     final b1 = extractBuild(v1);
     final b2 = extractBuild(v2);
+
+    if (b1 == null || b2 == null) {
+      // One side has no explicit build number → treat as same release
+      return 0;
+    }
+
     if (b1 != b2) {
       return b1.compareTo(b2);
     }

@@ -9,10 +9,12 @@ import 'package:resonance/core/configs/app_breakpoints.dart';
 import 'package:resonance/core/providers/navigation_provider.dart';
 import 'package:resonance/core/providers/overlay_provider.dart';
 import 'package:resonance/core/widgets/widgets.dart';
-import 'package:resonance/features/dashboard/presentation/widgets/app_bottom_nav_bar.dart';
-import 'package:resonance/features/dashboard/presentation/widgets/app_sidebar.dart';
+import 'package:resonance/features/dashboard/presentation/widgets/bottom_nav_bar.dart';
+import 'package:resonance/features/dashboard/presentation/widgets/left_sidebar.dart';
+import 'package:resonance/features/dashboard/presentation/widgets/right_sidebar.dart';
 import 'package:resonance/features/dashboard/presentation/widgets/notification_banner_overlay.dart';
 import 'package:resonance/features/download/presentation/screens/download_screen.dart';
+import 'package:resonance/features/explore/presentation/providers/explore_provider.dart';
 import 'package:resonance/features/explore/presentation/screens/explore_screen.dart';
 import 'package:resonance/features/home/presentation/screens/home_screen.dart';
 import 'package:resonance/features/library/presentation/screens/library_screen.dart';
@@ -22,7 +24,6 @@ import 'package:resonance/features/player/application/services/audio_orchestrato
 import 'package:resonance/features/player/presentation/screens/now_playing_screen.dart';
 import 'package:resonance/features/player/presentation/screens/queue_screen.dart';
 import 'package:resonance/features/player/presentation/widgets/mini_player/docked/docked_mini_player.dart';
-import 'package:resonance/core/providers/search_provider.dart';
 import 'package:resonance/features/home/presentation/providers/home_navigation_provider.dart';
 import 'package:resonance/features/library/presentation/widgets/morphing_library_bar.dart';
 import 'package:resonance/features/playlist/application/playlist_provider.dart';
@@ -121,6 +122,11 @@ class _MainDashboardState extends ConsumerState<MainDashboard> {
       ref.read(selectedHomePlaylistProvider.notifier).setSelectedId(null);
       return true;
     }
+    final selectedExplorePlaylist = ref.read(selectedExplorePlaylistProvider);
+    if (selectedExplorePlaylist != null) {
+      ref.read(selectedExplorePlaylistProvider.notifier).setSelected(null);
+      return true;
+    }
 
     // 4. Dismiss Settings SubView if in a sub-section
     final settingsSubView = ref.read(settingsSubViewProvider);
@@ -169,6 +175,19 @@ class _MainDashboardState extends ConsumerState<MainDashboard> {
   Widget build(BuildContext context) {
     // Standardized AppBreakpoints for responsive geometry vs OS platform checks
     final bool isWideLayout = AppBreakpoints.isWide(context);
+    final bool canExpandDualSidebars =
+        AppBreakpoints.canExpandDualSidebars(context);
+    final bool leftExpanded = ref.watch(leftSidebarExpandedProvider);
+    final bool rightExpanded = ref.watch(rightSidebarExpandedProvider);
+
+    // Mutual exclusion guard if window resized down below dualSidebarThreshold
+    if (!canExpandDualSidebars && leftExpanded && rightExpanded) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ref.read(leftSidebarExpandedProvider.notifier).setExpanded(false);
+      });
+    }
+
     final bool isDesktopOs =
         Platform.isWindows || Platform.isLinux || Platform.isMacOS;
     final bool isAndroid = Platform.isAndroid;
@@ -194,45 +213,99 @@ class _MainDashboardState extends ConsumerState<MainDashboard> {
         resizeToAvoidBottomInset: !isDesktopOs,
         body: Column(
           children: [
-            if (isDesktopOs) CustomTitleBar(nowPlayingTitle: nowPlayingTitle),
+            if (isDesktopOs)
+              RepaintBoundary(
+                child: CustomTitleBar(nowPlayingTitle: nowPlayingTitle),
+              ),
             Expanded(
               child: Row(
                 children: [
                   if (isWideLayout)
-                    SafeArea(
-                      top: !isDesktopOs,
-                      bottom: false,
-                      right: false,
-                      child: const AppSidebar(),
+                    RepaintBoundary(
+                      child: SafeArea(
+                        top: !isDesktopOs,
+                        bottom: false,
+                        right: false,
+                        child: const LeftSidebar(),
+                      ),
                     ),
 
-                  // Main Content area
+                  // Main Content area (Floating card on wide canvas)
                   Expanded(
-                    child: ClipRect(
-                      child: Stack(
-                        children: [
-                          // 1. Base Layer: Screen Navigation (IndexedStack keeps all tabs alive)
-                          _ScreenNavigationLayer(
-                            isDesktopOs: isDesktopOs,
-                            logicalIndex: logicalIndex,
-                            screens: _getScreens(isWideLayout),
-                          ),
+                    child: RepaintBoundary(
+                      child: Container(
+                        margin: isWideLayout
+                            ? const EdgeInsets.fromLTRB(8, 12, 12, 12)
+                            : EdgeInsets.zero,
+                        decoration: isWideLayout
+                            ? BoxDecoration(
+                                color: Theme.of(context).brightness == Brightness.dark
+                                    ? const Color(0xFF15181E)
+                                    : const Color(0xFFF5F6FC),
+                                borderRadius: BorderRadius.circular(24),
+                                border: Border.all(
+                                  color: Theme.of(context).brightness == Brightness.dark
+                                      ? Colors.white.withValues(alpha: 0.06)
+                                      : Colors.black.withValues(alpha: 0.04),
+                                  width: 1,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(
+                                      alpha: Theme.of(context).brightness == Brightness.dark ? 0.25 : 0.04,
+                                    ),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              )
+                            : null,
+                        child: ClipRRect(
+                          borderRadius: isWideLayout
+                              ? BorderRadius.circular(24)
+                              : BorderRadius.zero,
+                          child: Stack(
+                          children: [
+                            // 1. Base Layer: Screen Navigation (IndexedStack keeps all tabs alive)
+                            RepaintBoundary(
+                              child: TickerMode(
+                                enabled: !(showNowPlaying || showLyrics || showQueue),
+                                child: _ScreenNavigationLayer(
+                                  isDesktopOs: isDesktopOs,
+                                  logicalIndex: logicalIndex,
+                                  screens: _getScreens(isWideLayout),
+                                ),
+                              ),
+                            ),
 
-                          // 2. Mid Layer: Now Playing (Slide transition)
-                          _NowPlayingSlideLayer(showNowPlaying: showNowPlaying),
+                            // 2. Mid Layer: Now Playing (Slide transition)
+                            _NowPlayingSlideLayer(showNowPlaying: showNowPlaying),
 
-                          // 3. Top Layer: Lyrics Overlay
-                          _LyricsOverlayLayer(showLyrics: showLyrics),
+                            // 3. Top Layer: Lyrics Overlay
+                            _LyricsOverlayLayer(showLyrics: showLyrics),
 
-                          // 4. Top Layer: Queue Overlay
-                          _QueueOverlayLayer(showQueue: showQueue),
+                            // 4. Top Layer: Queue Overlay
+                            _QueueOverlayLayer(showQueue: showQueue),
 
-                          // 5. In-App Notification Toast Overlay (Top-Right Floating Banner)
-                          const NotificationBannerOverlay(),
-                        ],
+                            // 5. In-App Notification Toast Overlay (Top-Right Floating Banner)
+                            const NotificationBannerOverlay(),
+                          ],
+                        ),
                       ),
                     ),
                   ),
+                ),
+
+                  // Right Sidebar: Persistent Session Queue (Desktop Wide layout)
+                  if (isWideLayout)
+                    const RepaintBoundary(
+                      child: SafeArea(
+                        top: false,
+                        bottom: false,
+                        left: false,
+                        child: RightSidebar(),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -242,7 +315,7 @@ class _MainDashboardState extends ConsumerState<MainDashboard> {
             if (!isAndroid || !showNowPlaying) const DockedMiniPlayer(),
           ],
         ),
-        bottomNavigationBar: isWideLayout ? null : const AppBottomNavBar(),
+        bottomNavigationBar: isWideLayout ? null : const BottomNavBar(),
       ),
     );
   }
@@ -312,12 +385,29 @@ class _LyricsOverlayLayer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 280),
+      reverseDuration: const Duration(milliseconds: 220),
+      transitionBuilder: (child, animation) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+        return SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0, 0.05),
+            end: Offset.zero,
+          ).animate(curved),
+          child: FadeTransition(
+            opacity: curved,
+            child: child,
+          ),
+        );
+      },
       child: showLyrics
-          ? Container(
-              key: const ValueKey('lyrics_overlay'),
-              color: Colors.black.withValues(alpha: 0.6),
-              child: const LyricsScreen(isEmbedded: true),
+          ? const KeyedSubtree(
+              key: ValueKey('lyrics_overlay'),
+              child: LyricsScreen(isEmbedded: true),
             )
           : const SizedBox.shrink(key: ValueKey('lyrics_empty')),
     );
@@ -332,12 +422,29 @@ class _QueueOverlayLayer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 280),
+      reverseDuration: const Duration(milliseconds: 220),
+      transitionBuilder: (child, animation) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+        return SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0, 0.05),
+            end: Offset.zero,
+          ).animate(curved),
+          child: FadeTransition(
+            opacity: curved,
+            child: child,
+          ),
+        );
+      },
       child: showQueue
-          ? Container(
-              key: const ValueKey('queue_overlay'),
-              color: Colors.black.withValues(alpha: 0.6),
-              child: const QueueScreen(isEmbedded: true),
+          ? const KeyedSubtree(
+              key: ValueKey('queue_overlay'),
+              child: QueueScreen(isEmbedded: true),
             )
           : const SizedBox.shrink(key: ValueKey('queue_empty')),
     );

@@ -4,12 +4,12 @@ import 'package:system_theme/system_theme.dart';
 
 class AppTheme {
   // Palette 7 (Modern Glass - Light Mode Default) & Palette 8 (Deep Opulence - Dark Mode Default)
-  static const Color creamBackground = Color(0xFFF5F7FA); // Soft Slate Neutral background
+  static const Color creamBackground = Color(0xFFDFE2EC); // Calibrated Light canvas matching Picture 1 & 2
   static const Color creamSurface = Color(0xFFFFFFFF); // Pure Crisp White surface / cards
   static const Color textDark = Color(0xFF0F172A); // Slate Obsidian text
 
-  static const Color darkBackground = Color(0xFF121316); // Midnight Charcoal background
-  static const Color darkSurface = Color(0xFF1C1E23); // Dark Slate surface / cards
+  static const Color darkBackground = Color(0xFF0C0E12); // Modern high-contrast Dark canvas
+  static const Color darkSurface = Color(0xFF15181E); // Elevated Dark card surface
   static const Color textLight = Color(0xFFF1F5F9); // Crisp Off-White Slate
 
   static const Color accentGrey = Color(0xFF64748B); // Cool Slate Grey (Secondary Light text)
@@ -106,11 +106,12 @@ class AppTheme {
         thumbColor: primary,
       ),
       scrollbarTheme: ScrollbarThemeData(
-        thickness: WidgetStateProperty.resolveWith((states) => 
-          states.contains(WidgetState.hovered) ? 8.0 : 4.0),
-        radius: const Radius.circular(10),
-        thumbColor: WidgetStateProperty.resolveWith((states) =>
-          primary.withValues(alpha: states.contains(WidgetState.hovered) ? 0.5 : 0.2)),
+        thickness: const WidgetStatePropertyAll(4.0),
+        radius: const Radius.circular(8),
+        thumbColor: WidgetStateProperty.resolveWith((states) {
+          final isEngaged = states.contains(WidgetState.hovered) || states.contains(WidgetState.dragged);
+          return primary.withValues(alpha: isEngaged ? 0.6 : 0.25);
+        }),
         crossAxisMargin: 2,
         mainAxisMargin: 2,
         minThumbLength: 48,
@@ -161,16 +162,15 @@ class AppTheme {
     );
   }
 
-  static ThemeData getDarkTheme(String? accentMode, {bool isOnyx = false}) {
-    final defaultAccent = isOnyx ? const Color(0xFFE2B35B) : const Color(0xFFAE8C50);
-    final accentColor = _resolveAccent(accentMode, Brightness.dark) ?? defaultAccent;
+  static ThemeData getDarkTheme(String? accentMode) {
+    final accentColor = _resolveAccent(accentMode, Brightness.dark) ?? const Color(0xFFAE8C50);
     final baseScheme = ColorScheme.fromSeed(
       seedColor: accentColor,
       brightness: Brightness.dark,
     );
     final primary = baseScheme.primary;
-    final bg = isOnyx ? const Color(0xFF090C0E) : darkBackground;
-    final surf = isOnyx ? const Color(0xFF12161A) : darkSurface;
+    final bg = darkBackground;
+    final surf = darkSurface;
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
@@ -198,16 +198,16 @@ class AppTheme {
       ),
       bottomNavigationBarTheme: BottomNavigationBarThemeData(
         backgroundColor: bg,
-        selectedItemColor: creamBackground,
+        selectedItemColor: textLight,
         unselectedItemColor: accentGrey,
         type: BottomNavigationBarType.fixed,
         elevation: 10,
       ),
       navigationRailTheme: NavigationRailThemeData(
         backgroundColor: surf,
-        selectedIconTheme: const IconThemeData(color: creamBackground),
+        selectedIconTheme: const IconThemeData(color: textLight),
         unselectedIconTheme: IconThemeData(color: accentGrey),
-        selectedLabelTextStyle: TextStyle(color: creamBackground),
+        selectedLabelTextStyle: TextStyle(color: textLight),
         unselectedLabelTextStyle: TextStyle(color: accentGrey),
       ),
       iconTheme: const IconThemeData(color: textLight),
@@ -217,11 +217,12 @@ class AppTheme {
         thumbColor: primary,
       ),
       scrollbarTheme: ScrollbarThemeData(
-        thickness: WidgetStateProperty.resolveWith((states) => 
-          states.contains(WidgetState.hovered) ? 8.0 : 4.0),
-        radius: const Radius.circular(10),
-        thumbColor: WidgetStateProperty.resolveWith((states) =>
-          primary.withValues(alpha: states.contains(WidgetState.hovered) ? 0.5 : 0.2)),
+        thickness: const WidgetStatePropertyAll(4.0),
+        radius: const Radius.circular(8),
+        thumbColor: WidgetStateProperty.resolveWith((states) {
+          final isEngaged = states.contains(WidgetState.hovered) || states.contains(WidgetState.dragged);
+          return primary.withValues(alpha: isEngaged ? 0.6 : 0.25);
+        }),
         crossAxisMargin: 2,
         mainAxisMargin: 2,
         minThumbLength: 48,

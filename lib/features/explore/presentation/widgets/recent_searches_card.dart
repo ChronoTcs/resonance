@@ -57,6 +57,7 @@ class _RecentSearchesCardState extends ConsumerState<RecentSearchesCard> {
         File(localArtPath),
         width: widget.size,
         height: widget.size,
+        cacheWidth: 200,
         fit: BoxFit.cover,
         errorBuilder: (_, _, _) => _buildPlaceholder(theme),
       );
@@ -66,7 +67,6 @@ class _RecentSearchesCardState extends ConsumerState<RecentSearchesCard> {
         width: widget.size,
         height: widget.size,
         memCacheWidth: 400,
-        memCacheHeight: 400,
         fit: BoxFit.cover,
         placeholder: (_, _) => _buildPlaceholder(theme),
         errorWidget: (_, _, _) => _buildPlaceholder(theme),

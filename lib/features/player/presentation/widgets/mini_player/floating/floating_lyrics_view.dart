@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance/features/lyrics/presentation/widgets/lyrics_list_view.dart';
 import 'package:resonance/features/lyrics/application/lyrics_provider.dart';
+import 'package:resonance/features/player/application/providers/audio_provider.dart';
 
 class FloatingLyricsView extends ConsumerStatefulWidget {
   const FloatingLyricsView({super.key});
@@ -15,6 +16,8 @@ class _FloatingLyricsViewState extends ConsumerState<FloatingLyricsView> {
   Widget build(BuildContext context) {
     final lyricsState = ref.watch(lyricsProvider);
     final lyrics = lyricsState.lyrics;
+    final track = ref.watch(audioProvider.select((s) => s.currentTrack));
+    final trackKey = track?.id ?? track?.path;
     final theme = Theme.of(context);
     final isLight = theme.brightness == Brightness.light;
     final backgroundColor = isLight
@@ -38,7 +41,11 @@ class _FloatingLyricsViewState extends ConsumerState<FloatingLyricsView> {
                         ),
                       ),
                     )
-                  : LyricsListView(compact: true, textColor: textColor),
+                  : LyricsListView(
+                      key: ValueKey(trackKey),
+                      compact: true,
+                      textColor: textColor,
+                    ),
             ),
           ],
         ),

@@ -26,7 +26,8 @@ param(
     [string]$PreviousVersion = "",
     [int]$MaxDeltaReleases = 3,
     [switch]$SkipPythonEngine = $false,
-    [switch]$SkipInstaller = $false
+    [switch]$SkipInstaller = $false,
+    [switch]$SkipDeltaPatch = $false
 )
 
 $ErrorActionPreference = "Stop"
@@ -314,7 +315,10 @@ if (-not [string]::IsNullOrWhiteSpace($PreviousVersion)) {
     }
 }
 
-if ((Test-Path $HDiffzExe) -and ($TargetPrevReleases.Count -gt 0)) {
+$isMajorBaseline = ($Version -match '^1\.0\.0') -or ($BaseVersion -eq '1.0.0')
+if ($SkipDeltaPatch -or $isMajorBaseline) {
+    Write-Host "  -> Skipping delta patch generation for clean baseline release (v$BaseVersion)." -ForegroundColor Yellow
+} elseif ((Test-Path $HDiffzExe) -and ($TargetPrevReleases.Count -gt 0)) {
     foreach ($prev in $TargetPrevReleases) {
         $prevVer = $prev.Version
         $prevPath = $prev.Path

@@ -49,12 +49,12 @@ class AudioExtraActions extends ConsumerWidget {
         children: [
           Consumer(
             builder: (context, ref, _) {
-              final pos = ref.watch(audioProvider.select((s) => s.position));
-              final dur = ref.watch(audioProvider.select((s) => s.duration));
+              final posSec = ref.watch(audioProvider.select((s) => s.position.inSeconds));
+              final durSec = ref.watch(audioProvider.select((s) => s.duration.inSeconds));
               return SizedBox(
                 width: 110, // Fixed width to prevent jitter
                 child: Text(
-                  "${AppFormatters.formatDuration(pos)} / ${AppFormatters.formatDuration(dur)}",
+                  "${AppFormatters.formatDuration(Duration(seconds: posSec))} / ${AppFormatters.formatDuration(Duration(seconds: durSec))}",
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     fontSize: 12,

@@ -53,8 +53,11 @@ class MediaActionsBottomSheet extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isOnline = item.isStreaming;
-    ref.watch(playlistProvider);
-    final isLoved = ref.read(playlistProvider.notifier).isLiked(item);
+    final isLoved = ref.watch(
+      playlistProvider.select(
+        (s) => s.value?.isLiked(item) ?? false,
+      ),
+    );
     final isDownloaded = ref.watch(libraryProvider).isTrackDownloaded(
           item.id,
           title: item.title,
@@ -161,10 +164,8 @@ class _TrackHeroRow extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                item.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              ResonanceMarqueeText(
+                text: item.title,
                 style: theme.textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.bold,
                   fontSize: 14.5,
@@ -375,7 +376,7 @@ class _TrackBentoActions extends ConsumerWidget {
         Builder(
           builder: (context) {
             final isBlocked = ref.watch(blockedTracksProvider.select((list) =>
-                ref.read(blockedTracksProvider.notifier).isBlocked(item.id, path: item.path)));
+                list.any((t) => t.id == item.id || (item.path.isNotEmpty && t.id == item.path))));
             return Container(
               decoration: BoxDecoration(
                 color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
@@ -556,7 +557,9 @@ class _CreatePlaylistDialog extends ConsumerStatefulWidget {
 }
 
 class _CreatePlaylistDialogState extends ConsumerState<_CreatePlaylistDialog> {
+  static const int _kMaxPlaylistNameLength = 50;
   late final TextEditingController _controller;
+  String? _errorText;
 
   @override
   void initState() {
@@ -572,29 +575,32 @@ class _CreatePlaylistDialogState extends ConsumerState<_CreatePlaylistDialog> {
 
   Future<void> _handleCreate() async {
     final name = _controller.text.trim();
-    if (name.isNotEmpty) {
-      final notifier = ref.read(playlistProvider.notifier);
-      final newId = await notifier.createPlaylist(name);
+    if (name.isEmpty) {
+      setState(() => _errorText = 'Playlist name cannot be empty');
+      return;
+    }
+    final notifier = ref.read(playlistProvider.notifier);
+    final newId = await notifier.createPlaylist(name);
 
-      if (newId != null) {
-        await notifier.addTrackToPlaylist(newId, widget.item);
-      }
+    if (newId != null) {
+      await notifier.addTrackToPlaylist(newId, widget.item);
+    }
 
-      if (mounted) {
-        Navigator.pop(context);
-        ref.read(notificationProvider.notifier).showNotification(
-          'Playlist Created',
-          'Created "$name" and added song.',
-          target: newId != null ? 'target:playlist:$newId' : 'target:playlists',
-          silentOsNotification: true,
-        );
-      }
+    if (mounted) {
+      Navigator.pop(context);
+      ref.read(notificationProvider.notifier).showNotification(
+        'Playlist Created',
+        'Created "$name" and added song.',
+        target: newId != null ? 'target:playlist:$newId' : 'target:playlists',
+        silentOsNotification: true,
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isEmpty = _controller.text.trim().isEmpty;
 
     return Dialog(
       backgroundColor: Colors.transparent,
@@ -624,9 +630,11 @@ class _CreatePlaylistDialogState extends ConsumerState<_CreatePlaylistDialog> {
             TextField(
               controller: _controller,
               autofocus: true,
+              maxLength: _kMaxPlaylistNameLength,
               style: theme.textTheme.bodyMedium?.copyWith(fontSize: 14),
               decoration: InputDecoration(
                 hintText: 'Playlist name',
+                errorText: _errorText,
                 hintStyle: theme.textTheme.bodyMedium?.copyWith(
                   color: theme.hintColor.withValues(alpha: 0.6),
                   fontSize: 14,
@@ -658,6 +666,8 @@ class _CreatePlaylistDialogState extends ConsumerState<_CreatePlaylistDialog> {
                 ),
               ),
               textCapitalization: TextCapitalization.sentences,
+              onChanged: (_) => setState(() => _errorText = null),
+              onSubmitted: (_) => _handleCreate(),
             ),
             const SizedBox(height: 24),
             Row(
@@ -670,7 +680,7 @@ class _CreatePlaylistDialogState extends ConsumerState<_CreatePlaylistDialog> {
                 ),
                 const SizedBox(width: 12),
                 ResonanceButton(
-                  onPressed: _handleCreate,
+                  onPressed: isEmpty ? null : _handleCreate,
                   label: 'Create',
                   style: ResonanceButtonStyle.primary,
                 ),

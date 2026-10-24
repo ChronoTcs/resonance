@@ -96,6 +96,7 @@ class _DownloadScreenState extends ConsumerState<DownloadScreen>
         queue.where((e) => e.status == DownloadStatus.done).length;
 
     return Scaffold(
+      backgroundColor: Colors.transparent,
       body: Column(
         children: [
           if (widget.showHeader) ...[

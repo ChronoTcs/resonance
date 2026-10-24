@@ -23,6 +23,7 @@ import '../../settings/application/notification_provider.dart';
 import '../../player/application/providers/audio_provider.dart';
 import '../../stream/application/platform_stream_provider.dart';
 import '../../stream/platform/windows/windows_po_token_service.dart';
+import '../../player/application/services/playback_architecture_service.dart';
 import '../../../core/application/services/network_connectivity_service.dart';
 
 /// Event emitted by DownloadService to update the UI State in DownloadNotifier.
@@ -216,6 +217,8 @@ class DownloadService {
       'max_retries': settings.maxRetries,
       'socket_timeout': settings.connectionTimeout,
       'concurrent_fragments': settings.fragmentsPerDownload,
+      if (Platform.isWindows && WindowsPoTokenService().activePoToken != null)
+        'po_token': WindowsPoTokenService().activePoToken,
     });
   }
 
@@ -224,12 +227,20 @@ class DownloadService {
     final id = evt['id'] as String? ?? '';
     if (id.isEmpty && type != 'ready') return;
 
-    if (id.startsWith('resolve_') && _resolveCompleters.containsKey(id)) {
+    if (id.startsWith('resolve_')) {
       final completer = _resolveCompleters.remove(id);
-      if (type == 'resolved') {
-        completer?.complete(evt['url'] as String?);
-      } else {
-        completer?.complete(null);
+      final url = evt['url'] as String?;
+      final videoId = evt['videoId'] as String?;
+      if (completer != null) {
+        if (type == 'resolved') {
+          completer.complete(url);
+        } else {
+          completer.complete(null);
+        }
+      } else if (type == 'resolved' && url != null && videoId != null) {
+        // Late arrival salvage: URL resolved after timeout; preserve it in memory cache!
+        debugPrint('[DownloadService] Salvaging late-arriving stream URL for $videoId');
+        _ref.read(playbackArchitectureServiceProvider).cacheStreamUrl(videoId, url);
       }
       return;
     }
@@ -445,7 +456,7 @@ class DownloadService {
             )
             .then((req) => req.close());
         final itunesData = jsonDecode(
-          await itunesRes.transform(utf8.decoder).join(),
+          await itunesRes.transform(const Utf8Decoder(allowMalformed: true)).join(),
         );
         if (itunesData['results']?.isNotEmpty == true) {
           final artworkUrl100 =
@@ -998,7 +1009,7 @@ class DownloadService {
                 ),
               )
               .then((req) => req.close());
-          final responseBody = await lrcRes.transform(utf8.decoder).join();
+          final responseBody = await lrcRes.transform(const Utf8Decoder(allowMalformed: true)).join();
           final List<dynamic> results = jsonDecode(responseBody);
 
           if (results.isNotEmpty) {
@@ -1055,7 +1066,7 @@ class DownloadService {
             )
             .then((req) => req.close());
         final itunesData = jsonDecode(
-          await itunesRes.transform(utf8.decoder).join(),
+          await itunesRes.transform(const Utf8Decoder(allowMalformed: true)).join(),
         );
         if (itunesData['results']?.isNotEmpty == true) {
           final collectionName = itunesData['results'][0]['collectionName']
@@ -1114,7 +1125,7 @@ class DownloadService {
             )
             .then((req) => req.close());
         final itunesData = jsonDecode(
-          await itunesRes.transform(utf8.decoder).join(),
+          await itunesRes.transform(const Utf8Decoder(allowMalformed: true)).join(),
         );
         final results = itunesData['results'] as List?;
         if (results != null) {
@@ -1272,6 +1283,7 @@ class DownloadService {
 
   Future<String?> resolveStreamUrl(String videoId) async {
     if (Platform.isAndroid) return null;
+    final poToken = Platform.isWindows ? WindowsPoTokenService().activePoToken : null;
 
     // Route through persistent daemon bridge — no process spawn per call
     if (_bridge.isReady) {
@@ -1282,10 +1294,11 @@ class DownloadService {
         'action': 'resolve_stream',
         'id': reqId,
         'videoId': videoId,
+        'po_token': ?poToken,
       });
       debugPrint('[DownloadService] resolveStreamUrl: sent via daemon bridge for $videoId (id=$reqId)');
       try {
-        return await completer.future.timeout(const Duration(seconds: 25));
+        return await completer.future.timeout(const Duration(seconds: 45));
       } on TimeoutException {
         _resolveCompleters.remove(reqId);
         debugPrint('[DownloadService] resolveStreamUrl TIMEOUT (daemon) for $videoId');
@@ -1311,14 +1324,18 @@ class DownloadService {
       );
 
       final payload =
-          '${jsonEncode({'action': 'resolve_stream', 'videoId': videoId})}\n';
+          '${jsonEncode({
+            'action': 'resolve_stream',
+            'videoId': videoId,
+            'po_token': ?poToken,
+          })}\n';
       process.stdin.write(payload);
       await process.stdin.flush();
 
       final stdoutCompleter = Completer<String>();
       final sb = StringBuffer();
 
-      process.stdout.transform(utf8.decoder).listen((data) {
+      process.stdout.transform(const Utf8Decoder(allowMalformed: true)).listen((data) {
         sb.write(data);
         if (data.contains('"type": "resolved"') ||
             data.contains('"type": "error"')) {

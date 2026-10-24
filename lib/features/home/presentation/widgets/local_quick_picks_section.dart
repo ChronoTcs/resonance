@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:silky_scroll/silky_scroll.dart';
-import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/features/home/presentation/widgets/hover_track_card.dart';
 import 'package:resonance/features/library/application/library_provider.dart';
 import 'package:resonance/features/library/application/blocked_tracks_provider.dart';
@@ -31,20 +30,15 @@ class LocalQuickPicksSection extends ConsumerWidget {
           children: [
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: SizedBox(
+              child: Container(
                 height: 36,
-                child: Row(
-                  children: [
-                    Icon(UIcons.regular.folder, size: 16, color: theme.primaryColor),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Local Quick Picks',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: -0.2,
-                      ),
-                    ),
-                  ],
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Local Quick Picks',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: -0.2,
+                  ),
                 ),
               ),
             ),

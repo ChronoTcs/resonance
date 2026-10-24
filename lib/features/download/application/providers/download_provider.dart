@@ -68,6 +68,16 @@ class DownloadNotifier extends Notifier<List<DownloadItem>> {
     ).toList();
   }
 
+  void cancelAllAndClear() {
+    final service = ref.read(downloadServiceProvider);
+    for (final item in state) {
+      if (item.status == DownloadStatus.downloading || item.status == DownloadStatus.queued) {
+        service.cancelItem(item.id);
+      }
+    }
+    state = [];
+  }
+
   void retryItem(String id) {
     _updateItem(id, (item) => item.copyWith(
       status: DownloadStatus.queued, 

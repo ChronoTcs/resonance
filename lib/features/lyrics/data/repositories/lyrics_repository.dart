@@ -18,6 +18,12 @@ class LyricsRepository {
 
   LyricsRepository(this._ref);
 
+  void clearMemoryCache() {
+    _lastTrackId = null;
+    _lastLyrics = null;
+    _inFlightRequests.clear();
+  }
+
   Future<({List<LyricLine> lines, bool isVideoSynced})> getLyrics(
     MediaItem track, {
     String? lyricsFolderPath,

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:silky_scroll/silky_scroll.dart';
 import 'package:resonance/core/providers/cached_stream_music_provider.dart';
-import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/features/home/presentation/widgets/hover_track_card.dart';
 import 'package:resonance/features/library/application/blocked_tracks_provider.dart';
 
@@ -40,8 +39,6 @@ class HomeCachedMusicSection extends ConsumerWidget {
                     height: 36,
                     child: Row(
                       children: [
-                        Icon(UIcons.regular.cloud_download, size: 16, color: theme.primaryColor),
-                        const SizedBox(width: 8),
                         Text(
                           'Cached Streams',
                           style: theme.textTheme.titleMedium?.copyWith(

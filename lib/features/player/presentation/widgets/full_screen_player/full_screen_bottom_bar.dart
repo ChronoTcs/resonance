@@ -78,7 +78,7 @@ class _BottomBarTrackInfo extends StatelessWidget {
               child: SizedBox(
                 width: 56,
                 height: 56,
-                child: MediaArtworkWidget(item: track),
+                child: MediaArtworkWidget(item: track, width: 56, height: 56),
               ),
             ),
             const SizedBox(width: 12),
@@ -154,16 +154,20 @@ class FullScreenProgress extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final s = ref.watch(audioProvider);
+    final pos = ref.watch(audioProvider.select((s) => s.position));
+    final dur = ref.watch(audioProvider.select((s) => s.duration));
     return SizedBox(
       height: 32,
-      child: ReusableSeekSlider(
-        value: s.position.inMilliseconds.toDouble(),
-        max: s.duration.inMilliseconds.toDouble() > 0
-            ? s.duration.inMilliseconds.toDouble()
-            : 1.0,
-        onChanged: (v) =>
-            ref.read(audioProvider.notifier).seek(Duration(milliseconds: v.toInt())),
+      child: RepaintBoundary(
+        child: ReusableSeekSlider(
+          value: pos.inMilliseconds.toDouble(),
+          max: dur.inMilliseconds.toDouble() > 0
+              ? dur.inMilliseconds.toDouble()
+              : 1.0,
+          onChanged: (_) {},
+          onChangeEnd: (v) =>
+              ref.read(audioProvider.notifier).seek(Duration(milliseconds: v.toInt())),
+        ),
       ),
     );
   }
@@ -178,7 +182,12 @@ class FullScreenControls extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final s = ref.watch(audioProvider);
+    final isShuffleEnabled = ref.watch(audioProvider.select((s) => s.isShuffleEnabled));
+    final isPlaying = ref.watch(audioProvider.select((s) => s.isPlaying));
+    final isLoading = ref.watch(audioProvider.select((s) => s.isLoading));
+    final loopMode = ref.watch(audioProvider.select((s) => s.loopMode));
+    final isPrevDisabled = ref.watch(audioProvider.select((s) => s.currentIndex <= 0 && s.loopMode == LoopMode.off));
+    final isNextDisabled = ref.watch(audioProvider.select((s) => s.currentIndex >= s.queue.length - 1 && s.loopMode == LoopMode.off));
     final n = ref.read(audioProvider.notifier);
     final colorScheme = Theme.of(context).colorScheme;
 
@@ -189,7 +198,7 @@ class FullScreenControls extends ConsumerWidget {
           tooltip: 'Shuffle',
           icon: UIcons.regular.shuffle,
           iconSize: 20,
-          color: s.isShuffleEnabled
+          color: isShuffleEnabled
               ? colorScheme.primary
               : colorScheme.onSurface.withValues(alpha: 0.7),
           onTap: n.toggleShuffle,
@@ -199,12 +208,12 @@ class FullScreenControls extends ConsumerWidget {
           icon: UIcons.regular.step_backward,
           iconSize: 32,
           color: colorScheme.onSurface,
-          isDisabled: s.currentIndex <= 0 && s.loopMode == LoopMode.off,
+          isDisabled: isPrevDisabled,
           onTap: n.skipToPrevious,
         ),
         PlayPauseButton(
-          isPlaying: s.isPlaying,
-          isLoading: s.isLoading,
+          isPlaying: isPlaying,
+          isLoading: isLoading,
           size: PlayPauseSize.large,
           color: colorScheme.onSurface,
           onTap: n.togglePlayPause,
@@ -214,21 +223,20 @@ class FullScreenControls extends ConsumerWidget {
           icon: UIcons.regular.step_forward,
           iconSize: 32,
           color: colorScheme.onSurface,
-          isDisabled:
-              s.currentIndex >= s.queue.length - 1 && s.loopMode == LoopMode.off,
+          isDisabled: isNextDisabled,
           onTap: n.skipToNext,
         ),
         ReusableHoverIconButton(
-          tooltip: s.loopMode == LoopMode.one
+          tooltip: loopMode == LoopMode.one
               ? 'Repeat One'
-              : s.loopMode == LoopMode.all
+              : loopMode == LoopMode.all
                   ? 'Repeat All'
                   : 'Repeat Off',
-          icon: s.loopMode == LoopMode.one
+          icon: loopMode == LoopMode.one
               ? UIcons.regular.arrows_repeat_1
               : UIcons.regular.arrows_repeat,
           iconSize: 20,
-          color: s.loopMode != LoopMode.off
+          color: loopMode != LoopMode.off
               ? colorScheme.primary
               : colorScheme.onSurface.withValues(alpha: 0.7),
           onTap: n.cycleLoopMode,

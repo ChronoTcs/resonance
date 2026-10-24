@@ -74,9 +74,14 @@ class YoutubeInnerTubeClient {
 
     final Map<String, dynamic> responseData = jsonDecode(response.body);
     
-    // Automatically capture visitorData to maintain an anonymous preferences session
+    // Only capture visitorData if we don't already have an established session token.
+    // Overwriting visitorData on every InnerTube call changes sessionId in PoTokenGenerator.kt,
+    // forcing unnecessary WebView teardown and BotGuard re-initialization!
     final String? responseVisitorData = responseData['responseContext']?['visitorData'];
-    if (responseVisitorData != null && responseVisitorData.isNotEmpty) {
+    final String? existingVisitorData = _authService.visitorData;
+    if (responseVisitorData != null &&
+        responseVisitorData.isNotEmpty &&
+        (existingVisitorData == null || existingVisitorData.isEmpty)) {
       _authService.cacheVisitorData(responseVisitorData);
     }
 

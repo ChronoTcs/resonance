@@ -7,7 +7,9 @@ import '../data/services/lyrics_translation_service.dart';
 import 'lyrics_provider.dart';
 import '../../player/application/providers/audio_provider.dart';
 import '../../../core/data/services/cache_manager.dart';
+import '../../../core/data/services/media_cache_service.dart';
 import '../../../core/data/services/storage_service.dart';
+import '../../settings/application/maintenance_provider.dart';
 import 'package:path/path.dart' as p;
 import 'translation_cache_cleanup_service.dart';
 
@@ -73,8 +75,11 @@ class LyricsTranslationNotifier extends Notifier<LyricsTranslationState> {
       _debounceTimer?.cancel();
     });
 
-    // Run garbage collection on startup
-    Future.microtask(() => TranslationCacheCleanup.cleanup(ref.read(cacheManagerProvider)));
+    // Run garbage collection on startup using unified stream retention setting
+    Future.microtask(() => TranslationCacheCleanup.cleanup(
+          ref.read(cacheManagerProvider),
+          maxAgeDays: ref.read(streamTrackRetentionDaysProvider),
+        ));
 
     // Listen for track changes to clear translation or trigger it
     ref.listen(audioProvider.select((s) => s.currentTrack), (prev, next) {
@@ -191,14 +196,20 @@ class LyricsTranslationNotifier extends Notifier<LyricsTranslationState> {
     if (await transFile.exists()) {
       try {
         final content = await transFile.readAsString();
-        if (content.isNotEmpty) earlyTRN = _internalParseLrc(content);
+        if (content.isNotEmpty) {
+          earlyTRN = _internalParseLrc(content);
+          unawaited(cacheManager.updateLastAccessed(transFile));
+        }
       } catch (_) {}
     }
 
     if (await romanFile.exists()) {
       try {
         final content = await romanFile.readAsString();
-        if (content.isNotEmpty) earlyROM = _internalParseLrc(content);
+        if (content.isNotEmpty) {
+          earlyROM = _internalParseLrc(content);
+          unawaited(cacheManager.updateLastAccessed(romanFile));
+        }
       } catch (_) {}
     }
 
@@ -303,14 +314,20 @@ class LyricsTranslationNotifier extends Notifier<LyricsTranslationState> {
     if (fetchedTranslated == null && await transCacheFile.exists()) {
       try {
         final content = await transCacheFile.readAsString();
-        if (content.isNotEmpty) fetchedTranslated = _internalParseLrc(content);
+        if (content.isNotEmpty) {
+          fetchedTranslated = _internalParseLrc(content);
+          unawaited(cacheManager.updateLastAccessed(transCacheFile));
+        }
       } catch (_) {}
     }
 
     if (fetchedRomanized == null && await romanCacheFile.exists()) {
       try {
         final content = await romanCacheFile.readAsString();
-        if (content.isNotEmpty) fetchedRomanized = _internalParseLrc(content);
+        if (content.isNotEmpty) {
+          fetchedRomanized = _internalParseLrc(content);
+          unawaited(cacheManager.updateLastAccessed(romanCacheFile));
+        }
       } catch (_) {}
     }
 
@@ -338,6 +355,7 @@ class LyricsTranslationNotifier extends Notifier<LyricsTranslationState> {
       
       if (trackIdConfirm == trackIdAtStart) {
         final service = ref.read(lyricsTranslationServiceProvider);
+        final mediaCache = ref.read(mediaCacheServiceProvider);
         
         bool requiresNetwork = false;
         
@@ -352,10 +370,14 @@ class LyricsTranslationNotifier extends Notifier<LyricsTranslationState> {
               requiresNetwork = true;
             } else {
               fetchedRomanized ??= List.from(originalLyrics);
+              final romStr = service.stringify(fetchedRomanized);
               // Background fire-and-forget write to satisfy hasAllNeeded in future
-              romanCacheFile.writeAsString(service.stringify(fetchedRomanized)).catchError((e) {
+              romanCacheFile.writeAsString(romStr).then((f) async {
+                try {
+                  mediaCache.notifyDelta('translate', await f.length());
+                } catch (_) {}
+              }).catchError((e) {
                 debugPrint('[LyricsTranslation] Silent ROM healing failed - $e');
-                return romanCacheFile;
               });
               
               requiresNetwork = (fetchedTranslated == null && state.mode == LyricsTranslationMode.translated);
@@ -377,6 +399,11 @@ class LyricsTranslationNotifier extends Notifier<LyricsTranslationState> {
             // 4. Persistence
             await transCacheFile.writeAsString(service.stringify(fetchedTranslated));
             await romanCacheFile.writeAsString(service.stringify(fetchedRomanized));
+            try {
+              final transLen = await transCacheFile.length();
+              final romanLen = await romanCacheFile.length();
+              mediaCache.notifyDelta('translate', transLen + romanLen);
+            } catch (_) {}
           }
         }
       }

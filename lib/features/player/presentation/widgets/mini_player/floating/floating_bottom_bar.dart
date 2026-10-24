@@ -9,12 +9,15 @@ class FloatingBottomBar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final audioState = ref.watch(audioProvider);
     final audioNotifier = ref.read(audioProvider.notifier);
     final track = ref.watch(currentTrackProvider);
 
     if (track == null) return const SizedBox.shrink();
 
+    final isPlaying = ref.watch(audioProvider.select((s) => s.isPlaying));
+    final isLoading = ref.watch(audioProvider.select((s) => s.isLoading));
+    final isPrevDisabled = ref.watch(audioProvider.select((s) => s.currentIndex <= 0));
+    final isNextDisabled = ref.watch(audioProvider.select((s) => s.nextTrack == null));
     final theme = Theme.of(context);
 
     return Container(
@@ -25,16 +28,7 @@ class FloatingBottomBar extends ConsumerWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          ReusableSeekSlider(
-            value: audioState.position.inMilliseconds.toDouble(),
-            max: audioState.duration.inMilliseconds > 0 
-              ? audioState.duration.inMilliseconds.toDouble() 
-              : 0.0,
-            onChanged: (v) => audioNotifier.seek(Duration(milliseconds: v.toInt())),
-            trackHeight: 2,
-            height: 4,
-            thumbRadius: 0, // Narrow for miniplayer, thumb appears on hover/drag
-          ),
+          const _FloatingProgressBar(),
 
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
@@ -83,12 +77,12 @@ class FloatingBottomBar extends ConsumerWidget {
                       iconSize: 18,
                       padding: 4,
                       color: theme.colorScheme.onSurface,
-                      isDisabled: audioState.currentIndex <= 0,
+                      isDisabled: isPrevDisabled,
                     ),
                     const SizedBox(width: 4),
                     PlayPauseButton(
-                      isPlaying: audioState.isPlaying,
-                      isLoading: audioState.isLoading,
+                      isPlaying: isPlaying,
+                      isLoading: isLoading,
                       onTap: audioNotifier.togglePlayPause,
                       size: PlayPauseSize.small,
                     ),
@@ -100,7 +94,7 @@ class FloatingBottomBar extends ConsumerWidget {
                       iconSize: 18,
                       padding: 4,
                       color: theme.colorScheme.onSurface,
-                      isDisabled: audioState.nextTrack == null,
+                      isDisabled: isNextDisabled,
                     ),
                   ],
                 ),
@@ -108,6 +102,27 @@ class FloatingBottomBar extends ConsumerWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _FloatingProgressBar extends ConsumerWidget {
+  const _FloatingProgressBar();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final pos = ref.watch(audioProvider.select((s) => s.position));
+    final dur = ref.watch(audioProvider.select((s) => s.duration));
+    return RepaintBoundary(
+      child: ReusableSeekSlider(
+        value: pos.inMilliseconds.toDouble(),
+        max: dur.inMilliseconds > 0 ? dur.inMilliseconds.toDouble() : 0.0,
+        onChanged: (_) {},
+        onChangeEnd: (v) => ref.read(audioProvider.notifier).seek(Duration(milliseconds: v.toInt())),
+        trackHeight: 2,
+        height: 4,
+        thumbRadius: 0,
       ),
     );
   }

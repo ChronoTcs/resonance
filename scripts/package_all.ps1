@@ -21,6 +21,9 @@
 
 .PARAMETER BuildAppBundle
     Switch to build Android App Bundle (.aab). Default is false (faster local APK build).
+
+.PARAMETER TargetAbi
+    Optional target architecture for Android builds (e.g. "arm64", "arm", "x64", "universal").
 #>
 
 param(
@@ -30,7 +33,9 @@ param(
     [string]$PreviousVersion = "",
     [switch]$SkipPythonEngine = $false,
     [switch]$SkipInstaller = $false,
-    [switch]$BuildAppBundle = $false
+    [switch]$SkipDeltaPatch = $false,
+    [switch]$BuildAppBundle = $false,
+    [string]$TargetAbi = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -88,6 +93,9 @@ if ($Platform -eq "All" -or $Platform -eq "Windows") {
     if ($SkipInstaller) {
         $winParams["SkipInstaller"] = $true
     }
+    if ($SkipDeltaPatch) {
+        $winParams["SkipDeltaPatch"] = $true
+    }
     $global:LASTEXITCODE = 0
     & "$PSScriptRootDirectory\package_windows.ps1" @winParams
     if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne $null) {
@@ -102,6 +110,9 @@ if ($Platform -eq "All" -or $Platform -eq "Android") {
         Version = $BaseVersion
         BuildNumber = $BuildNumber
         BuildAppBundle = $BuildAppBundle
+    }
+    if (-not [string]::IsNullOrWhiteSpace($TargetAbi)) {
+        $androidParams["TargetAbi"] = $TargetAbi
     }
     $global:LASTEXITCODE = 0
     & "$PSScriptRootDirectory\package_android.ps1" @androidParams

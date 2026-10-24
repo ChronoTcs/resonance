@@ -81,13 +81,26 @@ class PlaybackRestorationService {
 
           await player.open(resolver.buildMedia(playablePath), play: false);
           
-          // Wait for engine to be ready before seeking
-          late StreamSubscription readinessSub;
+          // Wait for engine to be ready before seeking (with 5-second timeout auto-cancellation)
+          final restoredId = lastTrack.id ?? lastTrack.path;
+          StreamSubscription<Duration>? readinessSub;
+          Timer? timeoutTimer;
           readinessSub = player.stream.duration.listen((duration) {
-            if (duration > Duration.zero) {
-              player.seek(Duration(milliseconds: s.lastPositionMs));
-              readinessSub.cancel();
+            final currentTrack = _ref.read(audioProvider).currentTrack;
+            final currentId = currentTrack?.id ?? currentTrack?.path;
+            if (currentId != restoredId) {
+              timeoutTimer?.cancel();
+              readinessSub?.cancel();
+              return;
             }
+            if (duration > Duration.zero) {
+              timeoutTimer?.cancel();
+              notifier.seek(Duration(milliseconds: s.lastPositionMs));
+              readinessSub?.cancel();
+            }
+          });
+          timeoutTimer = Timer(const Duration(seconds: 5), () {
+            readinessSub?.cancel();
           });
 
           // 3. [Windows] Cold Start Tray Sync

@@ -10,7 +10,9 @@ import '../../../library/data/models/media_item.dart';
 final windowsSystemMediaServiceProvider = Provider<WindowsSystemMediaService>((
   ref,
 ) {
-  return WindowsSystemMediaService();
+  final service = WindowsSystemMediaService();
+  ref.onDispose(() => service.dispose());
+  return service;
 });
 
 class WindowsSystemMediaService with WindowListener {

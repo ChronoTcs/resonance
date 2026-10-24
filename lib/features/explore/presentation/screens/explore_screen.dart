@@ -13,6 +13,7 @@ import 'package:resonance/features/explore/presentation/widgets/mood_genre_secti
 import 'package:resonance/features/explore/presentation/widgets/recent_searches_carousel_section.dart';
 import 'package:resonance/features/explore/presentation/widgets/search_suggestions_section.dart';
 import 'package:resonance/features/explore/presentation/widgets/mobile_search_history_section.dart';
+import 'package:resonance/features/explore/presentation/screens/online_playlist_detail_screen.dart';
 import 'package:resonance/features/player/application/providers/audio_provider.dart';
 
 /// Dedicated Explore & Discovery Screen for both Windows and Android.
@@ -91,6 +92,19 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen>
 
   @override
   Widget build(BuildContext context) {
+    final selectedPlaylist = ref.watch(selectedExplorePlaylistProvider);
+    if (selectedPlaylist != null) {
+      return PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) {
+            ref.read(selectedExplorePlaylistProvider.notifier).setSelected(null);
+          }
+        },
+        child: OnlinePlaylistDetailScreen(playlist: selectedPlaylist),
+      );
+    }
+
     final isCompact = AppBreakpoints.isCompact(context);
     final theme = Theme.of(context);
     final isSearching = ref.watch(searchStateProvider);
@@ -143,6 +157,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen>
         }
       },
       child: Scaffold(
+        backgroundColor: Colors.transparent,
         body: Column(
           children: [
             const OfflineBanner(),

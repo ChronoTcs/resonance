@@ -52,6 +52,10 @@ class QueueService {
   MediaItem? get nextTrack {
     if (_queue.isEmpty) return null;
 
+    if (_loopMode == LoopMode.one) {
+      return currentTrack;
+    }
+
     if (_isShuffleEnabled) {
       if (_shuffleQueue.isEmpty) return null;
       if (_shuffleQueueIndex >= _shuffleQueue.length - 1) {
@@ -76,7 +80,6 @@ class QueueService {
   }
 
   int getNextIndex({bool fromCompletion = false}) {
-    // debugPrint('QueueService.getNextIndex: fromCompletion=$fromCompletion, _currentIndex=$_currentIndex, _queue.length=${_queue.length}, _loopMode=$_loopMode');
     if (_queue.isEmpty) return -1;
 
     // Repeat One logic: repeat the current track for both auto-advance and manual skip
@@ -264,12 +267,68 @@ class QueueService {
   MediaItem? peekNextTrack(LoopMode loopMode, bool isShuffleEnabled) {
     _loopMode = loopMode;
     _isShuffleEnabled = isShuffleEnabled;
+    if (_loopMode == LoopMode.one) {
+      return currentTrack;
+    }
     return nextTrack;
+  }
+
+  /// Returns the track that is [offset] positions ahead in the *effective* play order.
+  /// Respects shuffle mode: if shuffle is enabled, reads from [_shuffleQueue].
+  /// Returns null if out of bounds.
+  MediaItem? peekAhead(int offset, {bool shuffleEnabled = false}) {
+    if (_loopMode == LoopMode.one) {
+      return currentTrack;
+    }
+    if (shuffleEnabled && _shuffleQueue.isNotEmpty) {
+      final targetShuffleIndex = _shuffleQueueIndex + offset;
+      if (targetShuffleIndex < 0 || targetShuffleIndex >= _shuffleQueue.length) return null;
+      final targetId = _shuffleQueue[targetShuffleIndex];
+      try {
+        return _queue.firstWhere((t) => (t.id ?? t.path) == targetId);
+      } catch (_) {
+        return null;
+      }
+    }
+    final targetIndex = (_currentIndex < 0 ? 0 : _currentIndex) + offset;
+    if (targetIndex < 0 || targetIndex >= _queue.length) return null;
+    return _queue[targetIndex];
+  }
+
+  /// Returns ordered upcoming tracks starting from [offset] positions ahead in the effective play order.
+  /// Respects shuffle mode: reads from [_shuffleQueue] when shuffle is enabled.
+  List<MediaItem> getUpcomingTracks({int offset = 1, int? limit, bool shuffleEnabled = false}) {
+    if (_loopMode == LoopMode.one) {
+      final current = currentTrack;
+      return current != null ? [current] : [];
+    }
+    final List<MediaItem> upcoming = [];
+    if (shuffleEnabled && _shuffleQueue.isNotEmpty) {
+      final startIndex = _shuffleQueueIndex + offset;
+      if (startIndex >= _shuffleQueue.length) return upcoming;
+      final end = limit != null
+          ? (startIndex + limit).clamp(0, _shuffleQueue.length)
+          : _shuffleQueue.length;
+      for (int i = startIndex; i < end; i++) {
+        final targetId = _shuffleQueue[i];
+        final item = _queue.cast<MediaItem?>().firstWhere(
+          (t) => (t?.id ?? t?.path) == targetId,
+          orElse: () => null,
+        );
+        if (item != null) upcoming.add(item);
+      }
+      return upcoming;
+    }
+    final startIndex = (_currentIndex < 0 ? 0 : _currentIndex) + offset;
+    if (startIndex >= _queue.length) return upcoming;
+    final end = limit != null
+        ? (startIndex + limit).clamp(0, _queue.length)
+        : _queue.length;
+    return _queue.sublist(startIndex, end);
   }
 
   /// Returns the track at [index] without mutating any state.
   /// Returns null if index is out of bounds.
-  // simple direct lookup, no shuffle awareness needed for N+2 peek
   MediaItem? peekTrackAt(int index) {
     if (index < 0 || index >= _queue.length) return null;
     return _queue[index];

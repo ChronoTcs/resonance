@@ -1,5 +1,4 @@
 import 'package:resonance/core/widgets/widgets.dart';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance/core/domain/models/media_item.dart';
@@ -33,8 +32,7 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
     final lyricsState = ref.watch(lyricsProvider);
     final translationState = ref.watch(lyricsTranslationProvider);
     final lyrics = ref.watch(displayLyricsProvider);
-    final audioState = ref.watch(audioProvider);
-    final track = audioState.currentTrack;
+    final track = ref.watch(audioProvider.select((s) => s.currentTrack));
 
     // 1. Determine Content based on state
     Widget content;
@@ -63,7 +61,7 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
         ),
       );
     } else {
-      content = const LyricsListView();
+      content = LyricsListView(key: ValueKey(track?.id ?? track?.path));
     }
 
     // 2. Build the unified Stack
@@ -211,30 +209,32 @@ class _LyricsEmbeddedBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isLight = Theme.of(context).brightness == Brightness.light;
+    final theme = Theme.of(context);
+    final isLight = theme.brightness == Brightness.light;
+    final bg = theme.scaffoldBackgroundColor;
+    final accent = theme.colorScheme.primary;
+
+    final topColor = Color.alphaBlend(
+      accent.withValues(alpha: isLight ? 0.25 : 0.22),
+      bg,
+    );
+    final midColor = Color.alphaBlend(
+      accent.withValues(alpha: isLight ? 0.08 : 0.06),
+      bg,
+    );
+
     return Positioned.fill(
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          track != null
-              ? MediaArtworkWidget(
-                  item: track!,
-                  fit: BoxFit.cover,
-                  color: isLight
-                      ? Colors.white.withValues(alpha: 0.6)
-                      : Colors.black.withValues(alpha: 0.6),
-                  colorBlendMode:
-                      isLight ? BlendMode.lighten : BlendMode.darken,
-                )
-              : Container(color: Theme.of(context).colorScheme.surface),
-          BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 80, sigmaY: 80),
-            child: Container(
-              color: (isLight ? Colors.white : Colors.black)
-                  .withValues(alpha: 0.4),
+      child: RepaintBoundary(
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              stops: const [0.0, 0.45, 1.0],
+              colors: [topColor, midColor, bg],
             ),
           ),
-        ],
+        ),
       ),
     );
   }

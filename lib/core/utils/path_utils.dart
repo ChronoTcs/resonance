@@ -87,6 +87,16 @@ class PathUtils {
     return p.join(tempDir.path, 'resonance_staged_update');
   }
 
+  /// Temporary network image cache directory used by `cached_network_image` / `DefaultCacheManager`.
+  static Future<String> getSystemImagesCacheDefault() async {
+    try {
+      final tempDir = await getTemporaryDirectory();
+      return p.join(tempDir.path, 'libCachedImageData');
+    } catch (_) {
+      return p.join(Directory.systemTemp.path, 'libCachedImageData');
+    }
+  }
+
   /// Generates a stable unified ID matching the Python script perfectly:
   /// `loc_` + `sha256(videoId).hexdigest()[:10]`
   static String generateLocId(String videoId) {

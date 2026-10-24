@@ -21,32 +21,14 @@ class DownloadsSettingsSection extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Network Settings',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface),
-            ),
-            const SizedBox(height: 16),
-
-            // Default Stream Engine Selector
-            ResonanceSelector<String>(
-              icon: UIcons.regular.globe,
-              title: 'Default Source',
-              subtitle: 'Select default streaming engine',
-              value: settings.streamSource,
-              onChanged: (val) {
-                notifier.saveSettings(settings.copyWith(streamSource: val));
-              },
-              items: const [
-                ResonanceSelectorItem(value: 'ipc', label: 'Native IPC First (yt-dlp)'),
-                ResonanceSelectorItem(value: 'dart', label: 'In-App Dart First (youtube_explode)'),
-              ],
-            ),
-
-            const SizedBox(height: 16),
-            Text(
               'Advance Limits Downloads',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface),
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: theme.colorScheme.onSurface,
+              ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
 
             // Grouped Advanced Limits Container
             Material(
@@ -54,7 +36,9 @@ class DownloadsSettingsSection extends ConsumerWidget {
               clipBehavior: Clip.antiAlias,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
-                side: BorderSide(color: Theme.of(context).dividerColor.withValues(alpha: 0.08)),
+                side: BorderSide(
+                  color: Theme.of(context).dividerColor.withValues(alpha: 0.08),
+                ),
               ),
               child: Column(
                 children: [
@@ -64,7 +48,9 @@ class DownloadsSettingsSection extends ConsumerWidget {
                     value: settings.maxConcurrent,
                     min: 1,
                     max: 8,
-                    onChanged: (v) => notifier.saveSettings(settings.copyWith(maxConcurrent: v)),
+                    onChanged: (v) => notifier.saveSettings(
+                      settings.copyWith(maxConcurrent: v),
+                    ),
                   ),
                   const Divider(height: 1),
                   _buildNumericTileRow(
@@ -73,7 +59,9 @@ class DownloadsSettingsSection extends ConsumerWidget {
                     value: settings.maxRetries,
                     min: 0,
                     max: 10,
-                    onChanged: (v) => notifier.saveSettings(settings.copyWith(maxRetries: v)),
+                    onChanged: (v) => notifier.saveSettings(
+                      settings.copyWith(maxRetries: v),
+                    ),
                   ),
                   const Divider(height: 1),
                   _buildNumericTileRow(
@@ -82,7 +70,9 @@ class DownloadsSettingsSection extends ConsumerWidget {
                     value: settings.connectionTimeout,
                     min: 5,
                     max: 120,
-                    onChanged: (v) => notifier.saveSettings(settings.copyWith(connectionTimeout: v)),
+                    onChanged: (v) => notifier.saveSettings(
+                      settings.copyWith(connectionTimeout: v),
+                    ),
                   ),
                   const Divider(height: 1),
                   _buildNumericTileRow(
@@ -91,7 +81,9 @@ class DownloadsSettingsSection extends ConsumerWidget {
                     value: settings.fragmentsPerDownload,
                     min: 1,
                     max: 16,
-                    onChanged: (v) => notifier.saveSettings(settings.copyWith(fragmentsPerDownload: v)),
+                    onChanged: (v) => notifier.saveSettings(
+                      settings.copyWith(fragmentsPerDownload: v),
+                    ),
                   ),
                 ],
               ),

@@ -119,6 +119,13 @@ class _MediaArtworkWidgetState extends ConsumerState<MediaArtworkWidget> {
       ),
     );
 
+    final effectiveCacheWidth = (widget.width.isFinite && widget.width > 0)
+        ? (widget.width * 2).clamp(64, 600).toInt()
+        : 600;
+    final memCacheLimit = (widget.width.isFinite && widget.width > 0)
+        ? (widget.width * 2).clamp(64, 400).toInt()
+        : 400;
+
     Widget imageWidget;
 
     if (widget.item.albumArt != null) {
@@ -126,6 +133,7 @@ class _MediaArtworkWidgetState extends ConsumerState<MediaArtworkWidget> {
         widget.item.albumArt!,
         width: widget.width,
         height: widget.height,
+        cacheWidth: memCacheLimit,
         fit: widget.fit,
         color: widget.color,
         colorBlendMode: widget.colorBlendMode,
@@ -137,7 +145,7 @@ class _MediaArtworkWidgetState extends ConsumerState<MediaArtworkWidget> {
           imageUrl: _resolvedThumbnailUrl!,
           width: widget.width,
           height: widget.height,
-          memCacheWidth: 400,
+          memCacheWidth: effectiveCacheWidth,
           fit: widget.fit,
           color: widget.color,
           colorBlendMode: widget.colorBlendMode,
@@ -149,7 +157,7 @@ class _MediaArtworkWidgetState extends ConsumerState<MediaArtworkWidget> {
                 imageUrl: fallbackUrl,
                 width: widget.width,
                 height: widget.height,
-                memCacheWidth: 400,
+                memCacheWidth: effectiveCacheWidth,
                 fit: widget.fit,
                 color: widget.color,
                 colorBlendMode: widget.colorBlendMode,
@@ -180,14 +188,32 @@ class _MediaArtworkWidgetState extends ConsumerState<MediaArtworkWidget> {
             key: ValueKey(cacheKey),
             width: widget.width,
             height: widget.height,
-            cacheWidth: 600,
+            cacheWidth: effectiveCacheWidth,
             fit: widget.fit,
             color: widget.color,
             colorBlendMode: widget.colorBlendMode,
             errorBuilder: (_, _, _) => fallback,
           );
+        } else if (widget.item.thumbnailUrl != null &&
+            widget.item.thumbnailUrl!.startsWith('http')) {
+          final remoteUrl = widget.width > 200
+              ? ThumbnailUtils.upgradeResolution(widget.item.thumbnailUrl!)
+              : ThumbnailUtils.toCardResolution(widget.item.thumbnailUrl!);
+          imageWidget = CachedNetworkImage(
+            imageUrl: remoteUrl,
+            width: widget.width,
+            height: widget.height,
+            memCacheWidth: effectiveCacheWidth,
+            fit: widget.fit,
+            color: widget.color,
+            colorBlendMode: widget.colorBlendMode,
+            placeholder: (context, _) => fallback,
+            errorWidget: (context, _, _) => fallback,
+          );
+          Future.microtask(_resolveThumbnail);
         } else {
           imageWidget = fallback;
+          Future.microtask(_resolveThumbnail);
         }
       }
     } else {

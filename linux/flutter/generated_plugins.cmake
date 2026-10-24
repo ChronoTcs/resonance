@@ -6,13 +6,11 @@ list(APPEND FLUTTER_PLUGIN_LIST
   desktop_drop
   screen_retriever_linux
   system_theme
-  tray_manager
   url_launcher_linux
   window_manager
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST
-  cnativeapi
   jni
 )
 

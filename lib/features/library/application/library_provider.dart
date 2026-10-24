@@ -299,14 +299,22 @@ class LibraryNotifier extends Notifier<LibraryState> {
         }
       } catch (_) {}
 
+      final mediaCache = ref.read(mediaCacheServiceProvider);
+
       // 1. Delete Main File with Exponential Retry & Pending Rename Fallback
       final file = File(path);
       if (await file.exists()) {
+        int fileLen = 0;
+        try {
+          fileLen = await file.length();
+        } catch (_) {}
+
         bool deleted = false;
         for (int attempt = 0; attempt < 3; attempt++) {
           try {
             await file.delete();
             deleted = true;
+            mediaCache.notifyDelta('local_music', -fileLen);
             debugPrint('[LibraryNotifier] Deleted main file $path');
             break;
           } catch (_) {
@@ -320,6 +328,7 @@ class LibraryNotifier extends Notifier<LibraryState> {
           try {
             final pendingPath = '$path.pending_delete';
             final pendingFile = await file.rename(pendingPath);
+            mediaCache.notifyDelta('local_music', -fileLen);
             debugPrint('[LibraryNotifier] File locked — renamed for pending deletion: $pendingPath');
             Future.delayed(const Duration(seconds: 2), () async {
               try {
@@ -338,28 +347,43 @@ class LibraryNotifier extends Notifier<LibraryState> {
         final lrcFile = File(lrcPath);
         if (await lrcFile.exists()) {
           try {
+            final lrcLen = await lrcFile.length();
             await lrcFile.delete();
+            mediaCache.notifyDelta('local_lyrics', -lrcLen);
             debugPrint('[LibraryNotifier] Deleted local lyrics $lrcPath');
           } catch (_) {}
         }
       }
 
-      // 3. Delete Custom Lyrics Folder Entry
+      // 3. Delete Custom Lyrics Folder Entry (also check by locId and setVideoId)
       if (state.lyricsFolderPath != null) {
         final fileName = item.path.startsWith('http') ? item.title : (path.contains(Platform.pathSeparator) ? path.split(Platform.pathSeparator).last : path);
         final baseName = fileName.contains('.') ? fileName.substring(0, fileName.lastIndexOf('.')) : fileName;
-        final customLrcPath = "${state.lyricsFolderPath}${Platform.pathSeparator}$baseName.lrc";
-        final customLrcFile = File(customLrcPath);
-        if (await customLrcFile.exists()) {
-          try {
-            await customLrcFile.delete();
-            debugPrint('[LibraryNotifier] Deleted custom lyrics $customLrcPath');
-          } catch (_) {}
+        final candidateLrcNames = <String>{
+          '$baseName.lrc',
+          '$songId.lrc',
+          if (item.setVideoId != null && item.setVideoId!.isNotEmpty) '${item.setVideoId}.lrc',
+        };
+        for (final name in candidateLrcNames) {
+          final customLrcPath = "${state.lyricsFolderPath}${Platform.pathSeparator}$name";
+          final customLrcFile = File(customLrcPath);
+          if (await customLrcFile.exists()) {
+            try {
+              final lrcLen = await customLrcFile.length();
+              await customLrcFile.delete();
+              mediaCache.notifyDelta('local_lyrics', -lrcLen);
+              debugPrint('[LibraryNotifier] Deleted custom lyrics $customLrcPath');
+            } catch (_) {}
+          }
         }
       }
 
-      // 4. Delete Cache Entries (Audio, JSON, Art, etc.)
-      await ref.read(mediaCacheServiceProvider).removeFromCache(songId);
+      // 4. Delete Local Thumbnails & Cache Entries (Local Art, Stream Audio/Art/Lyrics, Metadata JSON, Translations)
+      await mediaCache.removeLocalTrackAssets(
+        songId,
+        setVideoId: item.setVideoId,
+        thumbnailPath: item.thumbnailUrl,
+      );
 
     } catch (e) {
         debugPrint('[LibraryNotifier] Error deleting track: $e');

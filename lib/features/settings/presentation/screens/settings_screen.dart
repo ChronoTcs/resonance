@@ -4,6 +4,7 @@ import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/core/widgets/widgets.dart';
 
 import '../widgets/appearance_section.dart';
+import '../widgets/preferences_section.dart';
 import '../widgets/library_paths_section.dart';
 import '../widgets/cache_management_section.dart';
 import '../widgets/audio_settings_section.dart';
@@ -21,6 +22,7 @@ import 'release_manager_screen.dart';
 enum SettingsSubView {
   none,
   display,
+  preferences,
   audio,
   storage,
   network,
@@ -59,6 +61,7 @@ class SettingsScreen extends ConsumerWidget {
         }
       },
       child: Scaffold(
+        backgroundColor: Colors.transparent,
         body: Column(
           children: [
             if (subView == SettingsSubView.none)
@@ -100,6 +103,16 @@ class SettingsScreen extends ConsumerWidget {
             AppearanceSection(),
             SizedBox(height: 24),
             TranslationSection(),
+          ],
+        );
+
+      case SettingsSubView.preferences:
+        return StickySubViewLayout(
+          key: const ValueKey('settings_subview_preferences'),
+          title: 'Preferences',
+          onBack: closeSubView,
+          children: const [
+            PreferencesSection(),
           ],
         );
 
@@ -176,6 +189,13 @@ class SettingsScreen extends ConsumerWidget {
               title: 'Display',
               subtitle: 'Theme, accent colours, lyrics opacity & translation',
               onTap: () => openSubView(SettingsSubView.display),
+            ),
+            _buildNavigationItem(
+              context,
+              icon: UIcons.regular.settings_sliders,
+              title: 'Preferences',
+              subtitle: 'App behavior, sleep timer & automatic updates',
+              onTap: () => openSubView(SettingsSubView.preferences),
             ),
             _buildNavigationItem(
               context,

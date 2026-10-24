@@ -172,13 +172,9 @@ class _QuickPicksHeader extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Row(
-              children: [
-                Icon(UIcons.regular.music, size: 18, color: theme.primaryColor),
-                const SizedBox(width: 8),
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       title,
@@ -199,8 +195,6 @@ class _QuickPicksHeader extends StatelessWidget {
                     ],
                   ],
                 ),
-              ],
-            ),
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [

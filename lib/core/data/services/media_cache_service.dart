@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:flutter_cache_manager/flutter_cache_manager.dart' show DefaultCacheManager;
 import 'package:path/path.dart' as p;
 import 'data_usage_service.dart';
 import 'cache_manager.dart';
@@ -140,6 +141,9 @@ class MediaCacheService {
   /// Cancels an in-flight background audio download for [songId] immediately.
   /// Aborts the underlying HTTP socket and cleans up any partial .tmp file.
   void cancelActiveDownload(String songId) {
+    if (!_activeDownloads.containsKey(songId) && !_activeClients.containsKey(songId)) {
+      return;
+    }
     _cancelledDownloads.add(songId);
     final client = _activeClients.remove(songId);
     if (client != null) {
@@ -148,6 +152,27 @@ class MediaCacheService {
         client.close();
       } catch (_) {}
     }
+  }
+
+  /// Aborts all in-flight background audio and artwork downloads and cancels scheduled cleanup timers.
+  /// Must be called before purging cache folders to prevent mid-write .tmp collisions or post-clear writes.
+  void cancelAllActiveDownloads() {
+    _cleanupTimer?.cancel();
+    for (final songId in _activeDownloads.keys) {
+      _cancelledDownloads.add(songId);
+    }
+    for (final songId in _activeClients.keys) {
+      _cancelledDownloads.add(songId);
+    }
+    for (final client in _activeClients.values) {
+      try {
+        client.close();
+      } catch (_) {}
+    }
+    _activeClients.clear();
+    _activeDownloads.clear();
+    _activeArtworkDownloads.clear();
+    _failedDownloads.clear();
   }
 
   Future<String> getAudioPath(
@@ -189,6 +214,7 @@ class MediaCacheService {
     debugPrint(
       '[MediaCache] Cache miss for $songId. Starting background cache...',
     );
+    _cancelledDownloads.remove(songId);
     final downloadFuture =
         _downloadAudioInBackground(
           songId,
@@ -225,6 +251,47 @@ class MediaCacheService {
     return null;
   }
 
+  /// Deletes both the cached .m4a file and any partial .m4a.tmp file for [songId].
+  /// Used when a cached stream is detected as truncated/corrupted during playback.
+  Future<void> deleteCachedAudio(String songId) async {
+    cancelActiveDownload(songId);
+    try {
+      final dir = await _cacheManager.getStreamAudioDir();
+      final safeId = getSafeFilename(songId);
+      final file = File(p.join(dir.path, '$safeId.m4a'));
+      final tmpFile = File('${file.path}.tmp');
+      if (await tmpFile.exists()) {
+        await tmpFile.delete();
+      }
+      if (await file.exists()) {
+        final len = await file.length();
+        await file.delete();
+        notifyDelta('stream_audio', -len);
+        debugPrint('[MediaCache] Purged corrupted/stale cached audio for $songId');
+      }
+    } catch (e) {
+      debugPrint('[MediaCache] Failed to delete cached audio for $songId: $e');
+    }
+  }
+
+  /// Extracts the total resource byte length from `Content-Range` (e.g. `bytes 0-999/3500000` or `bytes */3500000`)
+  /// or falls back to `startOffset + response.contentLength`.
+  int? _extractExpectedTotalBytes(http.StreamedResponse response, int startOffset) {
+    final contentRange = response.headers['content-range'];
+    if (contentRange != null) {
+      final match = RegExp(r'/(\d+)').firstMatch(contentRange);
+      if (match != null) {
+        final total = int.tryParse(match.group(1)!);
+        if (total != null && total > 0) return total;
+      }
+    }
+    final contentLen = response.contentLength;
+    if (contentLen != null && contentLen > 0) {
+      return startOffset + contentLen;
+    }
+    return null;
+  }
+
   Future<void> _downloadAudioInBackground(
     String songId,
     String url,
@@ -240,6 +307,7 @@ class MediaCacheService {
     int attempts = 0;
     const maxAttempts = 3;
     int downloadedBytes = 0;
+    int? expectedTotalBytes;
 
     if (tmpFile.existsSync()) {
       try {
@@ -320,6 +388,12 @@ class MediaCacheService {
 
           if (response.statusCode == 200 || response.statusCode == 206) {
             final isAppend = response.statusCode == 206 && downloadedBytes > 0;
+            final startOffset = isAppend ? downloadedBytes : 0;
+            final parsedTotal = _extractExpectedTotalBytes(response, startOffset);
+            if (parsedTotal != null && parsedTotal > 0) {
+              expectedTotalBytes = parsedTotal;
+            }
+
             if (!isAppend) {
               downloadedBytes = 0;
               sink = tmpFile.openWrite(mode: FileMode.write);
@@ -338,6 +412,17 @@ class MediaCacheService {
             await sink.flush();
             await sink.close();
             sink = null;
+
+            // [Completeness Check] Verify against Content-Length / Content-Range total size
+            // so a mid-stream CDN disconnect (~50%) is retried via HTTP Range instead of saved as complete!
+            final meetsExpectedTotal = expectedTotalBytes == null ||
+                downloadedBytes >= (expectedTotalBytes * 0.98).floor();
+
+            if (!meetsExpectedTotal) {
+              throw Exception(
+                'Incomplete stream download for $songId: $downloadedBytes / $expectedTotalBytes bytes',
+              );
+            }
 
             // [Integrity Check] Only promote to final path if download is substantive
             if (downloadedBytes > 64 * 1024) {
@@ -365,18 +450,27 @@ class MediaCacheService {
               throw Exception('Download too small: $downloadedBytes bytes');
             }
           } else if (response.statusCode == 416) {
-            // Range Not Satisfiable: bytes requested were beyond end of file
-            if (downloadedBytes > 64 * 1024) {
+            // Range Not Satisfiable: verify against Content-Range total size before promoting .tmp
+            final totalFrom416 = _extractExpectedTotalBytes(response, 0) ?? expectedTotalBytes;
+            final isTrulyComplete = totalFrom416 != null &&
+                downloadedBytes >= (totalFrom416 * 0.98).floor() &&
+                downloadedBytes > 64 * 1024;
+
+            if (isTrulyComplete) {
               await tmpFile.rename(savePath);
               debugPrint(
-                '[MediaCache] Range 416 received for $songId with $downloadedBytes bytes present. Treating as complete.',
+                '[MediaCache] Range 416 verified complete for $songId ($downloadedBytes / $totalFrom416 bytes).',
               );
               _scheduleCleanup();
               _notifyCacheChanged();
               return;
             } else {
+              debugPrint(
+                '[MediaCache] Range 416 mismatch/truncated for $songId ($downloadedBytes / $totalFrom416 bytes) — resetting .tmp',
+              );
               _cleanupTmpFile(tmpFile);
-              throw Exception('HTTP 416 Range Not Satisfiable for $songId');
+              downloadedBytes = 0;
+              throw Exception('HTTP 416 Range Not Satisfiable (incomplete .tmp) for $songId');
             }
           } else {
             throw Exception(
@@ -488,6 +582,9 @@ class MediaCacheService {
         if (!dir.existsSync()) await dir.create(recursive: true);
 
         await file.writeAsString(lyrics);
+        try {
+          notifyDelta('stream_lyrics', await file.length());
+        } catch (_) {}
         debugPrint('[MediaCache] Lyrics SAVED to cache: ${file.path}');
         _trackerService.updateLastPlayed(songId);
         return lyrics;
@@ -694,8 +791,9 @@ class MediaCacheService {
       final lyricsDir = await _cacheManager.getStreamLyricsDir();
       final imagesDir = await _cacheManager.getStreamImagesDir();
       final metaDir = await _cacheManager.getMetadataDir();
+      final translateDir = await _cacheManager.getTranslateDir();
 
-      final filesToDelete = [
+      final List<File> filesToDelete = [
         File(p.join(audioDir.path, '$safeId.m4a')),
         File(p.join(lyricsDir.path, '$safeId.lrc')),
         File(p.join(metaDir.path, '$safeId.json')),
@@ -704,9 +802,23 @@ class MediaCacheService {
         File(p.join(imagesDir.path, 'art_$safeId.webp')),
       ];
 
+      // Co-delete any cached lyric translations (${safeId}_*.lrc)
+      if (await translateDir.exists()) {
+        try {
+          await for (final entity in translateDir.list(followLinks: false)) {
+            if (entity is File) {
+              final base = p.basename(entity.path);
+              if (base.startsWith('${safeId}_') && base.endsWith('.lrc')) {
+                filesToDelete.add(entity);
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
       for (final file in filesToDelete) {
         if (await file.exists()) {
-          // SAFETY CHECK: Ensure we are only deleting within 'stream' or 'metadata' cache subfolders
+          // SAFETY CHECK: Ensure we are only deleting within 'stream' or 'cache' subfolders
           final normalizedPath = file.path.replaceAll('\\', '/');
           final isSafePath =
               normalizedPath.contains('/stream/') ||
@@ -727,6 +839,8 @@ class MediaCacheService {
                 notifyDelta('stream_images', -len);
               } else if (normalizedPath.contains('/cache/metadata/')) {
                 notifyDelta('metadata', -len);
+              } else if (normalizedPath.contains('/cache/translate/')) {
+                notifyDelta('translate', -len);
               }
               debugPrint(
                 '[MediaCache] Cache removal SUCCESS: ${p.basename(file.path)}',
@@ -746,6 +860,57 @@ class MediaCacheService {
       _notifyCacheChanged();
     } catch (e) {
       debugPrint('[MediaCache] Cache removal error for $songId: $e');
+    }
+  }
+
+  /// Co-deletes local artwork thumbnails (`local/images/art_*`) and any stream/system
+  /// sidecar files (metadata, translations, stream cache) when a local track is deleted.
+  Future<void> removeLocalTrackAssets(
+    String songId, {
+    String? setVideoId,
+    String? thumbnailPath,
+  }) async {
+    try {
+      final localImagesDir = await _cacheManager.getLocalImagesDir();
+      final candidateIds = <String>{
+        getSafeFilename(songId),
+        if (setVideoId != null && setVideoId.isNotEmpty) getSafeFilename(setVideoId),
+      };
+
+      final filesToDelete = <File>[];
+      for (final id in candidateIds) {
+        for (final ext in ['.jpg', '.png', '.webp']) {
+          filesToDelete.add(File(p.join(localImagesDir.path, 'art_$id$ext')));
+        }
+      }
+
+      if (thumbnailPath != null &&
+          thumbnailPath.isNotEmpty &&
+          !thumbnailPath.startsWith('http') &&
+          p.isWithin(localImagesDir.path, thumbnailPath)) {
+        filesToDelete.add(File(thumbnailPath));
+      }
+
+      final deletedPaths = <String>{};
+      for (final file in filesToDelete) {
+        if (deletedPaths.contains(file.path)) continue;
+        if (await file.exists()) {
+          try {
+            final len = await file.length();
+            await file.delete();
+            deletedPaths.add(file.path);
+            notifyDelta('local_images', -len);
+            debugPrint('[MediaCache] Deleted local thumbnail: ${p.basename(file.path)}');
+          } catch (_) {}
+        }
+      }
+
+      await removeFromCache(songId);
+      if (setVideoId != null && setVideoId.isNotEmpty && setVideoId != songId) {
+        await removeFromCache(setVideoId);
+      }
+    } catch (e) {
+      debugPrint('[MediaCache] Error removing local track assets for $songId: $e');
     }
   }
 
@@ -787,6 +952,7 @@ class MediaCacheService {
       'local_images': _cacheManager.getLocalImagesDir(),
       'metadata': _cacheManager.getMetadataDir(),
       'translate': _cacheManager.getTranslateDir(),
+      'images': _cacheManager.getSystemImagesCacheDir(),
       'stream_audio': _cacheManager.getStreamAudioDir(),
       'stream_images': _cacheManager.getStreamImagesDir(),
       'stream_lyrics': _cacheManager.getStreamLyricsDir(),
@@ -819,6 +985,36 @@ class MediaCacheService {
     }
   }
 
+  Future<void> _fastPurgeDirectory(Directory dir) async {
+    if (!await dir.exists()) return;
+    try {
+      await dir.delete(recursive: true);
+      await dir.create(recursive: true);
+      return;
+    } catch (_) {
+      // Fallback if directory root or a single file is locked by the OS: delete files concurrently
+      try {
+        final entities = await dir.list(recursive: true, followLinks: false).toList();
+        final files = entities.whereType<File>().toList();
+        const batchSize = 32;
+        for (var i = 0; i < files.length; i += batchSize) {
+          final end = (i + batchSize < files.length) ? i + batchSize : files.length;
+          await Future.wait(
+            files.sublist(i, end).map((f) => f.delete().catchError((_) => f)),
+          );
+        }
+      } catch (_) {}
+    }
+  }
+
+  Future<void> _purgeMpvTempDir() async {
+    try {
+      final baseDir = await _cacheManager.getBaseCacheDir();
+      final mpvTemp = Directory(p.join(baseDir.path, 'mpv_temp'));
+      await _fastPurgeDirectory(mpvTemp);
+    } catch (_) {}
+  }
+
   Future<void> clearCategory(String category) async {
     try {
       Directory? dir;
@@ -839,12 +1035,18 @@ class MediaCacheService {
           dir = await _cacheManager.getTranslateDir();
           break;
         case 'images':
-          dir = await _cacheManager.getStreamImagesDir();
+          dir = await _cacheManager.getSystemImagesCacheDir();
+          try {
+            await DefaultCacheManager().emptyCache();
+          } catch (_) {}
+          await _purgeMpvTempDir();
           break;
         case 'stream_audio':
+          cancelAllActiveDownloads();
           dir = await _cacheManager.getStreamAudioDir();
           break;
         case 'stream_images':
+          _activeArtworkDownloads.clear();
           dir = await _cacheManager.getStreamImagesDir();
           break;
         case 'stream_lyrics':
@@ -855,26 +1057,20 @@ class MediaCacheService {
           return;
       }
 
-      if (dir != null && await dir.exists()) {
-        try {
-          final List<FileSystemEntity> entities = await dir.list(followLinks: false).toList();
-          for (final entity in entities) {
-            if (entity is File) {
-              try {
-                await entity.delete();
-              } catch (_) {
-                // Silently skip files locked by audio player engine or OS
-              }
-            }
-          }
-        } catch (_) {}
+      if (dir != null) {
+        await _fastPurgeDirectory(dir);
         resetCategorySize(category);
+        try {
+          final stat = await dir.stat();
+          _dirModTimes[category] = stat.modified;
+        } catch (_) {}
         debugPrint('[MediaCache] Cleared category $category');
       }
 
       // Evict Flutter's memory image cache so deleted artwork doesn't cause decoding crashes
       PaintingBinding.instance.imageCache.clear();
       PaintingBinding.instance.imageCache.clearLiveImages();
+      _notifyCacheChanged();
     } catch (e) {
       debugPrint('[MediaCache] Clear category error: $e');
     }
@@ -882,53 +1078,65 @@ class MediaCacheService {
 
   Future<void> clearCache() async {
     try {
+      cancelAllActiveDownloads();
+      await _purgeMpvTempDir();
       // Clear all stream + system cache dirs; local/ is user data, not auto-cleared here
-      final dirs = [
-        await _cacheManager.getStreamAudioDir(),
-        await _cacheManager.getStreamImagesDir(),
-        await _cacheManager.getStreamLyricsDir(),
-        await _cacheManager.getMetadataDir(),
-        await _cacheManager.getTranslateDir(),
-      ];
+      final dirMap = <String, Directory>{
+        'stream_audio': await _cacheManager.getStreamAudioDir(),
+        'stream_images': await _cacheManager.getStreamImagesDir(),
+        'stream_lyrics': await _cacheManager.getStreamLyricsDir(),
+        'metadata': await _cacheManager.getMetadataDir(),
+        'translate': await _cacheManager.getTranslateDir(),
+        'images': await _cacheManager.getSystemImagesCacheDir(),
+      };
 
-      for (var dir in dirs) {
-        if (!dir.existsSync()) continue;
+      await Future.wait(dirMap.values.map(_fastPurgeDirectory));
+
+      for (final entry in dirMap.entries) {
+        resetCategorySize(entry.key);
         try {
-          final List<FileSystemEntity> entities = await dir.list(followLinks: false).toList();
-          for (final entity in entities) {
-            if (entity is File) {
-              try {
-                await entity.delete();
-              } catch (_) {
-                // Silently skip in-use/locked files
-              }
-            }
-          }
+          final stat = await entry.value.stat();
+          _dirModTimes[entry.key] = stat.modified;
         } catch (_) {}
       }
-      resetCategorySize('stream_audio');
-      resetCategorySize('stream_images');
-      resetCategorySize('stream_lyrics');
-      resetCategorySize('metadata');
-      resetCategorySize('translate');
+      try {
+        await DefaultCacheManager().emptyCache();
+      } catch (_) {}
       PaintingBinding.instance.imageCache.clear();
       PaintingBinding.instance.imageCache.clearLiveImages();
+      _notifyCacheChanged();
       debugPrint('[MediaCache] FULL CACHE CLEARED');
     } catch (e) {
       debugPrint('[MediaCache] Clear full cache error: $e');
     }
   }
 
+  Set<String> _loadPinnedIds() {
+    try {
+      final prefs = _ref.read(sharedPreferencesProvider);
+      final raw = prefs.getString('pinned_stream_ids');
+      if (raw != null) {
+        return Set<String>.from(jsonDecode(raw) as List);
+      }
+    } catch (_) {}
+    return const {};
+  }
+
   void _scheduleCleanup() {
     _cleanupTimer?.cancel();
-    _cleanupTimer = Timer(const Duration(seconds: 5), () {
+    _cleanupTimer = Timer(const Duration(seconds: 5), () async {
       final limitGb = _ref.read(streamCacheLimitGbProvider);
-      final secondaryDays = _ref.read(secondaryCacheRetentionDaysProvider);
+      final retentionDays = _ref.read(streamTrackRetentionDaysProvider);
       final limitMb = limitGb * 1024;
+      final pinnedIds = _loadPinnedIds();
 
-      enforceCacheLimit(limitMb);
-      _cacheManager.cleanupTemporaryStreams(maxAgeDays: secondaryDays);
-      _cleanupOrphanTmpFiles(); // [Atomic Write] Clean stale .tmp files
+      await enforceCacheLimit(limitMb);
+      await _cacheManager.cleanupTemporaryStreams(
+        maxAgeDays: retentionDays,
+        pinnedIds: pinnedIds,
+        activeIds: {..._activeDownloads.keys, ..._activeArtworkDownloads},
+      );
+      await _cleanupOrphanTmpFiles(); // [Atomic Write] Clean stale .tmp files
     });
   }
 
@@ -956,17 +1164,11 @@ class MediaCacheService {
   }
 
   Future<void> enforceCacheLimit(int limitMb) async {
-    // Load playlist-pinned track IDs so they are never evicted by the dynamic eraser.
-    Set<String> pinnedIds = const {};
-    try {
-      final prefs = _ref.read(sharedPreferencesProvider);
-      final raw = prefs.getString('pinned_stream_ids');
-      if (raw != null) {
-        // These are already safe filenames (written by PlaylistNotifier._saveState).
-        pinnedIds = Set<String>.from(jsonDecode(raw) as List);
-      }
-    } catch (_) {}
-    await _cacheManager.enforceStreamAudioLimit(limitMb, pinnedIds: pinnedIds);
+    final pinnedIds = _loadPinnedIds();
+    final evictedIds = await _cacheManager.enforceStreamAudioLimit(limitMb, pinnedIds: pinnedIds);
+    for (final id in evictedIds) {
+      await removeFromCache(id);
+    }
   }
 }
 

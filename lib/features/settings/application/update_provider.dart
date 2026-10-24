@@ -344,7 +344,7 @@ class UpdateNotifier extends Notifier<UpdateState> {
       }
     }
 
-    // Also clean up legacy internal storage path (pre-fix downloads)
+    // Also clean up legacy internal storage path if present
     final compatibleAsset = release.getCompatibleInstallerAsset();
     final fileName = compatibleAsset?['name'] as String?;
     if (fileName != null) {
@@ -450,7 +450,7 @@ class UpdateNotifier extends Notifier<UpdateState> {
     String filePath = '${newDir.path}/$fileName';
 
     if (!await File(filePath).exists()) {
-      // Backward-compat: check legacy internal storage from before this fix
+      // Backward-compatibility: check legacy internal storage location
       if (Platform.isAndroid) {
         final legacyDir = await getApplicationSupportDirectory();
         final legacyPath = '${legacyDir.path}/$fileName';

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/models/lyric_line.dart';
 import '../../application/lyrics_provider.dart';
+import '../../../../core/application/providers/window_lifecycle_provider.dart';
 
 class WordSyncedLyricRow extends ConsumerWidget {
   final LyricLine line;
@@ -30,24 +31,29 @@ class WordSyncedLyricRow extends ConsumerWidget {
     final effectiveTextColor =
         textColor ?? Theme.of(context).colorScheme.onSurface;
 
-    final textStyle = TextStyle(
+    final targetStyle = TextStyle(
       fontSize: isActive ? fontSizeActive : fontSizeInactive,
       fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
       height: 1.4,
+      color: effectiveTextColor.withValues(
+        alpha: isActive ? activeOpacity : inactiveOpacity,
+      ),
     );
 
     final syllables = line.syllables;
+    final isRenderActive = ref.watch(isWindowRenderActiveProvider);
 
-    // Inactive rows or lines without syllable timings render simple static text
+    // Inactive rows, hidden windows, or lines without syllable timings render animated text style
     // without subscribing to per-tick position stream updates
-    if (!isActive || syllables == null || syllables.isEmpty) {
-      return Text(
-        line.text,
+    if (!isRenderActive || !isActive || syllables == null || syllables.isEmpty) {
+      return AnimatedDefaultTextStyle(
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOutCubic,
         textAlign: TextAlign.center,
-        style: textStyle.copyWith(
-          color: effectiveTextColor.withValues(
-            alpha: isActive ? activeOpacity : inactiveOpacity,
-          ),
+        style: targetStyle,
+        child: Text(
+          line.text,
+          textAlign: TextAlign.center,
         ),
       );
     }
@@ -70,8 +76,10 @@ class WordSyncedLyricRow extends ConsumerWidget {
           // Word is currently being sung: interpolate opacity between inactive and active
           final range = syllable.duration.inMilliseconds;
           if (range > 0) {
-            final progress = (relativePosition - syllable.offset).inMilliseconds / range;
-            opacity = inactiveOpacity + (activeOpacity - inactiveOpacity) * progress.clamp(0.0, 1.0);
+            final progress =
+                (relativePosition - syllable.offset).inMilliseconds / range;
+            opacity = inactiveOpacity +
+                (activeOpacity - inactiveOpacity) * progress.clamp(0.0, 1.0);
           } else {
             opacity = activeOpacity;
           }
@@ -81,16 +89,24 @@ class WordSyncedLyricRow extends ConsumerWidget {
       spans.add(
         TextSpan(
           text: '${syllable.text} ',
-          style: textStyle.copyWith(
+          style: TextStyle(
             color: effectiveTextColor.withValues(alpha: opacity),
           ),
         ),
       );
     }
 
-    return RichText(
-      textAlign: TextAlign.center,
-      text: TextSpan(children: spans),
+    return RepaintBoundary(
+      child: AnimatedDefaultTextStyle(
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOutCubic,
+        textAlign: TextAlign.center,
+        style: targetStyle,
+        child: Text.rich(
+          TextSpan(children: spans),
+          textAlign: TextAlign.center,
+        ),
+      ),
     );
   }
 }

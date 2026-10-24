@@ -3,6 +3,7 @@ import 'dart:math';
 import 'dart:convert';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 import '../../../home/presentation/providers/recently_played_provider.dart';
@@ -33,6 +34,9 @@ import '../../data/services/audio_metadata_service.dart';
 import '../services/stream_resolution_service.dart';
 import '../services/gapless_prefetch_service.dart';
 import '../../../library/application/blocked_tracks_provider.dart';
+import '../../../../core/application/providers/window_lifecycle_provider.dart';
+import '../../../../core/providers/overlay_provider.dart';
+import 'sleep_timer_provider.dart';
 
 export '../states/audio_state.dart';
 
@@ -47,10 +51,36 @@ export '../states/audio_state.dart';
 class AudioNotifier extends Notifier<AudioState> {
   late Player _player;
 
-  // ── Navigation guards ──────────────────────────────────────────────────────
+  // ── Navigation & Self-Heal guards ──────────────────────────────────────────
   bool _isNavigating = false;
   final List<StreamSubscription> _subscriptions = [];
   DateTime? _lastCompletionTime;
+  late ResonanceAudioHandler _audioHandler;
+  AudioSession? _audioSession;
+  bool _wasPlayingBeforeInterruption = false;
+  double? _preDuckVolume;
+
+  int _prematureEofRetries = 0;
+  String? _lastRetriedTrackId;
+  bool _isSelfHealing = false;
+
+  /// Records the real hardware position of the outgoing track right before a track change.
+  /// Prevents minimized Windows UI state (where state.position is frozen) from tricking
+  /// AudioOrchestrator into thinking a finished track was fast-skipped (< 15s).
+  Duration lastTrackFinalPosition = Duration.zero;
+  Duration lastTrackFinalDuration = Duration.zero;
+
+  static const MethodChannel _androidPlatformChannel =
+      MethodChannel('com.chronostudio.resonance/potoken');
+
+  void _setAndroidPlaybackLocks(bool active) {
+    if (!isAndroid) return;
+    Future.microtask(() async {
+      try {
+        await _androidPlatformChannel.invokeMethod('setPlaybackLocks', {'active': active});
+      } catch (_) {}
+    });
+  }
 
   // ── Services ───────────────────────────────────────────────────────────────
   late QueueService _queue;
@@ -63,8 +93,12 @@ class AudioNotifier extends Notifier<AudioState> {
   @override
   AudioState build() {
     final audioHandler = ref.read(audioHandlerProvider);
+    _audioHandler = audioHandler;
     _player = audioHandler.player;
 
+    audioHandler.onPlay = () => play();
+    audioHandler.onPause = () => pause();
+    audioHandler.onStop = () => stop();
     audioHandler.onSkipToNext = () => next();
     audioHandler.onSkipToPrevious = () => skipToPrevious();
 
@@ -96,6 +130,7 @@ class AudioNotifier extends Notifier<AudioState> {
     _initListeners();
 
     ref.onDispose(() {
+      _setAndroidPlaybackLocks(false);
       for (var sub in _subscriptions) {
         sub.cancel();
       }
@@ -144,9 +179,123 @@ class AudioNotifier extends Notifier<AudioState> {
   Future<void> _initAudioSession() async {
     try {
       final session = await AudioSession.instance;
+      _audioSession = session;
       await session.configure(const AudioSessionConfiguration.music());
+
+      _subscriptions.add(session.interruptionEventStream.listen((event) {
+        if (event.begin) {
+          switch (event.type) {
+            case AudioInterruptionType.duck:
+              _preDuckVolume = state.volume;
+              _player.setVolume(state.volume * 0.2);
+              break;
+            case AudioInterruptionType.pause:
+            case AudioInterruptionType.unknown:
+              final currentlyPlaying = state.isPlaying || _player.state.playing;
+              if (currentlyPlaying) {
+                _wasPlayingBeforeInterruption = true;
+                _player.pause();
+              }
+              break;
+          }
+        } else {
+          switch (event.type) {
+            case AudioInterruptionType.duck:
+              if (_preDuckVolume != null) {
+                _player.setVolume(_preDuckVolume!);
+                _preDuckVolume = null;
+              } else {
+                _player.setVolume(state.volume);
+              }
+              break;
+            case AudioInterruptionType.pause:
+            case AudioInterruptionType.unknown:
+              if (_wasPlayingBeforeInterruption) {
+                _wasPlayingBeforeInterruption = false;
+                play();
+              }
+              break;
+          }
+        }
+      }));
+
+      _subscriptions.add(session.becomingNoisyEventStream.listen((_) {
+        debugPrint('[AudioNotifier] Audio becoming noisy — auto-pausing playback');
+        if (state.isPlaying || _player.state.playing) {
+          pause();
+        }
+      }));
     } catch (e) {
       debugPrint('[AudioNotifier] Audio session config failed: $e');
+    }
+  }
+
+  /// Re-resolves a dropped/throttled streaming track, purges any corrupted local cache file,
+  /// opens the fresh stream, and seeks back to [resumePosition] once the demuxer reports duration.
+  Future<void> _selfHealMidStream(String trackId, Duration resumePosition) async {
+    if (_isSelfHealing) return;
+    _isSelfHealing = true;
+    try {
+      if (!ref.read(networkConnectivityProvider).isOnline) {
+        debugPrint('[AudioPlayer] Offline — cannot self-heal stream, switching to offline playback');
+        if (state.currentTrack != null) {
+          await _handleOfflinePlayback(state.currentTrack!, state.currentIndex);
+        }
+        return;
+      }
+
+      final archService = ref.read(playbackArchitectureServiceProvider);
+      await archService.invalidateAndPurgeDisk(trackId);
+      final url = await archService.getStreamUrl(trackId, forceRefresh: true);
+
+      if (url != null) {
+        debugPrint(
+          '[AudioPlayer] Self-heal resolved fresh stream for $trackId — resuming at ${resumePosition.inSeconds}s',
+        );
+        if (isAndroid && _audioSession != null) {
+          await _audioSession!.setActive(true);
+        }
+        await _player.open(
+          _resolver.buildMedia(url, player: _player),
+          play: true,
+        );
+
+        if (resumePosition.inMilliseconds > 1000) {
+          StreamSubscription<Duration>? seekSub;
+          Timer? seekTimeout;
+          seekSub = _player.stream.duration.listen((dur) {
+            final currentId = state.currentTrack?.id ?? state.currentTrack?.path;
+            if (currentId != trackId) {
+              seekTimeout?.cancel();
+              seekSub?.cancel();
+              return;
+            }
+            if (dur > Duration.zero) {
+              seekTimeout?.cancel();
+              seekSub?.cancel();
+              _audioHandler.seek(resumePosition);
+            }
+          });
+          seekTimeout = Timer(const Duration(seconds: 6), () {
+            seekSub?.cancel();
+          });
+        }
+        return;
+      }
+    } on OfflinePlaybackException {
+      if (state.currentTrack != null) {
+        await _handleOfflinePlayback(state.currentTrack!, state.currentIndex);
+      }
+      return;
+    } catch (e) {
+      debugPrint('[AudioPlayer] Self-heal exception for $trackId: $e');
+    } finally {
+      _isSelfHealing = false;
+    }
+
+    debugPrint('[AudioPlayer] Self-heal failed for $trackId — advancing queue');
+    if (ref.read(mediaFocusProvider) == MediaFocus.audio) {
+      next(fromCompletion: true);
     }
   }
 
@@ -155,22 +304,32 @@ class AudioNotifier extends Notifier<AudioState> {
   void _initListeners() {
     _subscriptions.addAll([
       _player.stream.playing.listen((playing) {
+        if (state.isLoading && !playing) {
+          // Ignore transient playing=false emitted by libmpv while _player.open(..., play: true) is loading
+          return;
+        }
         state = state.copyWith(isPlaying: playing);
         if (playing) _isNavigating = false;
+        _setAndroidPlaybackLocks(playing);
         if (ref.read(mediaFocusProvider) == MediaFocus.audio) {
           _metadata.onPlaybackStatusChanged(
             currentTrack: state.currentTrack,
             isPlaying: playing,
-            position: state.position,
+            // While loading a new track, _player.state.position still holds the outgoing track's position
+            position: state.isLoading ? state.position : _player.state.position,
             duration: state.duration,
           );
         }
       }),
 
       _player.stream.position.listen((position) {
-        state = state.copyWith(position: position);
+        if (state.isLoading) {
+          // Ignore residual position ticks from the outgoing track while _player.open() is transitioning
+          return;
+        }
         if (position.inSeconds > 0) {
           _engine.resetErrorGuard();
+          lastTrackFinalPosition = position;
         }
 
         _persistence.savePosition(position.inMilliseconds);
@@ -182,24 +341,45 @@ class AudioNotifier extends Notifier<AudioState> {
             isPlaying: state.isPlaying,
           );
         }
+
+        // Skip UI state rebuilds when window is minimized or hidden to tray
+        if (!ref.read(isWindowRenderActiveProvider)) {
+          return;
+        }
+
+        // Throttle high-frequency mpv position updates (20-50 Hz -> 5 Hz normal, ~12 Hz when lyrics open)
+        final isLyricsOpen = ref.read(lyricsOverlayProvider);
+        final minDeltaMs = isLyricsOpen ? 80 : 200;
+        final deltaMs = (position.inMilliseconds - state.position.inMilliseconds).abs();
+        if (position == Duration.zero || deltaMs >= minDeltaMs) {
+          state = state.copyWith(position: position);
+        }
       }),
 
       _player.stream.duration.listen((d) {
+        if (d > Duration.zero) {
+          lastTrackFinalDuration = d;
+        }
         if (d > Duration.zero &&
             state.currentTrack != null &&
             (state.currentTrack!.duration == null ||
                 state.currentTrack!.duration == Duration.zero)) {
           final updatedTrack = state.currentTrack!.copyWith(duration: d);
           state = state.copyWith(duration: d, currentTrack: updatedTrack);
-          _metadata.onTrackChanged(updatedTrack, isPlaying: state.isPlaying);
-        } else {
+          _metadata.onPlaybackStatusChanged(
+            currentTrack: updatedTrack,
+            isPlaying: state.isPlaying,
+            position: state.isLoading ? state.position : _player.state.position,
+            duration: d,
+          );
+        } else if (d > Duration.zero) {
           state = state.copyWith(duration: d);
         }
       }),
       _player.stream.volume.listen((v) => state = state.copyWith(volume: v)),
 
       _player.stream.completed.listen((completed) {
-        if (!completed) return;
+        if (!completed || _isSelfHealing) return;
         final now = DateTime.now();
         if (_lastCompletionTime != null &&
             now.difference(_lastCompletionTime!).inMilliseconds < 800) {
@@ -207,17 +387,61 @@ class AudioNotifier extends Notifier<AudioState> {
         }
         _lastCompletionTime = now;
 
-        // [State-Based Completion Caching]
-        // Only trigger background cache for tracks that played as live network streams.
-        // If track was already playing from local disk cache, do nothing (0MB, no double-fetch).
         final completedTrack = state.currentTrack;
+        // CRITICAL: Always read _player.state.position (or lastTrackFinalPosition), NEVER state.position!
+        // When Windows is minimized (!isWindowRenderActiveProvider), state.position is frozen.
+        final playerPos = _player.state.position;
+        final actualPos = playerPos > lastTrackFinalPosition ? playerPos : lastTrackFinalPosition;
+        final playerDur = _player.state.duration;
+        final actualDur = playerDur > Duration.zero
+            ? playerDur
+            : (lastTrackFinalDuration > Duration.zero
+                ? lastTrackFinalDuration
+                : (state.duration > Duration.zero
+                    ? state.duration
+                    : (completedTrack?.duration ?? Duration.zero)));
+
+        // [Premature EOF Guard]
+        // If a streaming track emits completed (eof-reached) before reaching 85% of its duration,
+        // it suffered a mid-stream CDN drop or played a truncated .m4a cache file.
+        final isPrematureEof = completedTrack != null &&
+            completedTrack.isStreaming &&
+            actualDur.inSeconds > 30 &&
+            actualPos.inMilliseconds > 3000 &&
+            actualPos.inMilliseconds < (actualDur.inMilliseconds * 0.85);
+
+        if (isPrematureEof) {
+          final trackId = completedTrack.id ?? completedTrack.path;
+          if (_lastRetriedTrackId != trackId) {
+            _lastRetriedTrackId = trackId;
+            _prematureEofRetries = 0;
+          }
+          if (_prematureEofRetries < 2) {
+            _prematureEofRetries++;
+            debugPrint(
+              '[AudioNotifier] Premature EOF detected for $trackId at '
+              '${actualPos.inSeconds}s / ${actualDur.inSeconds}s '
+              '(retry $_prematureEofRetries/2). Self-healing...',
+            );
+            Future.microtask(() => _selfHealMidStream(trackId, actualPos));
+            return; // Do NOT run completion caching and do NOT skip to next track!
+          } else {
+            debugPrint(
+              '[AudioNotifier] Premature EOF retries exhausted for $trackId — advancing queue.',
+            );
+          }
+        }
+
+        // [State-Based Completion Caching]
+        // Only trigger background cache for tracks that played as live network streams AND completed legitimately.
+        // Skip completion caching if LoopMode.one is active to avoid concurrent live CDN socket collision (0xffffd8ba).
         final wasLiveStream = completedTrack != null &&
             completedTrack.isStreaming &&
             (completedTrack.path.startsWith('http') ||
                 (!completedTrack.path.contains('/stream/audio/') &&
                     !completedTrack.path.contains(r'\stream\audio\')));
 
-        if (completedTrack != null && wasLiveStream) {
+        if (completedTrack != null && wasLiveStream && state.loopMode != LoopMode.one) {
           final completedId = completedTrack.id ?? completedTrack.path;
           final archService = ref.read(playbackArchitectureServiceProvider);
           Future.microtask(() async {
@@ -237,6 +461,15 @@ class AudioNotifier extends Notifier<AudioState> {
         }
 
         if (ref.read(mediaFocusProvider) == MediaFocus.audio) {
+          // [Sleep Timer - End of Track Guard]
+          final sleepTimer = ref.read(sleepTimerProvider);
+          if (sleepTimer.isEndOfTrack) {
+            ref.read(sleepTimerProvider.notifier).triggerEndOfTrackStop();
+            pause();
+            seek(Duration.zero);
+            return;
+          }
+
           next(fromCompletion: true);
         }
       }),
@@ -245,6 +478,9 @@ class AudioNotifier extends Notifier<AudioState> {
       _player.stream.error.listen((error) {
         debugPrint('[AudioPlayer] [ERROR] Streaming / Playback error: $error');
         final currentId = state.currentTrack?.id ?? state.currentTrack?.path;
+        final playerPos = _player.state.position;
+        final resumePos = playerPos > lastTrackFinalPosition ? playerPos : lastTrackFinalPosition;
+
         if (currentId != null) {
           ref.read(playbackArchitectureServiceProvider).invalidate(currentId);
         }
@@ -260,7 +496,7 @@ class AudioNotifier extends Notifier<AudioState> {
           return;
         }
 
-        // Transparent self-heal: re-resolve same track before skipping
+        // Transparent self-heal: re-resolve same track and resume at interrupted position before skipping
         final errStr = error.toString().toLowerCase();
         final isStreamErr = errStr.contains('403') ||
             errStr.contains('forbidden') ||
@@ -277,36 +513,7 @@ class AudioNotifier extends Notifier<AudioState> {
             errStr.contains('eof');
         if (isStreamErr && currentId != null && (state.currentTrack?.isStreaming ?? false)) {
           debugPrint('[AudioPlayer] Stream failure detected — attempting self-heal re-resolve for $currentId');
-          Future.microtask(() async {
-            if (!ref.read(networkConnectivityProvider).isOnline) {
-              debugPrint('[AudioPlayer] Offline — cannot self-heal stream, switching to offline playback');
-              if (state.currentTrack != null) {
-                await _handleOfflinePlayback(state.currentTrack!, state.currentIndex);
-              }
-              return;
-            }
-            try {
-              final url = await ref.read(playbackArchitectureServiceProvider)
-                  .getStreamUrl(currentId, forceRefresh: true);
-              if (url != null) {
-                debugPrint('[AudioPlayer] Self-heal success — resuming $currentId');
-                await _player.open(
-                  _resolver.buildMedia(url, player: _player),
-                  play: true,
-                );
-                return;
-              }
-            } on OfflinePlaybackException {
-              if (state.currentTrack != null) {
-                await _handleOfflinePlayback(state.currentTrack!, state.currentIndex);
-              }
-              return;
-            } catch (_) {}
-            debugPrint('[AudioPlayer] Self-heal failed — skipping to next');
-            if (ref.read(mediaFocusProvider) == MediaFocus.audio) {
-              next(fromCompletion: true);
-            }
-          });
+          Future.microtask(() => _selfHealMidStream(currentId, resumePos));
           return;
         }
 
@@ -326,16 +533,37 @@ class AudioNotifier extends Notifier<AudioState> {
 
   // ── Track Changed ──────────────────────────────────────────────────────────
 
-  void _onTrackChanged(MediaItem track, int index) {
+  void _onTrackChanged(MediaItem track, int index, {bool? isPlaying}) {
+    final prevId = state.currentTrack?.id ?? state.currentTrack?.path;
+    final nextId = track.id ?? track.path;
+    if (prevId != nextId) {
+      // Snapshot outgoing track's real hardware position before resetting for the new track
+      final hwPos = _player.state.position;
+      if (hwPos > lastTrackFinalPosition) {
+        lastTrackFinalPosition = hwPos;
+      }
+      _prematureEofRetries = 0;
+      _lastRetriedTrackId = nextId;
+    }
+
     final cleanTrack = track.copyWith(lyricsOffset: Duration.zero);
+    final playing = isPlaying ?? state.isPlaying;
     state = state.copyWith(
       currentTrack: cleanTrack,
       currentIndex: index,
+      isPlaying: playing,
       position: Duration.zero,
       duration: cleanTrack.duration ?? Duration.zero,
     );
+    if (prevId != nextId) {
+      // Reset live trackers for the incoming track after state transition listeners have fired
+      Future.microtask(() {
+        lastTrackFinalPosition = Duration.zero;
+        lastTrackFinalDuration = cleanTrack.duration ?? Duration.zero;
+      });
+    }
     if (index != -1) _queue.setCurrentIndex(index);
-    _metadata.onTrackChanged(track, isPlaying: state.isPlaying);
+    _metadata.onTrackChanged(track, isPlaying: playing);
     final songId = track.id ?? track.path;
     if (track.isStreaming) {
       ref.read(streamCacheTrackerServiceProvider).updateLastPlayed(songId);
@@ -344,8 +572,8 @@ class AudioNotifier extends Notifier<AudioState> {
     ref.read(recentlyPlayedProvider.notifier).addTrack(track);
 
     _persistence.savePlaybackState(
-      trackJson: jsonEncode(track.toJson()),
-      queueJson: state.queue.map((t) => jsonEncode(t.toJson())).toList(),
+      trackJson: jsonEncode(track.toJson(includeArt: false)),
+      queueJson: state.queue.map((t) => jsonEncode(t.toJson(includeArt: false))).toList(),
       index: index,
     );
   }
@@ -359,6 +587,33 @@ class AudioNotifier extends Notifier<AudioState> {
   }
 
   // ── Playback Controls ──────────────────────────────────────────────────────
+
+  Future<void> _replayCurrentTrackForRepeatOne({bool fromCompletion = false}) async {
+    final track = state.currentTrack;
+    if (track == null) return;
+    try {
+      // If player already has media loaded, seek(zero) provides seamless loop
+      // without destroying native AudioTrack (Android) or clearing libmpv demuxer cache (Windows).
+      if (_player.state.playlist.medias.isNotEmpty) {
+        await _audioHandler.seek(Duration.zero);
+        play();
+        state = state.copyWith(position: Duration.zero, isPlaying: true);
+        return;
+      }
+
+      // Fallback only if player media was unloaded/empty
+      final playablePath = await _resolver.resolve(track);
+      if (isAndroid && _audioSession != null) {
+        await _audioSession!.setActive(true);
+      }
+      await _player.open(_resolver.buildMedia(playablePath, player: _player), play: true);
+      state = state.copyWith(position: Duration.zero, isPlaying: true);
+    } catch (e) {
+      debugPrint('[AudioNotifier] Repeat-one stream replay failed: $e');
+      await _audioHandler.seek(Duration.zero);
+      play();
+    }
+  }
 
   Future<void> _playCurrentFromQueue(MediaItem track) async {
     ref.read(mediaFocusProvider.notifier).setAudioFocus();
@@ -391,18 +646,21 @@ class AudioNotifier extends Notifier<AudioState> {
       return;
     }
 
-    // Guard: normalize streaming item so path is always the video ID, never an ephemeral stream URL
+    // Guard: normalize streaming item so id and path are always the canonical video ID, never an ephemeral stream URL
+    final normalizedId = (item.id != null && item.id!.isNotEmpty)
+        ? item.id!
+        : (item.isStreaming && !item.path.startsWith('http') ? item.path : item.id);
     final cleanItem = (item.isStreaming &&
             item.path.startsWith('http') &&
-            item.id != null &&
-            item.id!.isNotEmpty)
-        ? item.copyWith(path: item.id!)
-        : item;
+            normalizedId != null &&
+            normalizedId.isNotEmpty)
+        ? item.copyWith(id: normalizedId, path: normalizedId)
+        : (normalizedId != null && item.id == null
+            ? item.copyWith(id: normalizedId)
+            : item);
 
     final targetId = cleanItem.id ?? cleanItem.path;
-    if (state.queue.isEmpty ||
-        (index == -1 &&
-            !state.queue.any((t) => (t.id ?? t.path) == targetId))) {
+    if (state.queue.isEmpty || (index == -1 && !state.isPlaylistMode)) {
       _queue.setQueue([cleanItem], initialIndex: 0);
       state = state.copyWith(
         queue: [cleanItem],
@@ -413,9 +671,19 @@ class AudioNotifier extends Notifier<AudioState> {
       index = 0;
     } else if (index == -1) {
       index = state.queue.indexWhere((t) => (t.id ?? t.path) == targetId);
+      if (index == -1) {
+        _queue.setQueue([cleanItem], initialIndex: 0);
+        state = state.copyWith(
+          queue: [cleanItem],
+          currentIndex: 0,
+          isPlaylistMode: false,
+          clearActivePlaylistId: true,
+        );
+        index = 0;
+      }
     }
 
-    MediaItem trackToPlay = cleanItem;
+    String playablePath = cleanItem.path;
     final isPhysicalLocal = (!cleanItem.isStreaming &&
             (cleanItem.path.contains('/') || cleanItem.path.contains('\\'))) ||
         cleanItem.path.endsWith('.m4a') ||
@@ -428,8 +696,7 @@ class AudioNotifier extends Notifier<AudioState> {
 
       state = state.copyWith(isLoading: true, currentTrack: cleanItem);
       try {
-        final resolvedPath = await _resolver.resolve(cleanItem);
-        trackToPlay = cleanItem.copyWith(path: resolvedPath);
+        playablePath = await _resolver.resolve(cleanItem);
       } on OfflinePlaybackException {
         await _handleOfflinePlayback(cleanItem, index);
         return;
@@ -449,10 +716,12 @@ class AudioNotifier extends Notifier<AudioState> {
             // 1 retry with forceRefresh before giving up
             debugPrint('[AudioNotifier] Retrying resolution for ${cleanItem.id ?? cleanItem.path}');
             final retryPath = await _resolver.resolveForced(cleanItem);
-            final retryTrack = cleanItem.copyWith(path: retryPath);
-            _onTrackChanged(retryTrack, index);
-            state = state.copyWith(isLoading: true);
-            await _player.open(_resolver.buildMedia(retryTrack.path, player: _player), play: true);
+            _onTrackChanged(cleanItem, index, isPlaying: true);
+            state = state.copyWith(isLoading: true, isPlaying: true);
+            if (isAndroid && _audioSession != null) {
+              await _audioSession!.setActive(true);
+            }
+            await _player.open(_resolver.buildMedia(retryPath, player: _player), play: true);
             state = state.copyWith(isLoading: false);
             return;
           } catch (retryError) {
@@ -470,17 +739,28 @@ class AudioNotifier extends Notifier<AudioState> {
             silentOsNotification: true,
           );
           if (ref.read(mediaFocusProvider) == MediaFocus.audio) {
-            next(fromCompletion: true);
+          final sleepTimer = ref.read(sleepTimerProvider);
+          if (sleepTimer.isEndOfTrack) {
+            ref.read(sleepTimerProvider.notifier).triggerEndOfTrackStop();
+            pause();
+            seek(Duration.zero);
+            return;
+          }
+
+          next(fromCompletion: true);
           }
         });
         return;
       }
     }
 
-    _onTrackChanged(trackToPlay, index);
-    state = state.copyWith(isLoading: true, currentTrack: trackToPlay);
+    _onTrackChanged(cleanItem, index, isPlaying: true);
+    state = state.copyWith(isLoading: true, currentTrack: cleanItem, isPlaying: true);
     try {
-      await _player.open(_resolver.buildMedia(trackToPlay.path, player: _player), play: true);
+      if (isAndroid && _audioSession != null) {
+        await _audioSession!.setActive(true);
+      }
+      await _player.open(_resolver.buildMedia(playablePath, player: _player), play: true);
     } catch (e) {
       debugPrint('[AudioNotifier] CRITICAL: Error opening track: $e');
     } finally {
@@ -582,15 +862,6 @@ class AudioNotifier extends Notifier<AudioState> {
       clearActivePlaylistId: playlistId == null,
     );
     await _playCurrentFromQueue(validItems[safeIndex]);
-    final ids = validItems
-        .skip(safeIndex + 1)
-        .where((e) => e.isStreaming)
-        .take(3)
-        .map((e) => e.id ?? e.path)
-        .toList();
-    if (ids.isNotEmpty) {
-      ref.read(playbackArchitectureServiceProvider).predictiveFetch(ids);
-    }
   }
 
   void addTrackToQueue(MediaItem item) {
@@ -699,13 +970,7 @@ class AudioNotifier extends Notifier<AudioState> {
   }
 
   void preloadTracks(List<MediaItem> items) {
-    final ids = items
-        .where((e) => e.isStreaming)
-        .map((e) => e.id ?? e.path)
-        .toList();
-    if (ids.isNotEmpty) {
-      ref.read(playbackArchitectureServiceProvider).predictiveFetch(ids);
-    }
+    // Deprecated: Speculative prefetch removed. GaplessPrefetchService handles active queue pre-caching.
   }
 
   void reorderQueue(int oldIndex, int newIndex) {
@@ -764,27 +1029,72 @@ class AudioNotifier extends Notifier<AudioState> {
       final updatedTrack = current.copyWith(
         lyricsOffset: current.lyricsOffset + delta,
       );
-      state = state.copyWith(currentTrack: updatedTrack);
       final updatedQueue = state.queue.map((track) {
         if ((track.id ?? track.path) == (current.id ?? current.path)) {
           return updatedTrack;
         }
         return track;
       }).toList();
-      state = state.copyWith(queue: updatedQueue);
+      state = state.copyWith(
+        currentTrack: updatedTrack,
+        queue: updatedQueue,
+      );
     }
   }
 
-  void play() => _player.play();
-  void pause() => _player.pause();
-  void stop() => _player.stop();
+  void play() {
+    _wasPlayingBeforeInterruption = false;
+    if (isAndroid && _audioSession != null) {
+      _audioSession!.setActive(true);
+    }
+    _setAndroidPlaybackLocks(true);
+    // Self-healing recovery: if player stopped or libmpv playlist is empty, re-open currentTrack
+    if (_player.state.playlist.medias.isEmpty && state.currentTrack != null) {
+      debugPrint('[AudioNotifier] Play called but libmpv media empty — recovering via _playCurrentFromQueue');
+      _playCurrentFromQueue(state.currentTrack!);
+      return;
+    }
+    _player.play();
+  }
+
+  void pause() {
+    _wasPlayingBeforeInterruption = false;
+    _setAndroidPlaybackLocks(false);
+    _player.pause();
+  }
+
+  void stop() {
+    _wasPlayingBeforeInterruption = false;
+    _setAndroidPlaybackLocks(false);
+    _player.stop();
+    if (isAndroid && _audioSession != null) {
+      _audioSession!.setActive(false);
+    }
+  }
 
   void stopAndClear() {
+    // 1. Stop native engine first so libmpv releases open .m4a file descriptors immediately
+    stop();
+    // 2. Abort any scheduled gapless prefetch / waterfall worker timers and in-flight metadata upgrades
+    try {
+      ref.read(gaplessPrefetchServiceProvider).resetLock();
+    } catch (_) {}
+    _metadata.cancelPendingUpgrades();
+
+    // 3. Reset internal navigation/recovery trackers and queue state
+    _isNavigating = false;
+    _isSelfHealing = false;
+    _prematureEofRetries = 0;
+    _lastRetriedTrackId = null;
+    lastTrackFinalPosition = Duration.zero;
+    lastTrackFinalDuration = Duration.zero;
+
     _queue.setQueue([], initialIndex: -1);
     state = state.copyWith(
       currentTrack: null,
       clearCurrentTrack: true,
       isPlaying: false,
+      isLoading: false,
       queue: [],
       currentIndex: -1,
       nextTrack: null,
@@ -792,7 +1102,10 @@ class AudioNotifier extends Notifier<AudioState> {
       position: Duration.zero,
       duration: Duration.zero,
     );
-    _player.stop();
+    try {
+      _audioHandler.notifyQueueCompleted();
+    } catch (_) {}
+    unawaited(_persistence.clearPlaybackState());
   }
 
   void togglePlayPause() => state.isPlaying ? pause() : play();
@@ -804,6 +1117,14 @@ class AudioNotifier extends Notifier<AudioState> {
     }
     if (state.queue.isEmpty) return stop();
 
+    if (state.loopMode == LoopMode.one && state.currentTrack != null) {
+      _isNavigating = true;
+      _replayCurrentTrackForRepeatOne(fromCompletion: fromCompletion).whenComplete(() {
+        _isNavigating = false;
+      });
+      return;
+    }
+
     _isNavigating = true;
     final nextTrack = _queue.getNextTrack(
       state.loopMode,
@@ -812,19 +1133,17 @@ class AudioNotifier extends Notifier<AudioState> {
     );
 
     if (nextTrack != null) {
-      if (fromCompletion && state.loopMode == LoopMode.one) {
-        ref
-            .read(notificationProvider.notifier)
-            .showNotification(
-              'Track Repeating',
-              'Repeating: ${nextTrack.title}',
-            );
-      }
       _playCurrentFromQueue(nextTrack).whenComplete(() => _isNavigating = false);
     } else if (fromCompletion) {
       _isNavigating = false;
       pause();
+      if (isAndroid && _audioSession != null) {
+        _audioSession!.setActive(false);
+      }
       seek(Duration.zero);
+      try {
+        _audioHandler.notifyQueueCompleted();
+      } catch (_) {}
       ref
           .read(notificationProvider.notifier)
           .showNotification(
@@ -855,21 +1174,30 @@ class AudioNotifier extends Notifier<AudioState> {
 
   void skipToNext() => next();
   void skipToPrevious() {
-    if (state.position.inSeconds > 3) {
+    final currentPos = _player.state.position > state.position
+        ? _player.state.position
+        : state.position;
+    if (currentPos.inSeconds > 3) {
       seek(Duration.zero);
     } else {
       previous();
     }
   }
 
-  void seek(Duration position) => _player.seek(position);
+  void seek(Duration position) => _audioHandler.seek(position);
   void adjustVolume(double delta) =>
       setVolume((state.volume + delta).clamp(0.0, 100.0));
   void adjustPosition(Duration delta) {
-    final raw = state.position + delta;
+    final currentPos = _player.state.position > state.position
+        ? _player.state.position
+        : state.position;
+    final currentDur = _player.state.duration > Duration.zero
+        ? _player.state.duration
+        : state.duration;
+    final raw = currentPos + delta;
     final clamped = raw < Duration.zero
         ? Duration.zero
-        : (raw > state.duration ? state.duration : raw);
+        : (raw > currentDur ? currentDur : raw);
     seek(clamped);
   }
 

@@ -4,35 +4,18 @@ import 'package:resonance/core/application/services/network_connectivity_service
 import '../../data/repositories/youtube_search_repository.dart';
 import '../../data/models/explore_item.dart';
 import '../../data/models/explore_playlist.dart';
-import '../../../player/application/providers/audio_provider.dart';
-import '../../../library/data/models/media_item.dart';
+import '../../../playlist/application/services/playlist_input_handler.dart';
 
 // re-export from core so existing callers of explore_provider don't break
 export 'package:resonance/core/providers/search_provider.dart'
     show searchQueryProvider, searchStateProvider, SearchQueryNotifier, SearchStateNotifier;
 export 'package:resonance/features/home/presentation/providers/home_feed_provider.dart';
 
-
 import 'package:resonance/core/providers/cached_stream_music_provider.dart';
 import 'package:resonance/features/library/application/library_provider.dart';
 import 'package:resonance/features/library/application/blocked_tracks_provider.dart';
-
-Duration? _parseDurationString(String durationStr) {
-  final parts = durationStr.split(':');
-  if (parts.length == 2) {
-    final m = int.tryParse(parts[0]) ?? 0;
-    final s = int.tryParse(parts[1]) ?? 0;
-    final d = Duration(minutes: m, seconds: s);
-    return d > Duration.zero ? d : null;
-  } else if (parts.length == 3) {
-    final h = int.tryParse(parts[0]) ?? 0;
-    final m = int.tryParse(parts[1]) ?? 0;
-    final s = int.tryParse(parts[2]) ?? 0;
-    final d = Duration(hours: h, minutes: m, seconds: s);
-    return d > Duration.zero ? d : null;
-  }
-  return null;
-}
+import 'package:resonance/features/library/data/models/media_item.dart';
+import '../../data/repositories/youtube_playlist_repository.dart';
 
 final searchResultsProvider = FutureProvider<List<ExploreItem>>((ref) async {
   final query = ref.watch(searchQueryProvider);
@@ -78,25 +61,15 @@ final searchResultsProvider = FutureProvider<List<ExploreItem>>((ref) async {
   }
 
   final repo = ref.read(youtubeSearchRepositoryProvider);
-  final results = await repo.search(query);
-  
-  if (results.isNotEmpty) {
-    Future.microtask(() {
-      if (!ref.mounted) return;
-      final items = results.map((e) => MediaItem(
-        id: e.id,
-        title: e.title,
-        artist: e.author,
-        album: e.album,
-        thumbnailUrl: e.thumbnailUrl,
-        duration: _parseDurationString(e.duration),
-        path: e.id,
-        type: 'audio',
-      )).toList();
-      ref.read(audioProvider.notifier).preloadTracks(items);
-    });
+  final analysis = PlaylistInputHandler.analyze(query);
+  if (analysis.type == PlaylistInputType.singleTrack && analysis.videoId != null) {
+    final directItem = await repo.fetchTrackDetails(analysis.videoId!);
+    if (directItem != null) {
+      return [directItem];
+    }
   }
-  
+
+  final results = await repo.search(query);
   return results;
 });
 
@@ -106,6 +79,18 @@ final searchPlaylistResultsProvider = FutureProvider<List<ExplorePlaylist>>((ref
   if (!ref.watch(networkConnectivityProvider.select((s) => s.isOnline))) return [];
 
   final repo = ref.read(youtubeSearchRepositoryProvider);
+  final analysis = PlaylistInputHandler.analyze(query);
+  if (analysis.type == PlaylistInputType.playlist && analysis.playlistId != null) {
+    return [
+      ExplorePlaylist(
+        id: analysis.playlistId!,
+        title: 'Online Playlist (${analysis.playlistId})',
+        author: 'YouTube',
+        thumbnailUrl: '',
+        videoCount: 0,
+      )
+    ];
+  }
   return repo.searchPlaylists(query);
 });
 
@@ -125,23 +110,47 @@ final featuredMusicProvider = FutureProvider<List<ExploreItem>>((ref) async {
   final repo = ref.read(youtubeSearchRepositoryProvider);
   final rawResults = await repo.getFeaturedMusic();
   final results = rawResults.where((e) => !blockedNotifier.isBlocked(e.id)).toList();
-  
-  if (results.isNotEmpty) {
-    Future.microtask(() {
-      final items = results.map((e) => MediaItem(
-        id: e.id,
-        title: e.title,
-        artist: e.author,
-        thumbnailUrl: e.thumbnailUrl,
-        duration: _parseDurationString(e.duration),
-        path: e.id,
-        type: 'audio',
-      )).toList();
-      ref.read(audioProvider.notifier).preloadTracks(items);
-    });
-  }
-  
   return results;
+});
+
+class SelectedExplorePlaylistNotifier extends Notifier<ExplorePlaylist?> {
+  @override
+  ExplorePlaylist? build() => null;
+
+  void setSelected(ExplorePlaylist? playlist) => state = playlist;
+}
+
+final selectedExplorePlaylistProvider =
+    NotifierProvider<SelectedExplorePlaylistNotifier, ExplorePlaylist?>(
+  SelectedExplorePlaylistNotifier.new,
+);
+
+final onlinePlaylistTracksProvider =
+    FutureProvider.family<List<MediaItem>, String>((ref, playlistId) async {
+  if (playlistId.isEmpty) return [];
+
+  final isOnline = ref.watch(
+    networkConnectivityProvider.select((s) => s.isOnline),
+  );
+  if (!isOnline) {
+    return [];
+  }
+
+  final repo = ref.read(youtubePlaylistRepositoryProvider);
+  final items = await repo.fetchFullPlaylistContents(playlistId);
+  return items
+      .map(
+        (t) => MediaItem(
+          id: t.id,
+          title: t.title,
+          artist: t.author,
+          album: t.album,
+          thumbnailUrl: t.thumbnailUrl,
+          path: t.id,
+          type: 'audio',
+        ),
+      )
+      .toList();
 });
 
 

@@ -7,9 +7,14 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Release Tag to build/update (e.g. v0.1.8-beta)'
+        description: 'Release Tag to build/update (e.g. v1.0.0)'
         required: false
-        default: 'v0.1.8-beta'
+        default: 'v1.0.0'
+      skip_delta_patch:
+        description: 'Skip Windows delta patch generation (clean baseline release)'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -175,6 +180,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG_INPUT: ${{ inputs.tag_name }}
+          SKIP_DELTA_PATCH: ${{ inputs.skip_delta_patch }}
         run: |
           $buildDir = "build\windows\x64\runner\Release"
           New-Item -ItemType Directory -Path "Output" -Force
@@ -195,6 +201,11 @@ jobs:
           Write-Host "Created portable archive: $portableZip"
 
           # 2. Binary Delta Patching against previous build (in-tag) and previous release tags
+          $isMajorBaseline = ($tag -match '^v?1\.0\.0') -or ($baseVersion -eq '1.0.0')
+          $shouldSkipDelta = ($env:SKIP_DELTA_PATCH -eq 'true') -or $isMajorBaseline
+          if ($shouldSkipDelta) {
+            Write-Host "Skipping delta patch generation for clean baseline release: $tag" -ForegroundColor Yellow
+          } else {
           try {
             $hdiffz = "windows\tools\hdiffz.exe"
             if (-not (Test-Path $hdiffz)) {
@@ -250,10 +261,31 @@ jobs:
                   if ($pZip) {
                     Expand-Archive -Path $pZip.FullName -DestinationPath "$dirName\extracted" -Force
                     $safePrevTag = $pt.TrimStart('v') -replace '\+', '.'
+
+                    # Inspect prior tag assets to discover build number if tag used base name (e.g. build 14 under v0.1.9-beta)
+                    try {
+                      $ptAssets = gh release view $pt --json assets -q '.assets[].name' 2>$null
+                      if ($ptAssets) {
+                        $ptMatches = $ptAssets | Select-String -Pattern "v?\d+\.\d+\.\d+(?:-[a-zA-Z0-9]+)?[\.+](\d+)"
+                        $detectedPtBuilds = @()
+                        foreach ($m in $ptMatches) {
+                          $b = [int]$m.Matches[0].Groups[1].Value
+                          if ($b -ge 1000) { $b = $b % 1000 }
+                          if ($b -gt 0) { $detectedPtBuilds += $b }
+                        }
+                        if ($detectedPtBuilds.Count -gt 0) {
+                          $maxPtBuild = ($detectedPtBuilds | Measure-Object -Maximum).Maximum
+                          if (-not ($safePrevTag -match "\.$maxPtBuild$")) {
+                            $safePrevTag = "$safePrevTag.$maxPtBuild"
+                          }
+                        }
+                      }
+                    } catch {}
+
                     $patchTargets += @{
                       Name = "Resonance-v$($safePrevTag)-to-v$($safeCurr)-delta.patch"
                       SourceDir = "$dirName\extracted"
-                      Label = "$pt"
+                      Label = "$pt (safe label: $safePrevTag)"
                     }
                   }
                 }
@@ -277,6 +309,7 @@ jobs:
           } catch {
             Write-Warning "Delta patch step encountered error or skipped: $_"
           }
+          }
 
       - name: Install Inno Setup
         run: choco install innosetup --no-progress
@@ -286,7 +319,7 @@ jobs:
         run: |
           $pubspec = Get-Content "pubspec.yaml" -Raw
           $versionMatch = [regex]::Match($pubspec, "version:\s*([^\s]+)")
-          $baseVersion = if ($versionMatch.Success) { $versionMatch.Groups[1].Value.Trim().Split('+')[0] } else { "0.1.8-beta" }
+          $baseVersion = if ($versionMatch.Success) { $versionMatch.Groups[1].Value.Trim().Split('+')[0] } else { "1.0.0" }
 
           $innoCompiler = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $innoCompiler)) {
@@ -378,6 +411,7 @@ jobs:
         id: meta
         env:
           TAG_INPUT: ${{ inputs.tag_name }}
+          SKIP_DELTA_PATCH: ${{ inputs.skip_delta_patch }}
         run: |
           TAG="${{ github.ref_type == 'tag' && github.ref_name || env.TAG_INPUT }}"
           if [ -z "$TAG" ]; then

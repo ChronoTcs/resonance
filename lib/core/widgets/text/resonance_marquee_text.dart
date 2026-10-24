@@ -55,13 +55,17 @@ class _ResonanceMarqueeTextState extends State<ResonanceMarqueeText> {
     _timer = null;
   }
 
-  void _scheduleScroll() {
+  void _scheduleScroll({bool immediate = false}) {
     _cancelTimers();
     if (!mounted) return;
+    if (!TickerMode.valuesOf(context).enabled) return;
     final currentCycle = ++_cycleId;
 
-    _timer = Timer(widget.pauseDuration, () async {
+    final delay = immediate ? const Duration(milliseconds: 250) : widget.pauseDuration;
+
+    _timer = Timer(delay, () async {
       if (!mounted || currentCycle != _cycleId) return;
+      if (!TickerMode.valuesOf(context).enabled) return;
       if (!_scrollController.hasClients) return;
       final maxScroll = _scrollController.position.maxScrollExtent;
       if (maxScroll <= 0) return;
@@ -87,10 +91,6 @@ class _ResonanceMarqueeTextState extends State<ResonanceMarqueeText> {
         if (_scrollController.hasClients) {
           _scrollController.jumpTo(0);
         }
-        _timer = Timer(const Duration(seconds: 1), () {
-          if (!mounted || currentCycle != _cycleId) return;
-          _scheduleScroll();
-        });
       });
     });
   }
@@ -105,15 +105,17 @@ class _ResonanceMarqueeTextState extends State<ResonanceMarqueeText> {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      controller: _scrollController,
-      scrollDirection: Axis.horizontal,
-      physics: const NeverScrollableScrollPhysics(),
-      child: Text(
-        widget.text,
-        style: widget.style,
-        maxLines: 1,
-        softWrap: false,
+    return RepaintBoundary(
+      child: SingleChildScrollView(
+        controller: _scrollController,
+        scrollDirection: Axis.horizontal,
+        physics: const NeverScrollableScrollPhysics(),
+        child: Text(
+          widget.text,
+          style: widget.style,
+          maxLines: 1,
+          softWrap: false,
+        ),
       ),
     );
   }

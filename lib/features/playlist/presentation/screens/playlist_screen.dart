@@ -50,6 +50,7 @@ class PlaylistScreen extends ConsumerWidget {
     if (!showHeader) return content;
 
     return Scaffold(
+      backgroundColor: Colors.transparent,
       resizeToAvoidBottomInset: false,
       body: Column(
         children: [
@@ -221,7 +222,9 @@ class _CreatePlaylistDialog extends StatefulWidget {
 }
 
 class _CreatePlaylistDialogState extends State<_CreatePlaylistDialog> {
+  static const int _kMaxPlaylistNameLength = 50;
   final _ctrl = TextEditingController();
+  String? _errorText;
 
   @override
   void dispose() {
@@ -231,15 +234,18 @@ class _CreatePlaylistDialogState extends State<_CreatePlaylistDialog> {
 
   void _submit() {
     final text = _ctrl.text.trim();
-    if (text.isNotEmpty) {
-      widget.onConfirm(text);
-      Navigator.pop(context);
+    if (text.isEmpty) {
+      setState(() => _errorText = 'Playlist name cannot be empty');
+      return;
     }
+    widget.onConfirm(text);
+    Navigator.pop(context);
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isEmpty = _ctrl.text.trim().isEmpty;
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
@@ -272,9 +278,11 @@ class _CreatePlaylistDialogState extends State<_CreatePlaylistDialog> {
                 TextField(
                   controller: _ctrl,
                   autofocus: true,
+                  maxLength: _kMaxPlaylistNameLength,
                   style: theme.textTheme.bodyMedium?.copyWith(fontSize: 14),
                   decoration: InputDecoration(
                     hintText: 'Playlist name',
+                    errorText: _errorText,
                     hintStyle: theme.textTheme.bodyMedium?.copyWith(
                       color: theme.hintColor.withValues(alpha: 0.6),
                       fontSize: 14,
@@ -301,6 +309,7 @@ class _CreatePlaylistDialogState extends State<_CreatePlaylistDialog> {
                     ),
                   ),
                   textCapitalization: TextCapitalization.sentences,
+                  onChanged: (_) => setState(() => _errorText = null),
                   onSubmitted: (_) => _submit(),
                 ),
                 const SizedBox(height: 24),
@@ -314,7 +323,7 @@ class _CreatePlaylistDialogState extends State<_CreatePlaylistDialog> {
                     ),
                     const SizedBox(width: 12),
                     ResonanceButton(
-                      onPressed: _submit,
+                      onPressed: isEmpty ? null : _submit,
                       label: 'Create',
                       style: ResonanceButtonStyle.primary,
                     ),

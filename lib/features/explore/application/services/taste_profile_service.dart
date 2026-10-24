@@ -7,6 +7,7 @@ import 'package:resonance/features/explore/presentation/providers/explore_provid
 import 'package:resonance/features/home/presentation/providers/recently_played_provider.dart';
 import 'package:resonance/features/library/application/library_provider.dart';
 import 'package:resonance/features/library/data/models/media_item.dart';
+import 'user_taste_profile_service.dart';
 
 final tasteProfileServiceProvider = Provider<TasteProfileService>((ref) {
   return TasteProfileService(ref);
@@ -20,14 +21,62 @@ class TasteProfileService {
 
   TasteProfileService(this._ref);
 
-  /// Seeds derived from recent history + top play counts
+  /// Seeds derived from recent history + top play counts + persistent core anchors
   Future<List<MediaItem>> getQuickPickSeeds({int limit = 5}) async {
-    final recentItems = _ref.read(recentlyPlayedProvider).value ?? [];
-    final validRecent = recentItems.where((i) => (i.id ?? '').isNotEmpty).toList();
-    if (validRecent.isNotEmpty) {
-      return validRecent.take(limit).toList();
+    // 0. Prioritize persistent core anchors (tracks with verified repeat plays & completion)
+    final profileService = _ref.read(userTasteProfileServiceProvider);
+    final coreAnchors = await profileService.getCoreAnchorSeeds(limit: limit);
+
+    final recentItems = await _ref
+        .read(recentlyPlayedProvider.future)
+        .catchError((_) => _ref.read(recentlyPlayedProvider).value ?? <MediaItem>[]);
+    final tracker = _ref.read(streamCacheTrackerServiceProvider);
+    final topPlayedIds = await tracker.getTopPlayedIds(limit: limit * 2);
+
+    final Map<String, MediaItem> seedMap = {};
+
+    // 1. Add core anchors from user taste profile
+    for (final anchor in coreAnchors) {
+      final id = anchor.id ?? anchor.path;
+      if (id.isNotEmpty) {
+        seedMap[id] = anchor;
+      }
+      if (seedMap.length >= limit) break;
     }
-    return [];
+
+    // 2. Prioritize tracks with high repeat play counts from user history
+    for (final topId in topPlayedIds) {
+      final match = recentItems.where((i) => i.id == topId || i.path == topId).firstOrNull;
+      if (match != null) {
+        seedMap[topId] = match;
+      }
+      if (seedMap.length >= limit) break;
+    }
+
+    // 2. Fill with most recently played tracks
+    for (final item in recentItems) {
+      final id = item.id ?? item.path;
+      if (id.isNotEmpty && !seedMap.containsKey(id)) {
+        seedMap[id] = item;
+      }
+      if (seedMap.length >= limit) break;
+    }
+
+    // 3. Fallback: match any remaining top played IDs against library tracks
+    if (seedMap.length < limit && topPlayedIds.isNotEmpty) {
+      final libraryItems = _ref.read(libraryProvider).allMedia;
+      for (final topId in topPlayedIds) {
+        if (!seedMap.containsKey(topId)) {
+          final match = libraryItems.where((i) => i.id == topId || i.path == topId).firstOrNull;
+          if (match != null) {
+            seedMap[topId] = match;
+          }
+        }
+        if (seedMap.length >= limit) break;
+      }
+    }
+
+    return seedMap.values.take(limit).toList();
   }
 
   /// Resolves any [seed] (local or online) to a valid 11-char YouTube video ID for InnerTube radio.
@@ -60,6 +109,7 @@ class TasteProfileService {
   }
 
   /// Builds a personalized Quick Picks queue based on user's top seeds
+  /// using Fair 5-Seed Round-Robin and candidate sampling.
   Future<List<MediaItem>> buildQuickPicks({int limit = 20}) async {
     final seeds = await getQuickPickSeeds(limit: 5);
     final repo = _ref.read(youtubeSearchRepositoryProvider);
@@ -72,19 +122,27 @@ class TasteProfileService {
     }
 
     if (seeds.isNotEmpty) {
+      final perSeedQuota = (limit / seeds.length).ceil();
+      final seedBuckets = <List<MediaItem>>[];
+
       for (final seed in seeds) {
+        final bucket = <MediaItem>[];
         try {
           final onlineSeedId = await _resolveToOnlineSeedId(seed);
           if (onlineSeedId != null) {
             seenIds.add(onlineSeedId);
-            final recs = await repo.getRadioRecommendations(onlineSeedId, limit: 10);
+            final recs = await repo.getRadioRecommendations(
+              onlineSeedId,
+              limit: perSeedQuota * 2,
+              excludeIds: seenIds,
+            );
             for (final track in recs) {
               final id = track.id ?? track.path;
               if (!seenIds.contains(id)) {
                 seenIds.add(id);
-                results.add(track);
+                bucket.add(track);
               }
-              if (results.length >= limit) break;
+              if (bucket.length >= perSeedQuota) break;
             }
           } else {
             // Fallback: search for "${artist} music" or "${title}"
@@ -93,7 +151,7 @@ class TasteProfileService {
             for (final item in searchItems) {
               if (!seenIds.contains(item.id)) {
                 seenIds.add(item.id);
-                results.add(MediaItem(
+                bucket.add(MediaItem(
                   id: item.id,
                   path: item.id,
                   title: item.title,
@@ -102,13 +160,28 @@ class TasteProfileService {
                   type: 'audio',
                 ));
               }
-              if (results.length >= limit) break;
+              if (bucket.length >= perSeedQuota) break;
             }
           }
         } catch (e) {
           debugPrint('[TasteProfileService] Quick Picks error for seed ${seed.title}: $e');
         }
-        if (results.length >= limit) break;
+        seedBuckets.add(bucket);
+      }
+
+      // Round-robin interleave across seed buckets to ensure fair, diverse distribution
+      var added = true;
+      var round = 0;
+      while (added && results.length < limit) {
+        added = false;
+        for (final bucket in seedBuckets) {
+          if (round < bucket.length) {
+            results.add(bucket[round]);
+            added = true;
+            if (results.length >= limit) break;
+          }
+        }
+        round++;
       }
     }
 
@@ -136,23 +209,55 @@ class TasteProfileService {
       } catch (_) {}
     }
 
-    // Fallback 2: If results < 16, search popular hits
+    // Fallback 2: If results < 16, prefer artist-targeted searches from recent listening history
     if (results.length < 16) {
       try {
-        final trending = await repo.search('popular music hits');
-        for (final item in trending) {
-          if (!seenIds.contains(item.id)) {
-            seenIds.add(item.id);
-            results.add(MediaItem(
-              id: item.id,
-              path: item.id,
-              title: item.title,
-              artist: item.author,
-              thumbnailUrl: item.thumbnailUrl,
-              type: 'audio',
-            ));
+        final recentList = await _ref
+            .read(recentlyPlayedProvider.future)
+            .catchError((_) => _ref.read(recentlyPlayedProvider).value ?? <MediaItem>[]);
+        final knownArtists = recentList
+            .map((e) => e.artist)
+            .where((a) => a != null && a.isNotEmpty && a != 'Unknown Artist')
+            .cast<String>()
+            .toSet()
+            .toList();
+
+        for (final artist in knownArtists) {
+          final artistTracks = await repo.search('$artist mix');
+          for (final item in artistTracks) {
+            if (!seenIds.contains(item.id)) {
+              seenIds.add(item.id);
+              results.add(MediaItem(
+                id: item.id,
+                path: item.id,
+                title: item.title,
+                artist: item.author,
+                thumbnailUrl: item.thumbnailUrl,
+                type: 'audio',
+              ));
+            }
+            if (results.length >= limit) break;
           }
           if (results.length >= limit) break;
+        }
+
+        // Only if still under 16 and no artists were found, search popular hits
+        if (results.length < 16 && knownArtists.isEmpty) {
+          final trending = await repo.search('popular music hits');
+          for (final item in trending) {
+            if (!seenIds.contains(item.id)) {
+              seenIds.add(item.id);
+              results.add(MediaItem(
+                id: item.id,
+                path: item.id,
+                title: item.title,
+                artist: item.author,
+                thumbnailUrl: item.thumbnailUrl,
+                type: 'audio',
+              ));
+            }
+            if (results.length >= limit) break;
+          }
         }
       } catch (_) {}
     }
@@ -177,7 +282,9 @@ class TasteProfileService {
   Future<List<MediaItem>> buildDailyDiscover({int limit = 20}) async {
     final tracker = _ref.read(streamCacheTrackerServiceProvider);
     final topIds = await tracker.getTopPlayedIds(limit: 3);
-    final recentItems = _ref.read(recentlyPlayedProvider).value ?? [];
+    final recentItems = await _ref
+        .read(recentlyPlayedProvider.future)
+        .catchError((_) => _ref.read(recentlyPlayedProvider).value ?? <MediaItem>[]);
     
     final repo = _ref.read(youtubeSearchRepositoryProvider);
     final results = <MediaItem>[];
@@ -235,7 +342,9 @@ class TasteProfileService {
   Future<List<MediaItem>> getForgottenFavorites({int limit = 10}) async {
     final tracker = _ref.read(streamCacheTrackerServiceProvider);
     final cache = _ref.read(mediaCacheServiceProvider);
-    final recentItems = _ref.read(recentlyPlayedProvider).value ?? [];
+    final recentItems = await _ref
+        .read(recentlyPlayedProvider.future)
+        .catchError((_) => _ref.read(recentlyPlayedProvider).value ?? <MediaItem>[]);
 
     final results = <MediaItem>[];
     final seenKeys = <String>{};
@@ -277,7 +386,9 @@ class TasteProfileService {
   /// Extracts top listened artists from history paired with their seed track.
   /// Falls back to local library audio tracks or home feed if history is empty.
   Future<List<({String artist, MediaItem seed})>> getTopArtistsWithSeeds({int limit = 3}) async {
-    final recentItems = _ref.read(recentlyPlayedProvider).value ?? [];
+    final recentItems = await _ref
+        .read(recentlyPlayedProvider.future)
+        .catchError((_) => _ref.read(recentlyPlayedProvider).value ?? <MediaItem>[]);
     final artistCounts = <String, int>{};
     final artistSeedMap = <String, MediaItem>{};
 

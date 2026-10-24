@@ -15,6 +15,7 @@ class QueueItemCard extends ConsumerWidget {
   final int index;
   final VoidCallback onTap;
   final VoidCallback onDelete;
+  final bool isHistory;
 
   const QueueItemCard({
     super.key,
@@ -23,25 +24,29 @@ class QueueItemCard extends ConsumerWidget {
     required this.index,
     required this.onTap,
     required this.onDelete,
+    this.isHistory = false,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final isLight = theme.brightness == Brightness.light;
+    final cardOpacity = isHistory ? 0.7 : 1.0;
 
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      decoration: BoxDecoration(
-        color: isLight
-            ? Colors.white.withValues(alpha: 0.6)
-            : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: (isLight ? Colors.black : Colors.white).withValues(alpha: 0.08),
-          width: 1,
+    return Opacity(
+      opacity: cardOpacity,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        decoration: BoxDecoration(
+          color: isLight
+              ? Colors.white.withValues(alpha: isHistory ? 0.45 : 0.6)
+              : theme.colorScheme.surfaceContainerHighest.withValues(alpha: isHistory ? 0.25 : 0.4),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: (isLight ? Colors.black : Colors.white).withValues(alpha: isHistory ? 0.04 : 0.08),
+            width: 1,
+          ),
         ),
-      ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -59,18 +64,24 @@ class QueueItemCard extends ConsumerWidget {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Row(
               children: [
-                // Position Index (1, 2, 3, etc.)
+                // Position Index (1, 2, 3, etc.) or History indicator
                 Container(
                   width: 28,
                   alignment: Alignment.center,
-                  child: Text(
-                    positionTag,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.65),
-                    ),
-                  ),
+                  child: isHistory
+                      ? Icon(
+                          UIcons.regular.rotate_left,
+                          size: 13,
+                          color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                        )
+                      : Text(
+                          positionTag,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.65),
+                          ),
+                        ),
                 ),
                 const SizedBox(width: 8),
 
@@ -80,7 +91,7 @@ class QueueItemCard extends ConsumerWidget {
                   child: SizedBox(
                     width: 44,
                     height: 44,
-                    child: MediaArtworkWidget(item: track),
+                    child: MediaArtworkWidget(item: track, width: 44, height: 44),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -123,26 +134,30 @@ class QueueItemCard extends ConsumerWidget {
                   onTap: onDelete,
                 ),
 
-                // Instant Drag Handle (zero delay drag on the handle with grab cursor)
-                ReorderableDragStartListener(
-                  index: index,
-                  child: MouseRegion(
-                    cursor: SystemMouseCursors.grab,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-                      child: Icon(
-                        UIcons.regular.menu_burger,
-                        size: 16,
-                        color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                // Instant Drag Handle (only for upcoming tracks, not history)
+                if (!isHistory)
+                  ReorderableDragStartListener(
+                    index: index,
+                    child: MouseRegion(
+                      cursor: SystemMouseCursors.grab,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                        child: Icon(
+                          UIcons.regular.menu_burger,
+                          size: 16,
+                          color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                        ),
                       ),
                     ),
-                  ),
-                ),
+                  )
+                else
+                  const SizedBox(width: 8),
               ],
             ),
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }

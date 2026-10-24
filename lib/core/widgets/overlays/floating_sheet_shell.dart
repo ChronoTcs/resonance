@@ -1,4 +1,3 @@
-import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/core/widgets/buttons/reusable_hover_icon_button.dart';
@@ -149,24 +148,21 @@ class FloatingSheetShell extends StatelessWidget {
                 onTap: () {}, // Absorb inside card clicks
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(24),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: sheetBg,
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(color: borderColor, width: 1),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: isDark ? 0.45 : 0.15),
-                            blurRadius: 28,
-                            spreadRadius: 2,
-                            offset: const Offset(0, 10),
-                          ),
-                        ],
-                      ),
-                      child: contentWidget,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: sheetBg,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: borderColor, width: 1),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: isDark ? 0.45 : 0.15),
+                          blurRadius: 28,
+                          spreadRadius: 2,
+                          offset: const Offset(0, 10),
+                        ),
+                      ],
                     ),
+                    child: contentWidget,
                   ),
                 ),
               ),

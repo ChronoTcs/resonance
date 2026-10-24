@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
+import '../services/stream_resolution_service.dart';
 import '../services/equalizer_service.dart';
 import '../../data/services/audio_persistence_service.dart';
 import '../states/equalizer_state.dart';
@@ -63,7 +65,12 @@ class EqualizerController extends Notifier<EqualizerState> {
 
   void toggleLinkSliders(bool link) {
     state = state.copyWith(linkSliders: link);
-    _saveAndApply();
+    _persistence.saveEqualizerSettings(
+      enabled: state.isEnabled,
+      preset: state.preset,
+      bands: state.bands,
+      linked: link,
+    );
   }
 
   /// Restoration entry-point for PlaybackRestorationService
@@ -116,7 +123,12 @@ class EqualizerController extends Notifier<EqualizerState> {
         state.bands,
         enabled: state.isEnabled,
       );
-      (player.platform as NativePlayer).setProperty('af', filter);
+      final combined = MpvConfigurator.buildAudioFilter(filter);
+      try {
+        (player.platform as NativePlayer).setProperty('af', combined);
+      } catch (e) {
+        debugPrint('[EqualizerController] Error applying audio filter: $e');
+      }
     }
   }
 }

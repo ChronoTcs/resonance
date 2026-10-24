@@ -4,7 +4,7 @@ import 'package:path/path.dart' as p;
 import 'package:flutter/foundation.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:dart_discord_presence/dart_discord_presence.dart';
+import 'package:flutter/services.dart';
 import 'package:resonance/core/application/providers/app_config_provider.dart';
 import 'package:resonance/core/application/services/network_connectivity_service.dart';
 import 'package:resonance/core/domain/models/media_item.dart';
@@ -15,7 +15,9 @@ import '../services/cache_manager.dart';
 
 final discordRpcServiceProvider = Provider<DiscordRpcService>((ref) {
   final rpcCache = ref.watch(rpcCacheServiceProvider);
-  return DiscordRpcService(ref, rpcCache);
+  final service = DiscordRpcService(ref, rpcCache);
+  ref.onDispose(() => service.dispose());
+  return service;
 });
 
 class DiscordRpcService {
@@ -23,28 +25,37 @@ class DiscordRpcService {
   final RpcCacheService _rpcCache;
   DiscordRpcService(this._ref, this._rpcCache);
 
-  DiscordRPC? _discord;
+  static const _channel = MethodChannel('com.chronostudio.resonance/discord_rpc');
   bool _isInitialized = false;
   bool get isInitialized => _isInitialized;
   String? _lastTrackId;
   String _currentAlbumArtKey = 'resonance_logo';
 
   // Throttling and Sequencing
-  int _lastUpdateTime = 0;
-  int _requestSessionId = 0;
   bool _lastPlayingState = false;
-  // single guard — prevents double iTunes fetch from concurrent callers
-  bool _isResolvingArt = false;
+  final Map<String, Future<({String? artworkUrl, String? albumName})>>
+  _inFlightMetadataRequests = {};
   // throttle reconnect to once per 30s — handles Discord opening after app startup
   int _lastInitAttemptMs = 0;
 
+  // Payload deduplication state to prevent exceeding Discord's 5 updates / 20s rate limit
+  String? _lastSentDetails;
+  String? _lastSentState;
+  String? _lastSentLargeImage;
+  String? _lastSentLargeText;
+  bool? _lastSentIsPlaying;
+  int? _lastSentStartMs;
+  int? _lastSentEndMs;
+  String? _lastSentVideoId;
+
   Future<void> initialize() async {
-    if (!DiscordRPC.isAvailable) return;
+    if (!Platform.isWindows && !Platform.isAndroid) return;
 
     try {
-      _discord = DiscordRPC();
-      await _discord!.initialize('1481352932568862823');
-      _isInitialized = true;
+      final ok = await _channel.invokeMethod<bool>('initialize', {
+        'applicationId': '1481352932568862823',
+      });
+      _isInitialized = ok ?? true;
       debugPrint(
         '[DiscordRPC] Initialized successfully with Client ID: 1481352932568862823',
       );
@@ -107,8 +118,19 @@ class DiscordRpcService {
   /// track cannot bleed into the new track's Rich Presence payload.
   void clearTrackState() {
     _lastTrackId = null;
+    _lastPlayingState = false;
     _currentAlbumArtKey = 'resonance_logo';
-    _requestSessionId++; // Invalidates any in-flight async fetch sessions
+  }
+
+  void _resetLastSentCache() {
+    _lastSentDetails = null;
+    _lastSentState = null;
+    _lastSentLargeImage = null;
+    _lastSentLargeText = null;
+    _lastSentIsPlaying = null;
+    _lastSentStartMs = null;
+    _lastSentEndMs = null;
+    _lastSentVideoId = null;
   }
 
   /// Resolves iTunes artwork URL and official album metadata for [track].
@@ -119,7 +141,17 @@ class DiscordRpcService {
       debugPrint('[DiscordRPC] Offline — skipping iTunes metadata fetch for ${track.title}');
       return (artworkUrl: null, albumName: null);
     }
-    return _fetchAlbumArtAndMetadata(track.title, track.artist);
+    final res = await _fetchAlbumArtAndMetadata(track.title, track.artist);
+    if (res.artworkUrl != null && res.artworkUrl!.isNotEmpty) {
+      unawaited(
+        _rpcCache.getCachedAlbumArtUrl(
+          track.artist ?? '',
+          track.title,
+          () async => res.artworkUrl,
+        ),
+      );
+    }
+    return res;
   }
 
   /// Resolves full official metadata (Title, Artist, Album, ReleaseDate, High-Res Artwork) from iTunes.
@@ -148,46 +180,50 @@ class DiscordRpcService {
       }
 
       for (final query in queries) {
-        final uri = Uri.parse(
-          'https://itunes.apple.com/search?term=${Uri.encodeComponent(query)}&entity=song&limit=5',
-        );
-        final response = await http
-            .get(uri)
-            .timeout(const Duration(seconds: 4));
+        try {
+          final uri = Uri.parse(
+            'https://itunes.apple.com/search?term=${Uri.encodeComponent(query)}&entity=song&limit=5',
+          );
+          final response = await http
+              .get(uri)
+              .timeout(const Duration(seconds: 8));
 
-        if (response.statusCode == 200) {
-          final data = jsonDecode(response.body);
-          final results = data['results'] as List?;
-          if (results != null && results.isNotEmpty) {
-            for (final result in results) {
-              final collectionName = result['collectionName'] as String?;
-              if (_isBadAlbum(collectionName)) continue;
+          if (response.statusCode == 200) {
+            final data = jsonDecode(response.body);
+            final results = data['results'] as List?;
+            if (results != null && results.isNotEmpty) {
+              for (final result in results) {
+                final collectionName = result['collectionName'] as String?;
+                if (_isBadAlbum(collectionName)) continue;
 
-              final artworkUrl100 = result['artworkUrl100'] as String?;
-              String? highResUrl;
-              if (artworkUrl100 != null) {
-                highResUrl = artworkUrl100.replaceAll(
-                  '100x100bb.jpg',
-                  '600x600bb.jpg',
+                final artworkUrl100 = result['artworkUrl100'] as String?;
+                String? highResUrl;
+                if (artworkUrl100 != null) {
+                  highResUrl = artworkUrl100.replaceAll(
+                    '100x100bb.jpg',
+                    '600x600bb.jpg',
+                  );
+                }
+                final trackTitle = result['trackName'] as String?;
+                final artistName = result['artistName'] as String?;
+                final releaseDate = result['releaseDate'] as String?;
+
+                return (
+                  artworkUrl: highResUrl,
+                  albumName: collectionName,
+                  trackTitle: trackTitle,
+                  artistName: artistName,
+                  releaseDate: releaseDate,
                 );
               }
-              final trackTitle = result['trackName'] as String?;
-              final artistName = result['artistName'] as String?;
-              final releaseDate = result['releaseDate'] as String?;
-
-              return (
-                artworkUrl: highResUrl,
-                albumName: collectionName,
-                trackTitle: trackTitle,
-                artistName: artistName,
-                releaseDate: releaseDate,
-              );
             }
           }
+        } catch (e) {
+          debugPrint('[DiscordRPC] resolveFullTrackInfo query failed ("$query"): $e');
         }
       }
     } catch (e) {
-      debugPrint('[DiscordRPC] resolveFullTrackInfo error: $e');
+      debugPrint('[DiscordRPC] resolveFullTrackInfo setup error: $e');
     }
     return (
       artworkUrl: null,
@@ -240,6 +276,27 @@ class DiscordRpcService {
       debugPrint('[DiscordRPC] Offline — skipping iTunes album art fetch for "$rawTitle"');
       return (artworkUrl: null, albumName: null);
     }
+
+    final key = '${rawTitle.toLowerCase().trim()}||${(rawArtist ?? '').toLowerCase().trim()}';
+    final inFlight = _inFlightMetadataRequests[key];
+    if (inFlight != null) {
+      debugPrint('[DiscordRPC] Reusing in-flight iTunes request for "$rawTitle"');
+      return inFlight;
+    }
+
+    final future = _executeFetchAlbumArtAndMetadata(rawTitle, rawArtist);
+    _inFlightMetadataRequests[key] = future;
+    try {
+      return await future;
+    } finally {
+      _inFlightMetadataRequests.remove(key);
+    }
+  }
+
+  Future<({String? artworkUrl, String? albumName})> _executeFetchAlbumArtAndMetadata(
+    String rawTitle,
+    String? rawArtist,
+  ) async {
     try {
       // Strip movie/show subtitles for a broader, popularity-ranked search
       final cleanedTitle = _stripMovieSubtitle(rawTitle);
@@ -250,46 +307,50 @@ class DiscordRpcService {
       }
 
       for (final query in queries) {
-        // Try limit=5 to have candidates to skip bad album results
-        final uri = Uri.parse(
-          'https://itunes.apple.com/search?term=${Uri.encodeComponent(query)}&entity=song&limit=5',
-        );
-        debugPrint(
-          '[DiscordRPC] Fetching album art & metadata with query: "$query"',
-        );
-        final response = await http
-            .get(uri)
-            .timeout(const Duration(seconds: 4));
+        try {
+          // Try limit=5 to have candidates to skip bad album results
+          final uri = Uri.parse(
+            'https://itunes.apple.com/search?term=${Uri.encodeComponent(query)}&entity=song&limit=5',
+          );
+          debugPrint(
+            '[DiscordRPC] Fetching album art & metadata with query: "$query"',
+          );
+          final response = await http
+              .get(uri)
+              .timeout(const Duration(seconds: 10));
 
-        if (response.statusCode == 200) {
-          final data = jsonDecode(response.body);
-          final results = data['results'] as List?;
-          if (results != null && results.isNotEmpty) {
-            // Skip karaoke/tribute/compilation results; pick first legitimate hit
-            for (final result in results) {
-              final collectionName = result['collectionName'] as String?;
-              if (_isBadAlbum(collectionName)) {
-                debugPrint('[DiscordRPC] Skipping bad album: $collectionName');
-                continue;
+          if (response.statusCode == 200) {
+            final data = jsonDecode(response.body);
+            final results = data['results'] as List?;
+            if (results != null && results.isNotEmpty) {
+              // Skip karaoke/tribute/compilation results; pick first legitimate hit
+              for (final result in results) {
+                final collectionName = result['collectionName'] as String?;
+                if (_isBadAlbum(collectionName)) {
+                  debugPrint('[DiscordRPC] Skipping bad album: $collectionName');
+                  continue;
+                }
+                final artworkUrl100 = result['artworkUrl100'] as String?;
+                String? highResUrl;
+                if (artworkUrl100 != null) {
+                  highResUrl = artworkUrl100.replaceAll(
+                    '100x100bb.jpg',
+                    '500x500bb.jpg',
+                  );
+                  debugPrint(
+                    '[DiscordRPC] Found official artwork -> $highResUrl, album: $collectionName',
+                  );
+                }
+                return (artworkUrl: highResUrl, albumName: collectionName);
               }
-              final artworkUrl100 = result['artworkUrl100'] as String?;
-              String? highResUrl;
-              if (artworkUrl100 != null) {
-                highResUrl = artworkUrl100.replaceAll(
-                  '100x100bb.jpg',
-                  '500x500bb.jpg',
-                );
-                debugPrint(
-                  '[DiscordRPC] Found official artwork -> $highResUrl, album: $collectionName',
-                );
-              }
-              return (artworkUrl: highResUrl, albumName: collectionName);
+              // All candidates were bad — try next query permutation
+              debugPrint(
+                '[DiscordRPC] All ${results.length} results were bad albums for query: "$query"',
+              );
             }
-            // All candidates were bad — try next query permutation
-            debugPrint(
-              '[DiscordRPC] All ${results.length} results were bad albums for query: "$query"',
-            );
           }
+        } catch (e) {
+          debugPrint('[DiscordRPC] Query failed ("$query"): $e');
         }
       }
       debugPrint(
@@ -434,126 +495,60 @@ class DiscordRpcService {
 
     final startTimestamp = now - position.inMilliseconds;
 
+    final effectiveDuration = duration > Duration.zero
+        ? duration
+        : (track.duration ?? Duration.zero);
+    final endTimestamp = effectiveDuration.inMilliseconds > 0
+        ? startTimestamp + effectiveDuration.inMilliseconds
+        : null;
+
     // 1. Pause Guard: send presence once on pause transition, then stay silent on position ticks
     final isTrackChanged = _lastTrackId != currentTrackId;
     final isStateChanged = _lastPlayingState != isPlaying;
+
+    // Resolve best currently available artwork key (cached iTunes -> track HTTP URL -> existing HTTP key -> fallback logo)
+    final syncCached = _ref
+        .read(rpcCacheServiceProvider)
+        .getCachedAlbumArtUrlSync(track.artist ?? '', track.title);
+    if (syncCached != null && syncCached.isNotEmpty) {
+      _currentAlbumArtKey = syncCached;
+    } else if (track.thumbnailUrl != null &&
+        track.thumbnailUrl!.startsWith('http')) {
+      _currentAlbumArtKey = track.thumbnailUrl!;
+    } else if (isTrackChanged) {
+      _currentAlbumArtKey = 'resonance_logo';
+    }
 
     if (!isPlaying) {
       if (isStateChanged || isTrackChanged) {
         _lastPlayingState = isPlaying;
         _lastTrackId = currentTrackId;
-        _lastUpdateTime = now;
 
-        if (isTrackChanged) {
-          // New track arrived while paused/stopped (common in auto-advance):
-          // Reset art key immediately so old track's URL never bleeds into this track.
-          _currentAlbumArtKey =
-              (track.thumbnailUrl != null &&
-                  track.thumbnailUrl!.startsWith('http'))
-              ? track.thumbnailUrl!
-              : 'resonance_logo';
-          _sendActivity(
-            track,
-            false,
-            startTimestamp,
-            null,
-            _currentAlbumArtKey,
-            resolvedVideoId,
-          );
-
-          // Kick off background artwork resolution so the URL is ready when play resumes.
-          final artSession = _requestSessionId;
-          unawaited(
-            _resolveArtwork(track).then((url) {
-              if (url != null &&
-                  url.isNotEmpty &&
-                  _requestSessionId == artSession &&
-                  _lastTrackId == currentTrackId) {
-                _currentAlbumArtKey = url;
-                // No sendActivity here — the playing stream will push it when playback starts.
-              }
-            }),
-          );
-        } else {
-          // Same track, just paused — send once with existing art key.
-          _sendActivity(
-            track,
-            false,
-            startTimestamp,
-            null,
-            _currentAlbumArtKey,
-            resolvedVideoId,
-          );
-        }
+        _sendActivity(
+          track,
+          false,
+          startTimestamp,
+          null,
+          _currentAlbumArtKey,
+          resolvedVideoId,
+        );
       }
-      return null;
+      return _currentAlbumArtKey.startsWith('http') ? _currentAlbumArtKey : null;
     }
 
-    // 2. Playing throttle guard
-    if (!isTrackChanged && !isStateChanged && (now - _lastUpdateTime < 2000)) {
-      return _currentAlbumArtKey.startsWith('http')
-          ? _currentAlbumArtKey
-          : null;
-    }
-
-    _lastUpdateTime = now;
     _lastPlayingState = isPlaying;
-
-    final endTimestamp = duration.inMilliseconds > 0
-        ? startTimestamp + duration.inMilliseconds
-        : null;
-
-    // 3. Handle New Track Session
     if (isTrackChanged) {
       _lastTrackId = currentTrackId;
-      _currentAlbumArtKey =
-          (track.thumbnailUrl != null && track.thumbnailUrl!.startsWith('http'))
-          ? track.thumbnailUrl!
-          : 'resonance_logo';
-      final currentSession = ++_requestSessionId;
-      _isResolvingArt = false; // reset guard for new track
-
-      _sendActivity(
-        track,
-        isPlaying,
-        startTimestamp,
-        endTimestamp,
-        _currentAlbumArtKey,
-        resolvedVideoId,
-      );
-
-      // skip if another caller already kicked off resolution for this track
-      if (!_isResolvingArt) {
-        _isResolvingArt = true;
-        final artworkUrl = await _resolveArtwork(track);
-        _isResolvingArt = false;
-
-        if (artworkUrl != null &&
-            artworkUrl.isNotEmpty &&
-            _requestSessionId == currentSession &&
-            _lastTrackId == currentTrackId) {
-          _currentAlbumArtKey = artworkUrl;
-          _sendActivity(
-            track,
-            isPlaying,
-            startTimestamp,
-            endTimestamp,
-            _currentAlbumArtKey,
-            resolvedVideoId,
-          );
-          return artworkUrl;
-        }
-      }
-    } else {
-      _sendActivity(
-        track,
-        isPlaying,
-        startTimestamp,
-        endTimestamp,
-        _currentAlbumArtKey,
-        resolvedVideoId,
-      );
     }
+
+    _sendActivity(
+      track,
+      isPlaying,
+      startTimestamp,
+      endTimestamp,
+      _currentAlbumArtKey,
+      resolvedVideoId,
+    );
     return _currentAlbumArtKey.startsWith('http') ? _currentAlbumArtKey : null;
   }
 
@@ -594,15 +589,13 @@ class DiscordRpcService {
     return null;
   }
 
-  void _handlePipeError(Object error) {
-    debugPrint('[DiscordRPC] Pipe write error ($error) — resetting RPC connection state');
+  void _handleChannelError(Object error) {
+    debugPrint('[DiscordRPC] Channel error ($error) — resetting RPC connection state');
     _isInitialized = false;
     _lastTrackId = null;
+    _lastPlayingState = false;
     _currentAlbumArtKey = 'resonance_logo';
-    try {
-      _discord?.dispose();
-    } catch (_) {}
-    _discord = null;
+    _resetLastSentCache();
   }
 
   void _sendActivity(
@@ -613,66 +606,110 @@ class DiscordRpcService {
     String largeImageKey,
     String? targetVideoId,
   ) async {
-    if (!_isInitialized || _discord == null) return;
+    if (!_isInitialized) return;
+
+    final details = track.title;
+    final stateStr = track.artist ?? 'Unknown Artist';
+    final largeText = track.album ?? 'Resonance';
+
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final startMs = isPlaying ? startTimestamp : null;
+    final validEndMs = (isPlaying && endTimestamp != null && endTimestamp > nowMs)
+        ? endTimestamp
+        : null;
+
+    // Deduplicate identical payloads (within 2000ms timestamp tolerance) to prevent
+    // triggering Discord's strict 5 updates / 20s rate-limit cooldown.
+    // If endMs transitions from null -> non-null (duration resolved), NEVER deduplicate!
+    final sameStart = (startMs == null && _lastSentStartMs == null) ||
+        (startMs != null &&
+            _lastSentStartMs != null &&
+            (startMs - _lastSentStartMs!).abs() <= 2000);
+    final sameEnd = (validEndMs == null && _lastSentEndMs == null) ||
+        (validEndMs != null &&
+            _lastSentEndMs != null &&
+            (validEndMs - _lastSentEndMs!).abs() <= 2000);
+
+    final sameTimestamps = sameStart && sameEnd;
+
+    if (_lastSentDetails == details &&
+        _lastSentState == stateStr &&
+        _lastSentLargeImage == largeImageKey &&
+        _lastSentLargeText == largeText &&
+        _lastSentIsPlaying == isPlaying &&
+        _lastSentVideoId == targetVideoId &&
+        sameTimestamps) {
+      return;
+    }
+
+    _lastSentDetails = details;
+    _lastSentState = stateStr;
+    _lastSentLargeImage = largeImageKey;
+    _lastSentLargeText = largeText;
+    _lastSentIsPlaying = isPlaying;
+    _lastSentStartMs = startMs;
+    _lastSentEndMs = validEndMs;
+    _lastSentVideoId = targetVideoId;
+
+    // Both Windows C++ (discord_partner_sdk / discordpp) and Android AIDL
+    // expect epoch milliseconds.
+    final outStart = startMs;
+    final outEnd = validEndMs;
 
     final hasVideoLink = targetVideoId != null && targetVideoId.isNotEmpty;
+    // Windows Discord Desktop supports both timeline scrubber and buttons simultaneously.
+    // Android Discord mobile omits buttons while playing to show scrubber, and reveals buttons
+    // on pause to trigger AIDL diff update and clear the progress bar.
+    final showButtons = Platform.isWindows || !isPlaying;
+
+    debugPrint(
+      '[DiscordRPC] Dispatching presence: "$details" by "$stateStr" | playing=$isPlaying | start=$outStart | end=$outEnd',
+    );
 
     try {
-      _discord!.setPresence(
-        DiscordPresence(
-          type: DiscordActivityType.listening,
-          state: track.artist ?? 'Unknown Artist',
-          details: track.title,
-          largeAsset: DiscordAsset(
-            key: largeImageKey,
-            text: track.album ?? 'Resonance',
-          ),
-          smallAsset: DiscordAsset(
-            key: isPlaying ? 'play_icon' : 'pause_icon',
-            text: isPlaying ? 'Playing' : 'Paused',
-          ),
-          timestamps: isPlaying
-              ? DiscordTimestamps(start: startTimestamp, end: endTimestamp)
-              : null, // Omit timestamps to keep it cleared
-          buttons: isPlaying
-              ? null // Omit buttons during active music playback so Discord renders the timeline progress line bar
-              : [
-                  // Show custom buttons when paused since the timeline line is hidden
-                  if (hasVideoLink)
-                    DiscordButton(
-                      label: 'Listen Along',
-                      url: 'https://youtube.com/watch?v=$targetVideoId',
-                    ),
-                  DiscordButton(
-                    label: 'Play on Resonance',
-                    url: _ref.read(appConfigProvider).releasesUrl,
-                  ),
-                ],
-        ),
-      );
+      await _channel.invokeMethod('updatePresence', {
+        'name': 'Resonance',
+        'type': 'listening',
+        'details': details,
+        'state': stateStr,
+        'album': largeText,
+        'largeImage': largeImageKey,
+        'largeText': largeText,
+        'smallImage': null,
+        'smallText': null,
+        'startTimestamp': outStart,
+        'endTimestamp': outEnd,
+        'button1Label': showButtons && hasVideoLink ? 'Listen Along' : null,
+        'button1Url': showButtons && hasVideoLink
+            ? 'https://youtube.com/watch?v=$targetVideoId'
+            : null,
+        'button2Label': showButtons ? 'Play on Resonance' : null,
+        'button2Url': showButtons ? _ref.read(appConfigProvider).releasesUrl : null,
+      });
     } catch (e) {
-      _handlePipeError(e);
+      _handleChannelError(e);
     }
   }
 
   void clearPresence() {
-    if (!_isInitialized || _discord == null) return;
-    try {
-      _discord!.clearPresence();
-    } catch (e) {
-      _handlePipeError(e);
-    } finally {
-      _lastTrackId = null;
-      _currentAlbumArtKey = 'resonance_logo';
-    }
+    _lastTrackId = null;
+    _lastPlayingState = false;
+    _currentAlbumArtKey = 'resonance_logo';
+    _resetLastSentCache();
+    if (!_isInitialized) return;
+    unawaited(
+      _channel.invokeMethod('clearPresence').catchError((e) {
+        _handleChannelError(e);
+        return null;
+      }),
+    );
   }
 
   void dispose() {
     clearPresence();
-    try {
-      _discord?.dispose();
-    } catch (_) {}
-    _discord = null;
+    if (_isInitialized) {
+      unawaited(_channel.invokeMethod('dispose').catchError((_) => null));
+    }
     _isInitialized = false;
   }
 }

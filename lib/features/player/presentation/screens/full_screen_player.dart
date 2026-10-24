@@ -1,5 +1,4 @@
 import 'package:resonance/core/widgets/widgets.dart';
-import 'dart:ui';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -105,8 +104,7 @@ class _FullScreenPlayerState extends ConsumerState<FullScreenPlayer> {
 
   @override
   Widget build(BuildContext context) {
-    final audioState = ref.watch(audioProvider);
-    final currentTrack = audioState.currentTrack;
+    final currentTrack = ref.watch(audioProvider.select((s) => s.currentTrack));
     final showFullLyrics = ref.watch(lyricsOverlayProvider);
     final showQueue = ref.watch(queueOverlayProvider);
 
@@ -175,29 +173,31 @@ class _FullScreenDynamicBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: currentTrack == null
-              ? Container(color: surfaceColor)
-              : MediaArtworkWidget(
-                  item: currentTrack,
-                  fit: BoxFit.cover,
-                  color: isLight
-                      ? Colors.white.withValues(alpha: 0.6)
-                      : Colors.black.withValues(alpha: 0.6),
-                  colorBlendMode: isLight ? BlendMode.lighten : BlendMode.darken,
-                ),
-        ),
-        Positioned.fill(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 80, sigmaY: 80),
-            child: Container(
-              color: (isLight ? Colors.white : Colors.black).withValues(alpha: 0.4),
+    final theme = Theme.of(context);
+    final accent = theme.colorScheme.primary;
+
+    final topColor = Color.alphaBlend(
+      accent.withValues(alpha: isLight ? 0.25 : 0.22),
+      surfaceColor,
+    );
+    final midColor = Color.alphaBlend(
+      accent.withValues(alpha: isLight ? 0.08 : 0.06),
+      surfaceColor,
+    );
+
+    return Positioned.fill(
+      child: RepaintBoundary(
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              stops: const [0.0, 0.45, 1.0],
+              colors: [topColor, midColor, surfaceColor],
             ),
           ),
         ),
-      ],
+      ),
     );
   }
 }

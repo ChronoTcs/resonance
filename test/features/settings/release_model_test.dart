@@ -10,6 +10,47 @@ void main() {
       expect(AppRelease.compareSemVer('0.1.5', '0.1.5-beta'), equals(0));
       expect(AppRelease.compareSemVer('v0.1.6', '0.1.5'), greaterThan(0));
       expect(AppRelease.compareSemVer('0.1.6-beta+7', '0.1.6-beta+7'), equals(0));
+      expect(AppRelease.compareSemVer('0.1.9-beta.15', '0.1.9-beta+14'), greaterThan(0));
+      expect(AppRelease.compareSemVer('0.1.9-beta+14', '0.1.9-beta.15'), lessThan(0));
+      expect(AppRelease.compareSemVer('0.1.9-beta.15', '0.1.9-beta.15'), equals(0));
+      // Stable 1.0.0 comparisons
+      expect(AppRelease.compareSemVer('1.0.0+15', '0.1.9-beta+15'), greaterThan(0));
+      expect(AppRelease.compareSemVer('0.1.9-beta+15', '1.0.0+15'), lessThan(0));
+      expect(AppRelease.compareSemVer('1.0.0+15', '1.0.0+15'), equals(0));
+      expect(AppRelease.compareSemVer('1.0.0+16', '1.0.0+15'), greaterThan(0));
+      expect(AppRelease.compareSemVer('1.0.1', '1.0.0+15'), greaterThan(0));
+    });
+
+    test('isBeta correctly distinguishes stable releases from beta/pre-releases', () {
+      final stableRelease = AppRelease(
+        tagName: 'v1.0.0',
+        name: 'Resonance 1.0.0',
+        body: 'Official stable release',
+        isPrerelease: false,
+        publishedAt: DateTime.now(),
+        assets: [],
+      );
+      expect(stableRelease.isBeta, isFalse);
+
+      final betaRelease = AppRelease(
+        tagName: 'v0.1.9-beta',
+        name: 'Resonance v0.1.9-beta',
+        body: 'Beta release',
+        isPrerelease: true,
+        publishedAt: DateTime.now(),
+        assets: [],
+      );
+      expect(betaRelease.isBeta, isTrue);
+
+      final taggedBetaRelease = AppRelease(
+        tagName: 'v1.0.0-beta.1',
+        name: 'Resonance 1.0.0 Beta',
+        body: 'Beta release',
+        isPrerelease: false,
+        publishedAt: DateTime.now(),
+        assets: [],
+      );
+      expect(taggedBetaRelease.isBeta, isTrue);
     });
 
     test('getDeltaPatchAsset picks the exact matching patch asset for 0.1.4 and 0.1.3 users', () {
@@ -83,7 +124,7 @@ void main() {
           {
             'name': 'Resonance-v0.1.6-beta+7-to-v0.1.6-beta+8-delta.patch',
             'browser_download_url': 'https://github.com/.../0.1.6-beta+7-to-0.1.6-beta+8.patch',
-            'size': 650000, // ~650 KB hotfix!
+            'size': 650000, // ~650 KB delta patch payload
           },
           {
             'name': 'Resonance-v0.1.5-beta-to-v0.1.6-beta+8-delta.patch',

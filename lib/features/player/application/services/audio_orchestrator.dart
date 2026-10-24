@@ -18,6 +18,8 @@ import 'gapless_prefetch_service.dart';
 import 'sponsor_block_service.dart';
 import '../../../playlist/application/playlist_auto_continue_provider.dart';
 import '../../../library/application/blocked_tracks_provider.dart';
+import 'session_history_tracker.dart';
+import '../../../explore/application/services/user_taste_profile_service.dart';
 
 /// It decouples orthogonal logic (Sync, Tracking, Maintenance) from the core 
 /// AudioNotifier using the Riverpod pattern.
@@ -36,6 +38,11 @@ class AudioOrchestrator {
   // [Radio spam guard] Minimum gap between consecutive radio fetches
   DateTime? _lastRadioFetch;
   static const Duration _radioCooldown = Duration(seconds: 60);
+
+  // [Anchor Leash & Circuit Breakers]
+  MediaItem? _sessionAnchorTrack;
+  int _consecutiveFastSkips = 0;
+  int _refillCount = 0;
 
   AudioOrchestrator(this._ref);
 
@@ -58,48 +65,94 @@ class AudioOrchestrator {
     // --- Tray & SMTC Sync ORCHESTRATION ---
     // Update whenever track changes OR play/pause state changes
     _ref.listen(audioProvider.select((s) => s.currentTrack), (prev, next) {
+      final prevId = prev?.id ?? prev?.path;
+      final nextId = next?.id ?? next?.path;
+      final isTrackChanged = prevId != nextId;
+
       final isPlaying = _ref.read(audioProvider).isPlaying;
       _ref.read(playbackSyncServiceProvider).updateSync(next, isPlaying);
 
-      // Artwork + Lyrics: only on track change, not on every play/pause toggle
-      if (next != null && next != prev) {
+      // Artwork + Lyrics: only on actual track change, not on lyrics offset or play/pause toggle
+      if (next != null && isTrackChanged) {
         _ref.read(playbackSyncServiceProvider).syncPersistentMetadataOnTrackChange(next);
         if (Platform.isWindows) {
           _ref.read(windowsJumpListServiceProvider).syncJumpList();
         }
       }
 
-      // Reset Gapless Lock on track change
-      _ref.read(gaplessPrefetchServiceProvider).resetLock();
+      // Track engagement telemetry & Session Ring Buffer
+      if (prev != null && isTrackChanged) {
+        final notifier = _ref.read(audioProvider.notifier);
+        final statePos = _ref.read(audioProvider).position;
+        final stateDur = _ref.read(audioProvider).duration;
+        final prevPos = notifier.lastTrackFinalPosition > statePos
+            ? notifier.lastTrackFinalPosition
+            : statePos;
+        final prevDur = notifier.lastTrackFinalDuration > Duration.zero
+            ? notifier.lastTrackFinalDuration
+            : (stateDur > Duration.zero ? stateDur : (prev.duration ?? Duration.zero));
 
-      // T+0s prefetch — resolve N+1 immediately so rapid skips hit RAM cache
-      if (next != null && next != prev) {
-        _ref.read(gaplessPrefetchServiceProvider).proactiveFetch();
+        _ref.read(userTasteProfileServiceProvider).recordEngagement(
+          prev,
+          position: prevPos,
+          duration: prevDur,
+        );
+        _ref.read(sessionHistoryTrackerProvider).recordPlayed(prev.id ?? prev.path);
+
+        // Fast-Skip Circuit Breaker Check (2 consecutive skips < 15s)
+        final isFastSkip = prevPos.inSeconds < 15;
+        if (isFastSkip) {
+          _consecutiveFastSkips++;
+          if (_consecutiveFastSkips >= 2) {
+            debugPrint('[AudioOrchestrator] Circuit Breaker: 2 fast-skips detected. Purging drift & re-anchoring.');
+            _purgeDriftAndReanchor();
+            _consecutiveFastSkips = 0;
+          }
+        } else if (prevPos.inSeconds >= 30) {
+          _consecutiveFastSkips = 0;
+        }
+      }
+
+      final queueLen = _ref.read(audioProvider).queue.length;
+      if (next != null && (queueLen <= 1 || _sessionAnchorTrack == null || isTrackChanged)) {
+        if (isTrackChanged || _sessionAnchorTrack == null) {
+          _sessionAnchorTrack = next;
+          _consecutiveFastSkips = 0;
+        }
+      }
+
+      // Reset Gapless Lock and proactive fetch on track change
+      if (isTrackChanged) {
+        _ref.read(gaplessPrefetchServiceProvider).resetLock();
+        if (next != null) {
+          _ref.read(gaplessPrefetchServiceProvider).proactiveFetch();
+        }
       }
 
       // SponsorBlock Auto Intro Trimming Offset
-      if (next != null && next.isStreaming) {
-        final prevId = prev?.id ?? prev?.path;
-        final nextId = next.id ?? next.path;
-        if (nextId != prevId) {
-          _ref.read(sponsorBlockServiceProvider).autoDetectAndApplyIntroOffset(next);
-        }
+      if (next != null && next.isStreaming && isTrackChanged) {
+        _ref.read(sponsorBlockServiceProvider).autoDetectAndApplyIntroOffset(next);
       }
 
       // [Radio] Fire-and-forget radio recommendation seeding.
       // Guards:
-      //   1. Suppressed when LoopMode.all — finite playlists should loop, not expand.
+      //   1. Suppressed when LoopMode.all or LoopMode.one if queue already has tracks (> 1) or in playlist mode.
       //   2. If in playlist mode:
       //      - If autoContinue is OFF: never auto-refill radio.
       //      - If autoContinue is ON: only refill when reaching end of playlist (remaining <= 0).
       //   3. If not in playlist mode: refill when remaining <= threshold.
-      //   4. Cooldown: minimum 60s between fetches (bypassed if queue is empty).
-      if (next != null && next.isStreaming) {
+      //   4. Cooldown: minimum 60s between fetches (bypassed on manual seed play where remaining <= 0).
+      final audioState = _ref.read(audioProvider);
+      final isManualSeedReplay = !audioState.isPlaylistMode &&
+          audioState.queue.length == 1 &&
+          audioState.currentIndex == 0;
+
+      if (next != null && next.isStreaming && (isTrackChanged || isManualSeedReplay)) {
         final seedId = next.id ?? next.path;
         if (seedId.isNotEmpty) {
-          final audioState = _ref.read(audioProvider);
-          // Suppress radio during loop-all ONLY if in playlist mode or if queue already has multiple tracks (> 1)
-          if (audioState.loopMode == LoopMode.all &&
+          // Suppress radio during loop-all or loop-one if in playlist mode or if queue already has multiple tracks (> 1)
+          if ((audioState.loopMode == LoopMode.all ||
+                  audioState.loopMode == LoopMode.one) &&
               (audioState.isPlaylistMode || audioState.queue.length > 1)) {
             return;
           }
@@ -149,6 +202,13 @@ class AudioOrchestrator {
       } else {
         tracker.stopTracking();
       }
+
+      // Resume proactive prefetch if unpaused or session playback started
+      if (next && !(prev ?? false)) {
+        if (_ref.read(audioProvider).loopMode != LoopMode.one) {
+          _ref.read(gaplessPrefetchServiceProvider).proactiveFetch();
+        }
+      }
     });
 
     // --- Gapless Pre-fetch ORCHESTRATION ---
@@ -157,7 +217,9 @@ class AudioOrchestrator {
     _ref.listen(audioProvider.select((s) => s.position), (prev, next) {
       final prevSec = prev?.inSeconds ?? 0;
       if (next.inSeconds >= 5 && prevSec < 5) {
-        _ref.read(gaplessPrefetchServiceProvider).proactiveFetch();
+        if (_ref.read(audioProvider).loopMode != LoopMode.one) {
+          _ref.read(gaplessPrefetchServiceProvider).proactiveFetch();
+        }
       }
     });
 
@@ -169,18 +231,21 @@ class AudioOrchestrator {
   }
 
   /// Async radio fetch — fire-and-forget, never throws.
-  /// Deduplicates against current queue before appending.
+  /// Deduplicates against current queue and session history ring buffer.
   Future<void> _fetchAndAppendRadio(String videoId) async {
     try {
       final isOnline = _ref.read(networkConnectivityProvider).isOnline;
       final windowSize = _ref.read(queueWindowSizeProvider);
       final notifier = _ref.read(audioProvider.notifier);
       final blocked = _ref.read(blockedTracksProvider.notifier);
+      final sessionTracker = _ref.read(sessionHistoryTrackerProvider);
       final existingIds = _ref
           .read(audioProvider)
           .queue
           .map((t) => t.id ?? t.path)
           .toSet();
+
+      final combinedExcludeIds = sessionTracker.recentIds.union(existingIds);
 
       if (!isOnline) {
         // Offline Radio Fallback: query cachedStreamMusicProvider
@@ -192,9 +257,9 @@ class AudioOrchestrator {
         final shuffled = List<MediaItem>.from(cachedTracks)..shuffle();
         for (final track in shuffled) {
           final id = track.id ?? track.path;
-          if (!existingIds.contains(id) && !blocked.isBlocked(track.id, path: track.path)) {
+          if (!combinedExcludeIds.contains(id) && !blocked.isBlocked(track.id, path: track.path)) {
             newTracks.add(track);
-            existingIds.add(id);
+            combinedExcludeIds.add(id);
             if (newTracks.length >= windowSize) break;
           }
         }
@@ -207,17 +272,33 @@ class AudioOrchestrator {
         return;
       }
 
+      _refillCount++;
+      // [Anchor Leash] Alternating re-centering: every 2nd refill seeds from sessionAnchorTrack
+      String effectiveSeedId = videoId;
+      if (_refillCount % 2 == 1 && _sessionAnchorTrack != null) {
+        final anchorId = _sessionAnchorTrack!.id ?? _sessionAnchorTrack!.path;
+        if (anchorId.isNotEmpty && RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(anchorId)) {
+          effectiveSeedId = anchorId;
+          debugPrint('[AudioOrchestrator] Anchor Leash: Re-centering radio seed to $effectiveSeedId');
+        }
+      }
+
       final repo = _ref.read(youtubeSearchRepositoryProvider);
-      final recs = await repo.getRadioRecommendations(videoId, limit: windowSize);
+      final recs = await repo.getRadioRecommendations(
+        effectiveSeedId,
+        limit: windowSize,
+        excludeIds: combinedExcludeIds,
+        enableEntropy: true,
+      );
       if (recs.isEmpty) return;
 
       // batch-append to fire _updateNextTrack once, not once per track
       final newTracks = <MediaItem>[];
       for (final track in recs) {
         final id = track.id ?? track.path;
-        if (!existingIds.contains(id) && !blocked.isBlocked(track.id, path: track.path)) {
+        if (!combinedExcludeIds.contains(id) && !blocked.isBlocked(track.id, path: track.path)) {
           newTracks.add(track);
-          existingIds.add(id); // prevent duplicate within the same batch
+          combinedExcludeIds.add(id); // prevent duplicate within the same batch
           if (newTracks.length >= windowSize) break;
         }
       }
@@ -225,5 +306,23 @@ class AudioOrchestrator {
         notifier.addTracksToQueue(newTracks);
       }
     } catch (_) {}
+  }
+
+  /// Circuit breaker action: purges drifted radio tracks and re-seeds from session anchor.
+  void _purgeDriftAndReanchor() {
+    final notifier = _ref.read(audioProvider.notifier);
+    notifier.clearUpcomingQueue();
+    if (_sessionAnchorTrack != null) {
+      final anchorId = _sessionAnchorTrack!.id ?? _sessionAnchorTrack!.path;
+      if (anchorId.isNotEmpty && RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(anchorId)) {
+        _fetchAndAppendRadio(anchorId);
+      }
+    }
+  }
+
+  /// Sets or updates the session anchor track.
+  void setSessionAnchor(MediaItem track) {
+    _sessionAnchorTrack = track;
+    _consecutiveFastSkips = 0;
   }
 }

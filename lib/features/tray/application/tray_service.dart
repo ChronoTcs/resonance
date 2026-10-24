@@ -1,156 +1,141 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:nativeapi/nativeapi.dart' as napi;
-import 'package:path/path.dart' as p;
 import 'package:window_manager/window_manager.dart';
+import 'package:resonance/core/theme/theme_provider.dart';
+import 'package:resonance/core/providers/overlay_provider.dart';
 import 'package:resonance/features/stream/platform/windows/windows_po_token_service.dart';
 import 'package:resonance/features/player/application/providers/audio_provider.dart';
 import 'package:resonance/features/library/data/models/media_item.dart';
+import 'package:resonance/core/application/providers/window_lifecycle_provider.dart';
 import 'package:resonance/features/player/application/services/windows_system_media_service.dart';
 
-/// Manages System Tray integration for Windows using nativeapi.
-class TrayService {
+/// Manages System Tray integration for Windows using native Win32 C++ runner channel.
+class TrayService with WidgetsBindingObserver {
   final Ref _ref;
   bool _initialized = false;
-  napi.TrayIcon? _trayIcon;
+  static const MethodChannel _channel =
+      MethodChannel('com.chronostudio.resonance/system_tray');
 
   TrayService(this._ref);
+
+  bool _resolveIsDark() {
+    final mode = _ref.read(themeProvider);
+    switch (mode) {
+      case AppThemeMode.dark:
+        return true;
+      case AppThemeMode.light:
+        return false;
+      case AppThemeMode.system:
+        return WidgetsBinding.instance.platformDispatcher.platformBrightness ==
+            Brightness.dark;
+    }
+  }
 
   /// Initializes the tray icon and context menu
   Future<void> initTray() async {
     if (!Platform.isWindows || _initialized) return;
 
-    _trayIcon = napi.TrayIcon();
-
-    // 1. Try resolving from executable bundle assets
-    final exeDir = p.dirname(Platform.resolvedExecutable);
-    final bundlePngPath = p.join(exeDir, 'data', 'flutter_assets', 'assets', 'icons', 'app_icon.png');
-    final bundleIcoPath = p.join(exeDir, 'data', 'flutter_assets', 'assets', 'icons', 'app_icon.ico');
-
-    // 2. Try resolving from absolute project source tree (for local flutter run debug sessions)
-    final projectPngPath = p.join(Directory.current.path, 'assets', 'icons', 'app_icon.png');
-    final projectIcoPath = p.join(Directory.current.path, 'assets', 'icons', 'app_icon.ico');
-
-    napi.Image? iconImage;
-    for (final pathCandidate in [bundlePngPath, bundleIcoPath, projectPngPath, projectIcoPath]) {
-      if (File(pathCandidate).existsSync()) {
-        iconImage = napi.Image.fromFile(pathCandidate);
-        if (iconImage != null) {
-          debugPrint('[TrayService] Successfully loaded nativeapi tray icon from: $pathCandidate');
+    _channel.setMethodCallHandler((call) async {
+      switch (call.method) {
+        case 'onMenuItemSelected':
+          final action = call.arguments as String?;
+          if (action != null) {
+            _onMenuItemSelected(action);
+          }
           break;
-        }
+        case 'onTrayIconClicked':
+          await _restoreWindow();
+          break;
+        default:
+          break;
       }
-    }
-
-    iconImage ??= napi.Image.fromAsset('assets/icons/app_icon.png');
-
-    if (iconImage != null) {
-      _trayIcon!.icon = iconImage;
-    } else {
-      debugPrint('[TrayService] ERROR: All nativeapi icon load attempts failed.');
-    }
-
-    _trayIcon!.contextMenuTrigger = napi.ContextMenuTrigger.rightClicked;
-    _trayIcon!.isVisible = true;
-
-    _trayIcon!.on<napi.TrayIconClickedEvent>((_) {
-      _restoreWindow();
     });
 
-    await _buildInitialMenu();
-    _initialized = true;
+    try {
+      final isDark = _resolveIsDark();
+      await _channel.invokeMethod('init', {'isDark': isDark});
+      _initialized = true;
 
-    final audioState = _ref.read(audioProvider);
-    await updateTrayMetadata(audioState.currentTrack, audioState.isPlaying);
+      // Register observer for platform brightness shifts
+      WidgetsBinding.instance.addObserver(this);
 
-    debugPrint('[TrayService] Initialized with nativeapi');
+      // Listen for app-level theme changes (Settings or TitleBar toggle)
+      _ref.listen<AppThemeMode>(themeProvider, (previous, next) {
+        updateTheme();
+      });
+
+      final audioState = _ref.read(audioProvider);
+      await updateTrayMetadata(audioState.currentTrack, audioState.isPlaying);
+
+      debugPrint('[TrayService] Initialized with adaptive Win32 tray (isDark: $isDark)');
+    } catch (e, stack) {
+      debugPrint('[TrayService] Failed to initialize native tray: $e\n$stack');
+    }
   }
 
-  /// Builds static initial tray menu
-  Future<void> _buildInitialMenu() async {
-    if (_trayIcon == null) return;
-
-    final menu = napi.Menu();
-    final nowPlayingItem = napi.MenuItem('Resonance')..enabled = false;
-    menu.addItem(nowPlayingItem);
-    menu.addSeparator();
-
-    final playItem = napi.MenuItem('Play');
-    playItem.on<napi.MenuItemClickedEvent>((_) => _onMenuItemSelected('play_pause'));
-    menu.addItem(playItem);
-
-    final nextItem = napi.MenuItem('Next Track');
-    nextItem.on<napi.MenuItemClickedEvent>((_) => _onMenuItemSelected('skip_next'));
-    menu.addItem(nextItem);
-
-    final prevItem = napi.MenuItem('Previous Track');
-    prevItem.on<napi.MenuItemClickedEvent>((_) => _onMenuItemSelected('skip_prev'));
-    menu.addItem(prevItem);
-
-    menu.addSeparator();
-
-    final restoreItem = napi.MenuItem('Open Resonance');
-    restoreItem.on<napi.MenuItemClickedEvent>((_) => _onMenuItemSelected('restore'));
-    menu.addItem(restoreItem);
-
-    final exitItem = napi.MenuItem('Exit');
-    exitItem.on<napi.MenuItemClickedEvent>((_) => _onMenuItemSelected('exit'));
-    menu.addItem(exitItem);
-
-    _trayIcon!.contextMenu = menu;
+  @override
+  void didChangePlatformBrightness() {
+    if (_ref.read(themeProvider) == AppThemeMode.system) {
+      updateTheme();
+    }
   }
 
-  /// Dynamically updates metadata and play/pause status
+  /// Updates the tray context menu theme dynamically
+  Future<void> updateTheme({bool? isDark}) async {
+    if (!Platform.isWindows || !_initialized) return;
+    final dark = isDark ?? _resolveIsDark();
+    try {
+      await _channel.invokeMethod('setTheme', {'isDark': dark});
+    } catch (e) {
+      debugPrint('[TrayService] Failed to update tray theme: $e');
+    }
+  }
+
+  /// Dynamically updates metadata, playback status, and theme
   Future<void> updateTrayMetadata(MediaItem? currentTrack, bool isPlaying) async {
-    if (!Platform.isWindows || !_initialized || _trayIcon == null) return;
+    if (!Platform.isWindows || !_initialized) return;
 
     final tooltip = currentTrack != null
         ? '${currentTrack.title} - ${currentTrack.artist ?? 'Unknown'}'
         : 'Resonance';
-    _trayIcon!.tooltip = tooltip;
 
-    final menu = napi.Menu();
-    final nowPlayingItem = napi.MenuItem(currentTrack != null ? '▶ ${currentTrack.title}' : 'Resonance')..enabled = false;
-    menu.addItem(nowPlayingItem);
-    menu.addSeparator();
+    final title = currentTrack?.title ?? '';
 
-    final playItem = napi.MenuItem(isPlaying ? 'Pause' : 'Play');
-    playItem.on<napi.MenuItemClickedEvent>((_) => _onMenuItemSelected('play_pause'));
-    menu.addItem(playItem);
-
-    final nextItem = napi.MenuItem('Next Track');
-    nextItem.on<napi.MenuItemClickedEvent>((_) => _onMenuItemSelected('skip_next'));
-    menu.addItem(nextItem);
-
-    final prevItem = napi.MenuItem('Previous Track');
-    prevItem.on<napi.MenuItemClickedEvent>((_) => _onMenuItemSelected('skip_prev'));
-    menu.addItem(prevItem);
-
-    menu.addSeparator();
-
-    final restoreItem = napi.MenuItem('Open Resonance');
-    restoreItem.on<napi.MenuItemClickedEvent>((_) => _onMenuItemSelected('restore'));
-    menu.addItem(restoreItem);
-
-    final exitItem = napi.MenuItem('Exit');
-    exitItem.on<napi.MenuItemClickedEvent>((_) => _onMenuItemSelected('exit'));
-    menu.addItem(exitItem);
-
-    _trayIcon!.contextMenu = menu;
+    try {
+      await _channel.invokeMethod('updateMetadata', {
+        'tooltip': tooltip,
+        'title': title,
+        'isPlaying': isPlaying,
+        'isDark': _resolveIsDark(),
+      });
+    } catch (e) {
+      debugPrint('[TrayService] Failed to update tray metadata: $e');
+    }
   }
 
   /// Clears the tray icon before application shutdown
   Future<void> destroy() async {
-    if (!Platform.isWindows || _trayIcon == null) return;
-    _trayIcon!.dispose();
-    _trayIcon = null;
+    if (!Platform.isWindows || !_initialized) return;
+    WidgetsBinding.instance.removeObserver(this);
+    try {
+      await _channel.invokeMethod('destroy');
+    } catch (e) {
+      debugPrint('[TrayService] Error destroying tray: $e');
+    } finally {
+      _initialized = false;
+    }
   }
 
-  void _onMenuItemSelected(String key) {
+  void _onMenuItemSelected(String key) async {
     final audioNotifier = _ref.read(audioProvider.notifier);
 
     switch (key) {
+      case 'open_now_playing':
+        await _restoreWindow();
+        _ref.read(nowPlayingOverlayProvider.notifier).setVisible(true);
+        break;
       case 'play_pause':
         audioNotifier.togglePlayPause();
         break;
@@ -170,6 +155,7 @@ class TrayService {
   }
 
   Future<void> _restoreWindow() async {
+    _ref.read(isWindowRenderActiveProvider.notifier).state = true;
     await windowManager.show();
     await windowManager.focus();
     // Rebuild thumbnail toolbar — Windows DWM destroys it when HWND is hidden.

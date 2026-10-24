@@ -146,6 +146,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
         }
       },
       child: Scaffold(
+        backgroundColor: Colors.transparent,
         resizeToAvoidBottomInset: !isDesktop,
         body: Column(
           children: [
