@@ -11,6 +11,9 @@ import 'package:resonance/features/download/application/providers/download_provi
 import 'package:resonance/features/download/data/models/download_item.dart';
 import 'package:resonance/features/settings/application/notification_provider.dart';
 import 'package:resonance/features/player/application/providers/audio_provider.dart';
+import 'package:resonance/features/player/application/providers/sleep_timer_provider.dart';
+import 'package:resonance/features/player/presentation/widgets/mini_player/shared/sleep_timer_quick_sheet.dart';
+import 'package:resonance/features/settings/presentation/widgets/preferences/sleep_timer_countdown_text.dart';
 import 'package:resonance/features/library/application/blocked_tracks_provider.dart';
 import 'package:resonance/features/player/utils/media_action_utils.dart';
 
@@ -354,6 +357,51 @@ class _TrackBentoActions extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: 8),
+
+        // Group: Sleep timer
+        if (item.type != 'playlist') ...[
+          Consumer(
+            builder: (context, ref, _) {
+              final isTimerEnabled = ref.watch(sleepTimerProvider.select((s) => s.isEnabled));
+              final timerMode = ref.watch(sleepTimerProvider.select((s) => s.selectedMode));
+              final remaining = ref.watch(sleepTimerProvider.select((s) => s.remainingDuration));
+
+              final String subtitle;
+              if (!isTimerEnabled) {
+                subtitle = 'Off · Set timer or end of track';
+              } else if (timerMode == SleepTimerMode.endOfTrack) {
+                subtitle = 'Active · Stopping after current track';
+              } else {
+                subtitle = 'Active · ${SleepTimerCountdownText.formatDuration(remaining)} left';
+              }
+
+              return Container(
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: isTimerEnabled
+                        ? theme.colorScheme.primary.withValues(alpha: 0.35)
+                        : Colors.white.withValues(alpha: 0.05),
+                  ),
+                ),
+                child: _ActionCardRow(
+                  icon: isTimerEnabled ? UIcons.solid.moon : UIcons.regular.moon,
+                  iconColor: isTimerEnabled ? theme.colorScheme.primary : null,
+                  title: 'Sleep timer',
+                  titleColor: isTimerEnabled ? theme.colorScheme.primary : null,
+                  subtitle: subtitle,
+                  subtitleColor: isTimerEnabled ? theme.colorScheme.primary : null,
+                  onTap: () {
+                    Navigator.pop(context);
+                    SleepTimerQuickSheet.show(context);
+                  },
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 8),
+        ],
 
         // Group 2: Song details
         Container(
@@ -979,16 +1027,22 @@ class _QuickActionButtonState extends State<_QuickActionButton> {
 class _ActionCardRow extends StatefulWidget {
   final IconData icon;
   final String title;
+  final String? subtitle;
   final VoidCallback onTap;
   final Color? iconColor;
   final Color? titleColor;
+  final Color? subtitleColor;
+
 
   const _ActionCardRow({
     required this.icon,
     required this.title,
+    this.subtitle,
     required this.onTap,
     this.iconColor,
     this.titleColor,
+    this.subtitleColor,
+
   });
 
   @override
@@ -1027,20 +1081,37 @@ class _ActionCardRowState extends State<_ActionCardRow> {
               ),
               const SizedBox(width: 14),
               Expanded(
-                child: Text(
-                  widget.title,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: widget.titleColor ?? theme.colorScheme.onSurface,
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w500,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      widget.title,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: widget.titleColor ?? theme.colorScheme.onSurface,
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    if (widget.subtitle != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        widget.subtitle!,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: widget.subtitleColor ?? theme.colorScheme.onSurfaceVariant,
+                          fontSize: 11.5,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
-              Icon(
-                UIcons.regular.angle_small_right,
-                size: 16,
-                color: theme.colorScheme.onSurfaceVariant.withValues(alpha: _isHovered ? 0.9 : 0.5),
-              ),
+
+                  Icon(
+                    UIcons.regular.angle_small_right,
+                    size: 16,
+                    color: theme.colorScheme.onSurfaceVariant.withValues(alpha: _isHovered ? 0.9 : 0.5),
+                  ),
             ],
           ),
         ),

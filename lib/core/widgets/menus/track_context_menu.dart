@@ -12,6 +12,7 @@ import 'package:resonance/features/download/data/models/download_item.dart';
 import 'package:resonance/features/settings/application/notification_provider.dart';
 import 'package:resonance/features/library/application/blocked_tracks_provider.dart';
 import 'package:resonance/features/player/utils/media_action_utils.dart';
+import 'package:resonance/features/player/presentation/widgets/mini_player/shared/sleep_timer_quick_sheet.dart';
 
 /// Standalone desktop right-click context menu for music tracks.
 class TrackContextMenu {
@@ -84,6 +85,17 @@ class TrackContextMenu {
             Icon(UIcons.regular.add_folder, size: 15, color: theme.colorScheme.onSurface),
             const SizedBox(width: 12),
             Text('Add to Playlist', style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurface)),
+          ],
+        ),
+      ),
+      PopupMenuItem<String>(
+        value: 'sleep_timer',
+        height: 38,
+        child: Row(
+          children: [
+            Icon(UIcons.regular.moon, size: 15, color: theme.colorScheme.onSurface),
+            const SizedBox(width: 12),
+            Text('Sleep Timer', style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurface)),
           ],
         ),
       ),
@@ -233,6 +245,9 @@ class TrackContextMenu {
         break;
       case 'add_playlist':
         MediaActionsBottomSheet.showPlaylistPicker(context, item);
+        break;
+      case 'sleep_timer':
+        SleepTimerQuickSheet.show(context);
         break;
       case 'toggle_like':
         ref.read(playlistProvider.notifier).toggleLike(item);
